@@ -19,14 +19,14 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#efefef] pb-32">
       <main className="mx-auto w-full max-w-md px-3 py-5">
         <header className="mb-6 flex items-center justify-between">
-          <button
+          <button type="button"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-[#4a4a4a] text-sm font-semibold text-white shadow-sm"
             aria-label="Perfil"
             onClick={() => setIsProfileMenuOpen(true)}
           >
             N
           </button>
-          <button className="inline-flex items-center gap-1.5 rounded-full border border-[#d6d6d6] bg-white px-3 py-1.5 text-sm font-medium text-[#1a1a1a] shadow-sm">
+          <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-[#d6d6d6] bg-white px-3 py-1.5 text-sm font-medium text-[#1a1a1a] shadow-sm">
             <FavoriteIcon />
             Favoritos
           </button>

@@ -18,7 +18,7 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
 
   return (
     <div className="fixed inset-0 z-40">
-      <button
+      <button type="button"
         className="absolute inset-0 bg-black/15"
         aria-label="Cerrar menu de perfil"
         onClick={onClose}
@@ -33,17 +33,17 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
         <nav>
           <ul className="space-y-0.5">
             <li>
-              <button className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
+              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
                 Cuenta
               </button>
             </li>
             <li>
-              <button className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
+              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
                 Guardados/favoritos
               </button>
             </li>
             <li>
-              <button className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
+              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
                 Seguidos
               </button>
             </li>
@@ -56,12 +56,12 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
               </Link>
             </li>
             <li>
-              <button className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
+              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
                 Notificaciones
               </button>
             </li>
             <li>
-              <button className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
+              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
                 Blog
               </button>
             </li>
@@ -69,7 +69,7 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
             <li className="my-2 border-t border-[#e7e7e7]" />
 
             <li>
-              <button className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
+              <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[#f4f4f4]">
                 <SettingsIcon />
                 Ajustes
               </button>
@@ -78,7 +78,7 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
             <li className="my-2 border-t border-[#e7e7e7]" />
 
             <li>
-              <button className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium text-[#d12f1a] hover:bg-[#f4f4f4]">
+              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium text-[#d12f1a] hover:bg-[#f4f4f4]">
                 Log out
               </button>
             </li>

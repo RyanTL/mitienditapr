@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mitiendita PR Frontend
 
-## Getting Started
+Mobile-first marketplace UI for local vendors and shoppers.
 
-First, run the development server:
+## Stack
+- `Next.js` App Router + TypeScript
+- `Tailwind CSS v4`
+- Route-based UI prototypes with mock data
 
+## Run
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quality Checks
+```bash
+npm run lint
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Note: `npm run build` may fail in network-restricted environments because `next/font` fetches Google Fonts.
 
-## Learn More
+## Routes
+- `/` Home marketplace
+- `/ordenes` Orders history page
+- `/{shopSlug}` Shop page
+- `/{shopSlug}/producto/{productId}` Product detail
+- `/{shopSlug}/carrito` Cart
 
-To learn more about Next.js, take a look at the following resources:
+## Folder Structure
+```text
+src/
+  app/
+    ... route pages
+  components/
+    icons/                  reusable SVG icons
+    navigation/             shared nav + floating action UI
+    profile/                profile/account menu UI
+  lib/
+    mock-shop-data.ts       typed mock domain data + selectors
+    formatters.ts           shared format helpers
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Conventions Used
+- Shared UI primitives for repeated elements (icons, nav pills, floating actions)
+- Typed mock domain objects (`ShopDetail`, `Product`)
+- Centralized style constants for navigation geometry
+- No duplicated icon SVG definitions in pages
+- Pure display routes + small reusable components for easier migration to real API data
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Next Production Steps
+1. Replace mock data in `src/lib/mock-shop-data.ts` with API calls.
+2. Add server-side auth and session-aware user profile menu.
+3. Add real cart state (database or client-store + API sync).
+4. Add integration tests for route navigation and critical flows.

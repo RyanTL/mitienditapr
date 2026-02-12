@@ -104,7 +104,7 @@ export default function OrdersPage() {
         <header className="mb-8 flex items-center justify-between">
           <div className="w-8" />
           <h1 className="text-4xl font-semibold tracking-tight text-black">Ordenes</h1>
-          <button className="text-black" aria-label="Mas opciones">
+          <button type="button" className="text-black" aria-label="Mas opciones">
             <DotsIcon />
           </button>
         </header>
@@ -139,7 +139,7 @@ export default function OrdersPage() {
                     {item.tag}
                   </span>
                 ) : null}
-                <button
+                <button type="button"
                   className="absolute right-3 bottom-3 flex h-14 w-14 items-center justify-center rounded-full bg-[#111] text-white"
                   aria-label={`Agregar ${item.title} al carrito`}
                 >

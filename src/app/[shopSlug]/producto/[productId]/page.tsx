@@ -68,13 +68,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
               </p>
             </div>
             <div className="mt-0.5 flex items-center gap-2">
-              <button
+              <button type="button"
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[#cdcdcd] bg-[#efefef] text-[#1b1b1b]"
                 aria-label="Guardar producto"
               >
                 <HeartIcon />
               </button>
-              <button
+              <button type="button"
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[#cdcdcd] bg-[#efefef] text-[#1b1b1b]"
                 aria-label="Compartir producto"
               >
@@ -83,7 +83,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          <button className="mt-5 inline-flex items-center gap-1.5 text-sm text-[#3a3a3a]">
+          <button type="button" className="mt-5 inline-flex items-center gap-1.5 text-sm text-[#3a3a3a]">
             Ship to 00667
             <span className="inline-flex items-center justify-center">
               <ChevronDownIcon />
@@ -93,17 +93,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <div className="mt-6">
             <p className="text-sm text-[#3a3a3a]">Cantidad</p>
             <div className="mt-1 inline-flex items-center gap-4 rounded-full border border-[#d6d6d6] px-3 py-1 text-lg leading-none text-[#2b2b2b]">
-              <button aria-label="Restar cantidad">−</button>
+              <button type="button" aria-label="Restar cantidad">−</button>
               <span>1</span>
-              <button aria-label="Sumar cantidad">+</button>
+              <button type="button" aria-label="Sumar cantidad">+</button>
             </div>
           </div>
 
           <div className="mt-8 space-y-3">
-            <button className="w-full rounded-3xl bg-[#28737f] px-6 py-3.5 text-3xl font-bold text-white">
+            <button type="button" className="w-full rounded-3xl bg-[#28737f] px-6 py-3.5 text-3xl font-bold text-white">
               Anadir al carrito
             </button>
-            <button className="w-full rounded-3xl bg-black px-6 py-3.5 text-3xl font-bold text-white">
+            <button type="button" className="w-full rounded-3xl bg-black px-6 py-3.5 text-3xl font-bold text-white">
               Comprar ahora
             </button>
           </div>
@@ -119,7 +119,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <h3 className="text-[1.55rem] font-bold leading-none text-[#161616]">
               Ver mas de {shop.vendorName}
             </h3>
-            <button
+            <button type="button"
               className="flex h-8 w-8 items-center justify-center rounded-full border border-[#cbcbcb]"
               aria-label="Ver mas productos"
             >

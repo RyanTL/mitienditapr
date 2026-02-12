@@ -36,7 +36,12 @@ function NavItemButton({ item }: { item: NavItem }) {
   }
 
   return (
-    <button className={className} aria-label={item.ariaLabel} onClick={item.onClick}>
+    <button
+      type="button"
+      className={className}
+      aria-label={item.ariaLabel}
+      onClick={item.onClick}
+    >
       {item.icon}
     </button>
   );

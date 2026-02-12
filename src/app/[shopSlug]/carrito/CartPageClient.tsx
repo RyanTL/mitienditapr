@@ -105,14 +105,14 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
 
                       <div className="mt-3 flex items-center justify-between">
                         <div className="inline-flex items-center gap-5 rounded-full border border-[#d9d9d9] bg-white px-4 py-2 text-lg leading-none text-[#1f1f1f]">
-                          <button aria-label="Eliminar producto">
+                          <button type="button" aria-label="Eliminar producto">
                             <TrashIcon />
                           </button>
                           <span>{item.quantity}</span>
-                          <button aria-label="Agregar uno mas">+</button>
+                          <button type="button" aria-label="Agregar uno mas">+</button>
                         </div>
 
-                        <button
+                        <button type="button"
                           className="flex h-14 w-14 items-center justify-center rounded-full border border-[#d9d9d9] text-[#2a2a2a]"
                           aria-label="Opciones del producto"
                           onClick={() => setMenuItemId(item.id)}
@@ -132,7 +132,7 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
                 </p>
               </div>
 
-              <button className="w-full rounded-3xl bg-[green] px-6 py-3.5 text-xl font-semibold text-white shadow-[0_10px_24px_rgba(34,197,94,0.2)]">
+              <button type="button" className="w-full rounded-3xl bg-[green] px-6 py-3.5 text-xl font-semibold text-white shadow-[0_10px_24px_rgba(34,197,94,0.2)]">
                 Continuar al pago
               </button>
             </>
@@ -156,7 +156,7 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
 
       {menuItemId ? (
         <div className="fixed inset-0 z-40">
-          <button
+          <button type="button"
             className="absolute inset-0 bg-black/55"
             aria-label="Cerrar menu del producto"
             onClick={() => setMenuItemId(null)}
@@ -167,7 +167,7 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
               <h3 className="text-3xl font-bold leading-none text-black">
                 Administrar producto
               </h3>
-              <button
+              <button type="button"
                 className="flex h-16 w-16 items-center justify-center rounded-full bg-[#ececec] text-[#6a6a6a]"
                 aria-label="Cerrar menu"
                 onClick={() => setMenuItemId(null)}
@@ -177,14 +177,14 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
             </div>
 
             <div className="space-y-3">
-              <button
+              <button type="button"
                 className="flex w-full items-center gap-4 rounded-2xl px-1 py-3 text-left text-2xl leading-none text-black"
                 onClick={() => setMenuItemId(null)}
               >
                 <HeartIcon className="h-8 w-8" />
                 Mover a guardados
               </button>
-              <button
+              <button type="button"
                 className="flex w-full items-center gap-4 rounded-2xl px-1 py-3 text-left text-2xl leading-none text-[#d92f11]"
                 onClick={() => setMenuItemId(null)}
               >

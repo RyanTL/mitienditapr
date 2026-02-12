@@ -31,20 +31,20 @@ export default async function ShopPage({ params }: ShopPageProps) {
     <div className="min-h-screen bg-[#efefef] px-4 py-4 pb-28 text-[#111]">
       <main className="mx-auto w-full max-w-md">
         <header className="mb-14 flex items-center justify-between">
-          <button
+          <button type="button"
             className="flex h-12 w-12 items-center justify-center rounded-full border border-[#d8d8d8] bg-white text-[#202020]"
             aria-label="Abrir menu"
           >
             <MenuIcon />
           </button>
           <div className="flex items-center gap-2">
-            <button
+            <button type="button"
               className="rounded-full border border-[#d8d8d8] bg-white px-3 py-2 text-sm font-semibold text-[#202020]"
               aria-label="Seguir vendedor"
             >
               Seguir
             </button>
-            <button
+            <button type="button"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-[#d8d8d8] bg-white text-[#202020]"
               aria-label="Compartir tienda"
             >
