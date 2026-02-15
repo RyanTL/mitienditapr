@@ -10,6 +10,7 @@ import { FloatingSearchButton } from "@/components/navigation/floating-search-bu
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { ProfileMenu } from "@/components/profile/profile-menu";
+import { ShopRating } from "@/components/shop/shop-rating";
 import { marketplaceShopCards } from "@/lib/mock-shop-data";
 
 export default function HomePage() {
@@ -46,9 +47,7 @@ export default function HomePage() {
                   <h2 className="text-lg leading-tight font-extrabold text-[#131313]">
                     {shop.name}
                   </h2>
-                  <p className="text-sm font-semibold text-[#222]">
-                    {shop.rating}★ ({shop.reviewCount})
-                  </p>
+                  <ShopRating rating={shop.rating} reviewCount={shop.reviewCount} />
                 </div>
               </div>
 

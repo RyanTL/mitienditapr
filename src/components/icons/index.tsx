@@ -152,6 +152,16 @@ export function TrashIcon({ className = "h-6 w-6", ...props }: IconProps) {
   );
 }
 
+export function InfoIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 10.2v6.1" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="7.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function CloseIcon({ className = "h-8 w-8", ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>

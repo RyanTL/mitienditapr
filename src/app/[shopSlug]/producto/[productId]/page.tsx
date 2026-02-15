@@ -12,6 +12,7 @@ import {
 } from "@/components/icons";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
+import { ShopRating } from "@/components/shop/shop-rating";
 import { formatUsd } from "@/lib/formatters";
 import { getShopBySlug } from "@/lib/mock-shop-data";
 
@@ -62,8 +63,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           <div className="mt-3 flex items-start justify-between">
             <div>
-              <h1 className="text-[2.05rem] font-bold leading-none">{product.name}</h1>
-              <p className="mt-1 text-[2rem] font-semibold leading-none">
+              <h1 className="text-[1.75rem] font-medium leading-none">{product.name}</h1>
+              <ShopRating
+                rating={shop.rating}
+                reviewCount={shop.reviewCount}
+                className="mt-1.5 text-sm font-semibold text-[#222]"
+              />
+              <p className="mt-1 text-[1.25rem] leading-none">
                 {formatUsd(product.priceUsd)}
               </p>
             </div>
