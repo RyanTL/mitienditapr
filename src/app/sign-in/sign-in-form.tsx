@@ -22,21 +22,27 @@ export function SignInForm({ nextPath }: SignInFormProps) {
     setErrorMessage(null);
     setIsSubmitting(true);
 
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    setIsSubmitting(false);
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
 
-    if (error) {
-      setErrorMessage(error.message);
-      return;
+      router.replace(nextPath);
+      router.refresh();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo iniciar sesion.";
+      setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    router.replace(nextPath);
-    router.refresh();
   };
 
   return (

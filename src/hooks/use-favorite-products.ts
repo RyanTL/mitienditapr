@@ -1,100 +1,166 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { createCatalogProductKey } from "@/lib/catalog-ids";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
-  FAVORITES_CHANGED_EVENT,
-  buildFavoriteProductId,
-  createFavoriteProduct,
-  getFavoriteProducts,
-  saveFavoriteProducts,
+  deleteFavoriteProduct,
+  fetchFavoriteProducts,
+  upsertFavoriteProduct,
   type FavoriteProduct,
-} from "@/lib/favorites-storage";
+} from "@/lib/supabase/favorites";
 
 type FavoriteProductInput = Omit<FavoriteProduct, "id">;
 
-function getInitialFavorites() {
-  if (typeof window === "undefined") {
-    return [] as FavoriteProduct[];
-  }
-
-  return getFavoriteProducts();
+function createFavoriteProduct(input: FavoriteProductInput): FavoriteProduct {
+  return {
+    ...input,
+    id: createCatalogProductKey(input.shopSlug, input.productId),
+  };
 }
 
 export function useFavoriteProducts() {
-  const [favorites, setFavorites] =
-    useState<FavoriteProduct[]>(getInitialFavorites);
+  const router = useRouter();
+  const pathname = usePathname();
+  const [favorites, setFavorites] = useState<FavoriteProduct[]>([]);
 
-  useEffect(() => {
-    const syncFavorites = () => {
-      setFavorites(getFavoriteProducts());
-    };
-
-    window.addEventListener("storage", syncFavorites);
-    window.addEventListener(FAVORITES_CHANGED_EVENT, syncFavorites);
-
-    return () => {
-      window.removeEventListener("storage", syncFavorites);
-      window.removeEventListener(FAVORITES_CHANGED_EVENT, syncFavorites);
-    };
+  const refreshFavorites = useCallback(async () => {
+    try {
+      const nextFavorites = await fetchFavoriteProducts();
+      setFavorites(nextFavorites);
+    } catch (error) {
+      console.error("No se pudieron cargar favoritos:", error);
+    }
   }, []);
 
-  const updateFavorites = useCallback(
-    (updater: (current: FavoriteProduct[]) => FavoriteProduct[]) => {
-      const nextFavorites = updater(getFavoriteProducts());
-      saveFavoriteProducts(nextFavorites);
-      setFavorites(nextFavorites);
-      window.dispatchEvent(new Event(FAVORITES_CHANGED_EVENT));
-    },
-    [],
-  );
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void refreshFavorites();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [refreshFavorites]);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void refreshFavorites();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [refreshFavorites]);
+
+  const redirectToSignIn = useCallback(() => {
+    const nextPath = pathname ?? "/";
+    router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
+  }, [pathname, router]);
 
   const addFavorite = useCallback(
-    (input: FavoriteProductInput) => {
+    async (input: FavoriteProductInput) => {
       const favorite = createFavoriteProduct(input);
-      updateFavorites((current) => {
-        if (current.some((item) => item.id === favorite.id)) {
-          return current;
+      const previousFavorites = favorites;
+
+      if (previousFavorites.some((item) => item.id === favorite.id)) {
+        return true;
+      }
+
+      setFavorites((current) => [favorite, ...current]);
+
+      try {
+        const result = await upsertFavoriteProduct(input.shopSlug, input.productId);
+        if (result.unauthorized) {
+          setFavorites(previousFavorites);
+          redirectToSignIn();
+          return false;
         }
-        return [favorite, ...current];
-      });
+
+        return true;
+      } catch (error) {
+        console.error("No se pudo guardar el favorito:", error);
+        setFavorites(previousFavorites);
+        return false;
+      }
     },
-    [updateFavorites],
+    [favorites, redirectToSignIn],
   );
 
   const removeFavoriteById = useCallback(
-    (favoriteId: string) => {
-      updateFavorites((current) =>
-        current.filter((item) => item.id !== favoriteId),
-      );
+    async (favoriteId: string) => {
+      const favoriteToRemove = favorites.find((item) => item.id === favoriteId);
+      if (!favoriteToRemove) {
+        return;
+      }
+
+      const previousFavorites = favorites;
+      setFavorites((current) => current.filter((item) => item.id !== favoriteId));
+
+      try {
+        const result = await deleteFavoriteProduct(
+          favoriteToRemove.shopSlug,
+          favoriteToRemove.productId,
+        );
+
+        if (result.unauthorized) {
+          setFavorites(previousFavorites);
+          redirectToSignIn();
+        }
+      } catch (error) {
+        console.error("No se pudo eliminar el favorito:", error);
+        setFavorites(previousFavorites);
+      }
     },
-    [updateFavorites],
+    [favorites, redirectToSignIn],
   );
 
   const toggleFavorite = useCallback(
-    (input: FavoriteProductInput) => {
+    async (input: FavoriteProductInput) => {
       const favorite = createFavoriteProduct(input);
       const favoriteId = favorite.id;
-      let willBeFavorite = false;
+      const previousFavorites = favorites;
+      const isCurrentlyFavorite = previousFavorites.some(
+        (item) => item.id === favoriteId,
+      );
 
-      updateFavorites((current) => {
-        const alreadyFavorite = current.some((item) => item.id === favoriteId);
-        willBeFavorite = !alreadyFavorite;
-        if (alreadyFavorite) {
+      setFavorites((current) => {
+        if (isCurrentlyFavorite) {
           return current.filter((item) => item.id !== favoriteId);
         }
         return [favorite, ...current];
       });
 
-      return willBeFavorite;
+      try {
+        const result = isCurrentlyFavorite
+          ? await deleteFavoriteProduct(input.shopSlug, input.productId)
+          : await upsertFavoriteProduct(input.shopSlug, input.productId);
+
+        if (result.unauthorized) {
+          setFavorites(previousFavorites);
+          redirectToSignIn();
+          return isCurrentlyFavorite;
+        }
+
+        return !isCurrentlyFavorite;
+      } catch (error) {
+        console.error("No se pudo actualizar el favorito:", error);
+        setFavorites(previousFavorites);
+        return isCurrentlyFavorite;
+      }
     },
-    [updateFavorites],
+    [favorites, redirectToSignIn],
   );
 
   const isFavorite = useCallback(
     (shopSlug: string, productId: string) => {
-      const favoriteId = buildFavoriteProductId(shopSlug, productId);
-      return favorites.some((item) => item.id === favoriteId);
+      const favoriteId = createCatalogProductKey(shopSlug, productId);
+      return favorites.some((favorite) => favorite.id === favoriteId);
     },
     [favorites],
   );

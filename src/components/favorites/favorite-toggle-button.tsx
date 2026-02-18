@@ -51,7 +51,7 @@ export function FavoriteToggleButton({
           event.stopPropagation();
         }
 
-        toggleFavorite(product);
+        void toggleFavorite(product);
       }}
     >
       <HeartIcon

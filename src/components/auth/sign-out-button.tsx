@@ -6,9 +6,10 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type SignOutButtonProps = {
   className?: string;
+  onSignedOut?: () => void;
 };
 
-export function SignOutButton({ className }: SignOutButtonProps) {
+export function SignOutButton({ className, onSignedOut }: SignOutButtonProps) {
   const router = useRouter();
 
   return (
@@ -16,13 +17,18 @@ export function SignOutButton({ className }: SignOutButtonProps) {
       type="button"
       className={className}
       onClick={async () => {
-        const supabase = createSupabaseBrowserClient();
-        await supabase.auth.signOut();
-        router.push("/sign-in");
-        router.refresh();
+        try {
+          const supabase = createSupabaseBrowserClient();
+          await supabase.auth.signOut();
+          onSignedOut?.();
+          router.push("/sign-in");
+          router.refresh();
+        } catch (error) {
+          console.error("No se pudo cerrar sesion:", error);
+        }
       }}
     >
-      Log out
+      Cerrar sesion
     </button>
   );
 }

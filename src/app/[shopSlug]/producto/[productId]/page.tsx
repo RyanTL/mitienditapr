@@ -9,6 +9,7 @@ import {
   HomeIcon,
   ShareIcon,
 } from "@/components/icons";
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-button";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
@@ -115,9 +116,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
 
           <div className="mt-8 space-y-3">
-            <button type="button" className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)]">
-              Anadir al carrito
-            </button>
+            <AddToCartButton
+              shopSlug={shop.slug}
+              productId={product.id}
+              className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)] disabled:opacity-70"
+            />
             <button type="button" className="w-full rounded-3xl bg-[var(--color-black)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)]">
               Comprar ahora
             </button>

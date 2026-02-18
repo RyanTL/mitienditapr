@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   BackIcon,
@@ -17,26 +18,51 @@ import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/n
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { formatUsd } from "@/lib/formatters";
 import type { ShopDetail } from "@/lib/mock-shop-data";
+import {
+  checkoutCartByShop,
+  fetchCartItems,
+  removeCartItem,
+  setCartItemQuantity,
+  type CartItem,
+} from "@/lib/supabase/cart";
 
 type CartPageClientProps = {
   shop: ShopDetail;
-  isEmpty: boolean;
 };
 
-export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
+export default function CartPageClient({ shop }: CartPageClientProps) {
+  const router = useRouter();
   const [menuItemId, setMenuItemId] = useState<string | null>(null);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const { addFavorite } = useFavoriteProducts();
-  const [cartItems, setCartItems] = useState(() =>
-    isEmpty
-      ? []
-      : [
-          {
-            id: "line-1",
-            product: shop.products[0],
-            quantity: 1,
-          },
-        ],
-  );
+
+  const loadShopCartItems = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const items = await fetchCartItems();
+      setCartItems(
+        items.filter((item) => item.product.shopSlug === shop.slug),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar el carrito.";
+
+      setLoadError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [shop.slug]);
+
+  useEffect(() => {
+    void loadShopCartItems();
+  }, [loadShopCartItems]);
 
   const subtotal = useMemo(
     () =>
@@ -46,38 +72,146 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
       ),
     [cartItems],
   );
+
   const activeMenuItem = useMemo(
-    () => cartItems.find((item) => item.id === menuItemId),
+    () => cartItems.find((item) => item.id === menuItemId) ?? null,
     [cartItems, menuItemId],
   );
-  const removeLineItem = (lineItemId: string) => {
-    setCartItems((current) => current.filter((item) => item.id !== lineItemId));
-  };
 
-  const increaseQuantity = (lineItemId: string) => {
+  useEffect(() => {
+    if (menuItemId && !activeMenuItem) {
+      setMenuItemId(null);
+    }
+  }, [activeMenuItem, menuItemId]);
+
+  const removeLineItem = useCallback(
+    async (lineItemId: string) => {
+      const previousItems = cartItems;
+      setCartItems((current) => current.filter((item) => item.id !== lineItemId));
+
+      try {
+        await removeCartItem(lineItemId);
+      } catch (error) {
+        console.error("No se pudo eliminar el item del carrito:", error);
+        setCartItems(previousItems);
+      }
+    },
+    [cartItems],
+  );
+
+  const increaseQuantity = useCallback(
+    async (lineItemId: string) => {
+      const targetItem = cartItems.find((item) => item.id === lineItemId);
+      if (!targetItem) {
+        return;
+      }
+
+      const previousItems = cartItems;
+      const nextQuantity = targetItem.quantity + 1;
+
+      setCartItems((current) =>
+        current.map((item) =>
+          item.id === lineItemId ? { ...item, quantity: nextQuantity } : item,
+        ),
+      );
+
+      try {
+        await setCartItemQuantity(lineItemId, nextQuantity);
+      } catch (error) {
+        console.error("No se pudo actualizar la cantidad:", error);
+        setCartItems(previousItems);
+      }
+    },
+    [cartItems],
+  );
+
+  const decreaseQuantity = useCallback(
+    async (lineItemId: string) => {
+      const targetItem = cartItems.find((item) => item.id === lineItemId);
+      if (!targetItem) {
+        return;
+      }
+
+      const previousItems = cartItems;
+      const nextQuantity = targetItem.quantity - 1;
+
+      setCartItems((current) =>
+        nextQuantity <= 0
+          ? current.filter((item) => item.id !== lineItemId)
+          : current.map((item) =>
+              item.id === lineItemId ? { ...item, quantity: nextQuantity } : item,
+            ),
+      );
+
+      try {
+        await setCartItemQuantity(lineItemId, nextQuantity);
+      } catch (error) {
+        console.error("No se pudo actualizar la cantidad:", error);
+        setCartItems(previousItems);
+      }
+    },
+    [cartItems],
+  );
+
+  const moveActiveItemToFavorites = useCallback(async () => {
+    if (!activeMenuItem) {
+      setMenuItemId(null);
+      return;
+    }
+
+    const didSaveFavorite = await addFavorite({
+      shopSlug: activeMenuItem.product.shopSlug,
+      shopName: activeMenuItem.product.shopName,
+      productId: activeMenuItem.product.productId,
+      productName: activeMenuItem.product.name,
+      priceUsd: activeMenuItem.product.priceUsd,
+      imageUrl: activeMenuItem.product.imageUrl,
+      alt: activeMenuItem.product.alt,
+    });
+
+    if (!didSaveFavorite) {
+      return;
+    }
+
+    const previousItems = cartItems;
     setCartItems((current) =>
-      current.map((item) =>
-        item.id === lineItemId ? { ...item, quantity: item.quantity + 1 } : item,
-      ),
+      current.filter((item) => item.id !== activeMenuItem.id),
     );
-  };
 
-  const decreaseQuantity = (lineItemId: string) => {
-    setCartItems((current) =>
-      current.flatMap((item) => {
-        if (item.id !== lineItemId) {
-          return [item];
-        }
+    try {
+      await removeCartItem(activeMenuItem.id);
+      setMenuItemId(null);
+    } catch (error) {
+      console.error("No se pudo mover el item a favoritos:", error);
+      setCartItems(previousItems);
+      setMenuItemId(null);
+    }
+  }, [activeMenuItem, addFavorite, cartItems]);
 
-        const nextQuantity = item.quantity - 1;
-        if (nextQuantity <= 0) {
-          return [];
-        }
+  const handleCheckout = useCallback(async () => {
+    setIsCheckingOut(true);
 
-        return [{ ...item, quantity: nextQuantity }];
-      }),
-    );
-  };
+    try {
+      const result = await checkoutCartByShop(shop.slug);
+
+      if (result.unauthorized) {
+        router.push(`/sign-in?next=${encodeURIComponent(`/${shop.slug}/carrito`)}`);
+        return;
+      }
+
+      if (result.empty) {
+        return;
+      }
+
+      await loadShopCartItems();
+      router.push("/ordenes");
+      router.refresh();
+    } catch (error) {
+      console.error("No se pudo completar la orden:", error);
+    } finally {
+      setIsCheckingOut(false);
+    }
+  }, [loadShopCartItems, router, shop.slug]);
 
   return (
     <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 text-[var(--color-carbon)]">
@@ -88,18 +222,28 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
               N
             </div>
             <div>
-              <h1 className="text-lg font-bold leading-none text-[var(--color-carbon)]">
+              <h1 className="text-base font-bold leading-none text-[var(--color-carbon)]">
                 {shop.vendorName}
               </h1>
-              <p className="mt-1 text-sm font-medium leading-none text-[var(--color-carbon)]">
+              <p className="mt-1 text-xs font-medium leading-none text-[var(--color-carbon)]">
                 {shop.rating} ★ ({shop.reviewCount})
               </p>
             </div>
           </header>
 
-          {cartItems.length === 0 ? (
+          {isLoading ? (
             <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
-              <p className="text-2xl font-semibold text-[var(--color-carbon)]">Tu carrito esta vacio.</p>
+              <p className="text-base font-semibold text-[var(--color-carbon)]">Cargando carrito...</p>
+            </div>
+          ) : loadError ? (
+            <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
+              <p className="text-base font-semibold text-[var(--color-carbon)]">
+                {loadError}
+              </p>
+            </div>
+          ) : cartItems.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
+              <p className="text-base font-semibold text-[var(--color-carbon)]">Tu carrito esta vacio.</p>
               <p className="mt-2 text-sm text-[var(--color-carbon)]">
                 Agrega productos para continuar con tu compra.
               </p>
@@ -126,20 +270,20 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <h2 className="text-xl leading-tight font-medium text-[var(--color-carbon)]">
+                        <h2 className="text-sm leading-tight font-medium text-[var(--color-carbon)]">
                           {item.product.name}
                         </h2>
-                        <p className="whitespace-nowrap text-lg font-semibold leading-none text-[var(--color-carbon)]">
+                        <p className="whitespace-nowrap text-sm font-semibold leading-none text-[var(--color-carbon)]">
                           {formatUsd(item.product.priceUsd)}
                         </p>
                       </div>
 
                       <div className="mt-3 flex items-center justify-between">
-                        <div className="inline-flex items-center gap-5 rounded-full border border-[var(--color-gray-border)] bg-[var(--color-white)] px-4 py-2 text-lg leading-none text-[var(--color-carbon)]">
+                        <div className="inline-flex items-center gap-5 rounded-full border border-[var(--color-gray-border)] bg-[var(--color-white)] px-4 py-2 text-sm leading-none text-[var(--color-carbon)]">
                           <button
                             type="button"
                             aria-label="Reducir cantidad"
-                            onClick={() => decreaseQuantity(item.id)}
+                            onClick={() => void decreaseQuantity(item.id)}
                           >
                             −
                           </button>
@@ -147,7 +291,7 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
                           <button
                             type="button"
                             aria-label="Aumentar cantidad"
-                            onClick={() => increaseQuantity(item.id)}
+                            onClick={() => void increaseQuantity(item.id)}
                           >
                             +
                           </button>
@@ -167,14 +311,19 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
               ))}
 
               <div className="mb-5 flex items-center justify-between">
-                <p className="text-xl font-medium leading-none text-[var(--color-carbon)]">Subtotal</p>
-                <p className="text-xl font-semibold leading-none text-[var(--color-carbon)]">
+                <p className="text-lg font-medium leading-none text-[var(--color-carbon)]">Subtotal</p>
+                <p className="text-lg font-semibold leading-none text-[var(--color-carbon)]">
                   {formatUsd(subtotal)}
                 </p>
               </div>
 
-              <button type="button" className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-xl font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)]">
-                Continuar al pago
+              <button
+                type="button"
+                disabled={isCheckingOut}
+                className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-base font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)] disabled:opacity-70"
+                onClick={() => void handleCheckout()}
+              >
+                {isCheckingOut ? "Procesando..." : "Continuar al pago"}
               </button>
             </>
           )}
@@ -219,34 +368,17 @@ export default function CartPageClient({ shop, isEmpty }: CartPageClientProps) {
 
             <div className="space-y-3">
               <button type="button"
-                className="flex w-full items-center gap-4 rounded-2xl px-1 py-3 text-left text-2xl leading-none text-[var(--color-black)]"
-                onClick={() => {
-                  if (!activeMenuItem) {
-                    setMenuItemId(null);
-                    return;
-                  }
-
-                  addFavorite({
-                    shopSlug: shop.slug,
-                    shopName: shop.vendorName,
-                    productId: activeMenuItem.product.id,
-                    productName: activeMenuItem.product.name,
-                    priceUsd: activeMenuItem.product.priceUsd,
-                    imageUrl: activeMenuItem.product.imageUrl,
-                    alt: activeMenuItem.product.alt,
-                  });
-                  removeLineItem(activeMenuItem.id);
-                  setMenuItemId(null);
-                }}
+                className="flex w-full items-center gap-4 rounded-2xl px-1 py-3 text-left text-lg leading-none text-[var(--color-black)]"
+                onClick={() => void moveActiveItemToFavorites()}
               >
                 <HeartIcon className="h-8 w-8" />
                 Mover a favoritos
               </button>
               <button type="button"
-                className="flex w-full items-center gap-4 rounded-2xl px-1 py-3 text-left text-2xl leading-none text-[var(--color-danger)]"
+                className="flex w-full items-center gap-4 rounded-2xl px-1 py-3 text-left text-lg leading-none text-[var(--color-danger)]"
                 onClick={() => {
                   if (activeMenuItem) {
-                    removeLineItem(activeMenuItem.id);
+                    void removeLineItem(activeMenuItem.id);
                   }
                   setMenuItemId(null);
                 }}

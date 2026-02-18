@@ -79,7 +79,7 @@ export function FavoritesPageClient() {
                     type="button"
                     className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-brand)] text-[var(--color-white)]"
                     aria-label={`Quitar ${favorite.productName} de favoritos`}
-                    onClick={() => removeFavoriteById(favorite.id)}
+                    onClick={() => void removeFavoriteById(favorite.id)}
                   >
                     <HeartIcon className="h-5 w-5" />
                   </button>

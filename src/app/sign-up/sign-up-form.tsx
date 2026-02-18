@@ -20,33 +20,39 @@ export function SignUpForm() {
     setSuccessMessage(null);
     setIsSubmitting(true);
 
-    const supabase = createSupabaseBrowserClient();
-    const callbackUrl =
-      typeof window === "undefined"
-        ? "http://localhost:3000/auth/callback"
-        : `${window.location.origin}/auth/callback`;
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const callbackUrl =
+        typeof window === "undefined"
+          ? "http://localhost:3000/auth/callback"
+          : `${window.location.origin}/auth/callback`;
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: callbackUrl,
-      },
-    });
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: callbackUrl,
+        },
+      });
 
-    setIsSubmitting(false);
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
 
-    if (error) {
-      setErrorMessage(error.message);
-      return;
+      setSuccessMessage(
+        "Cuenta creada. Revisa tu email para confirmar tu cuenta antes de entrar.",
+      );
+      setTimeout(() => {
+        router.push("/sign-in");
+      }, 1200);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo crear la cuenta.";
+      setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setSuccessMessage(
-      "Cuenta creada. Revisa tu email para confirmar tu cuenta antes de entrar.",
-    );
-    setTimeout(() => {
-      router.push("/sign-in");
-    }, 1200);
   };
 
   return (
