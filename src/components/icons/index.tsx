@@ -99,11 +99,20 @@ export function ShareIcon({ className = "h-6 w-6", ...props }: IconProps) {
   );
 }
 
-export function HeartIcon({ className = "h-6 w-6", ...props }: IconProps) {
+type HeartIconProps = IconProps & {
+  filled?: boolean;
+};
+
+export function HeartIcon({
+  className = "h-6 w-6",
+  filled = false,
+  ...props
+}: HeartIconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
       <path
         d="M12.1 20.2c-.1 0-.2 0-.3-.1-4.8-4.2-7.8-6.9-7.8-10.3C4 7.7 5.7 6 7.8 6c1.6 0 3 .8 3.8 2.1C12.4 6.8 13.8 6 15.4 6c2.1 0 3.8 1.7 3.8 3.8 0 3.4-3 6.1-7.8 10.3-.1.1-.2.1-.3.1Z"
+        fill={filled ? "currentColor" : "none"}
         stroke="currentColor"
         strokeWidth="1.8"
       />

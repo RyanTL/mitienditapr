@@ -6,10 +6,10 @@ import {
   BackIcon,
   ChevronDownIcon,
   ChevronIcon,
-  HeartIcon,
   HomeIcon,
   ShareIcon,
 } from "@/components/icons";
+import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-button";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { ShopRating } from "@/components/shop/shop-rating";
@@ -38,17 +38,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
     .slice(0, 2);
 
   return (
-    <div className="min-h-screen bg-[#efefef] px-4 py-5 pb-28 text-[#111]">
+    <div className="min-h-screen bg-[var(--color-white)] px-4 py-5 pb-28 text-[var(--color-carbon)]">
       <main className="mx-auto w-full max-w-md">
         <header className="mb-4 flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4b4b4b] text-lg font-bold text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-lg font-bold text-[var(--color-white)]">
             N
           </div>
-          <p className="text-lg font-bold text-[#171717]">{shop.vendorName}</p>
+          <p className="text-lg font-bold text-[var(--color-carbon)]">{shop.vendorName}</p>
         </header>
 
         <section>
-          <div className="relative overflow-hidden rounded-2xl bg-[#dfdfdf]">
+          <div className="relative overflow-hidden rounded-2xl bg-[var(--color-gray)]">
             <div className="relative h-[360px]">
               <Image
                 src={product.imageUrl}
@@ -67,21 +67,30 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <ShopRating
                 rating={shop.rating}
                 reviewCount={shop.reviewCount}
-                className="mt-1.5 text-sm font-semibold text-[#222]"
+                className="mt-1.5 text-sm font-semibold text-[var(--color-carbon)]"
               />
               <p className="mt-1 text-[1.25rem] leading-none">
                 {formatUsd(product.priceUsd)}
               </p>
             </div>
             <div className="mt-0.5 flex items-center gap-2">
+              <FavoriteToggleButton
+                product={{
+                  shopSlug: shop.slug,
+                  shopName: shop.vendorName,
+                  productId: product.id,
+                  productName: product.name,
+                  priceUsd: product.priceUsd,
+                  imageUrl: product.imageUrl,
+                  alt: product.alt,
+                }}
+                baseClassName="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-gray-border)]"
+                activeClassName="border-[var(--color-brand)] bg-[var(--color-brand)] text-[var(--color-white)]"
+                inactiveClassName="bg-[var(--color-gray-100)] text-[var(--color-carbon)]"
+                iconClassName="h-6 w-6"
+              />
               <button type="button"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#cdcdcd] bg-[#efefef] text-[#1b1b1b]"
-                aria-label="Guardar producto"
-              >
-                <HeartIcon />
-              </button>
-              <button type="button"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#cdcdcd] bg-[#efefef] text-[#1b1b1b]"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-100)] text-[var(--color-carbon)]"
                 aria-label="Compartir producto"
               >
                 <ShareIcon />
@@ -89,7 +98,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          <button type="button" className="mt-5 inline-flex items-center gap-1.5 text-sm text-[#3a3a3a]">
+          <button type="button" className="mt-5 inline-flex items-center gap-1.5 text-sm text-[var(--color-carbon)]">
             Ship to 00667
             <span className="inline-flex items-center justify-center">
               <ChevronDownIcon />
@@ -97,8 +106,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </button>
 
           <div className="mt-6">
-            <p className="text-sm text-[#3a3a3a]">Cantidad</p>
-            <div className="mt-1 inline-flex items-center gap-4 rounded-full border border-[#d6d6d6] px-3 py-1 text-lg leading-none text-[#2b2b2b]">
+            <p className="text-sm text-[var(--color-carbon)]">Cantidad</p>
+            <div className="mt-1 inline-flex items-center gap-4 rounded-full border border-[var(--color-gray)] px-3 py-1 text-lg leading-none text-[var(--color-carbon)]">
               <button type="button" aria-label="Restar cantidad">−</button>
               <span>1</span>
               <button type="button" aria-label="Sumar cantidad">+</button>
@@ -106,27 +115,27 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
 
           <div className="mt-8 space-y-3">
-            <button type="button" className="w-full rounded-3xl bg-[#28737f] px-6 py-3.5 text-3xl font-bold text-white">
+            <button type="button" className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)]">
               Anadir al carrito
             </button>
-            <button type="button" className="w-full rounded-3xl bg-black px-6 py-3.5 text-3xl font-bold text-white">
+            <button type="button" className="w-full rounded-3xl bg-[var(--color-black)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)]">
               Comprar ahora
             </button>
           </div>
         </section>
 
         <section className="mt-8">
-          <h2 className="text-3xl font-bold text-[#171717]">Descripcion</h2>
-          <p className="mt-2 text-sm text-[#4a4a4a]">{product.description}</p>
+          <h2 className="text-3xl font-bold text-[var(--color-carbon)]">Descripcion</h2>
+          <p className="mt-2 text-sm text-[var(--color-carbon)]">{product.description}</p>
         </section>
 
         <section className="mt-10 pb-4">
           <div className="mb-4 flex items-center gap-2">
-            <h3 className="text-[1.55rem] font-bold leading-none text-[#161616]">
+            <h3 className="text-[1.55rem] font-bold leading-none text-[var(--color-carbon)]">
               Ver mas de {shop.vendorName}
             </h3>
             <button type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#cbcbcb]"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-gray)]"
               aria-label="Ver mas productos"
             >
               <ChevronIcon />
@@ -137,7 +146,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             {relatedProducts.map((related) => (
               <article key={related.id}>
                 <Link href={`/${shop.slug}/producto/${related.id}`} className="block">
-                  <div className="relative overflow-hidden rounded-2xl bg-[#dedede]">
+                  <div className="relative overflow-hidden rounded-2xl bg-[var(--color-gray)]">
                     <div className="relative h-[180px]">
                       <Image
                         src={related.imageUrl}
@@ -148,10 +157,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
                       />
                     </div>
                   </div>
-                  <h4 className="mt-2 text-[1.65rem] font-bold leading-none">
+                  <h4 className="mt-2 text-[1.25rem] font-bold leading-none">
                     {related.name}
                   </h4>
-                  <p className="mt-1 text-[1.7rem] font-semibold leading-none">
+                  <p className="mt-1 text-[1rem] font-semibold leading-none">
                     {formatUsd(related.priceUsd)}
                   </p>
                 </Link>

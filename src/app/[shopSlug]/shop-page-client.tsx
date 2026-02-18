@@ -8,12 +8,12 @@ import {
   BackIcon,
   ChevronIcon,
   CloseIcon,
-  HeartIcon,
   HomeIcon,
   InfoIcon,
   MenuIcon,
   ShareIcon,
 } from "@/components/icons";
+import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-button";
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { BOTTOM_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
@@ -92,12 +92,12 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
   }, [isShopMenuOpen]);
 
   return (
-    <div className="min-h-screen bg-[#efefef] px-4 py-4 pb-28 text-[#111]">
+    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-4 pb-28 text-[var(--color-carbon)]">
       <main className="mx-auto w-full max-w-md">
         <header className="mb-14 flex items-center justify-between">
           <button
             type="button"
-            className="flex h-12 w-12 items-center justify-center rounded-full border border-[#d8d8d8] bg-white text-[#202020]"
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] text-[var(--color-carbon)]"
             aria-label={isShopMenuOpen ? "Cerrar menu de tienda" : "Abrir menu de tienda"}
             aria-expanded={isShopMenuOpen}
             onClick={() => setIsShopMenuOpen((current) => !current)}
@@ -107,14 +107,14 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-full border border-[#d8d8d8] bg-white px-3 py-2 text-sm font-semibold text-[#202020]"
+              className="rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm font-semibold text-[var(--color-carbon)]"
               aria-label="Seguir vendedor"
             >
               Seguir
             </button>
             <button
               type="button"
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-[#d8d8d8] bg-white text-[#202020]"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] text-[var(--color-carbon)]"
               aria-label="Compartir tienda"
             >
               <ShareIcon className="h-5 w-5" />
@@ -124,7 +124,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
 
         <section className="mb-20 text-center">
           <h1 className="text-5xl font-extrabold tracking-tight">{shop.vendorName}</h1>
-          <p className="mx-auto mt-6 max-w-[32ch] text-lg leading-6 text-[#2d2d2d]">
+          <p className="mx-auto mt-6 max-w-[32ch] text-lg leading-6 text-[var(--color-carbon)]">
             {shop.description}
           </p>
         </section>
@@ -132,8 +132,11 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
         <section className="grid grid-cols-2 gap-x-3 gap-y-6 pb-6">
           {shop.products.map((product) => (
             <article key={product.id}>
-              <Link href={`/${shop.slug}/producto/${product.id}`} className="block">
-                <div className="relative mb-2 overflow-hidden rounded-3xl bg-[#dedede]">
+              <div className="relative mb-2">
+                <Link
+                  href={`/${shop.slug}/producto/${product.id}`}
+                  className="block overflow-hidden rounded-3xl bg-[var(--color-gray)]"
+                >
                   <div className="relative h-[190px]">
                     <Image
                       src={product.imageUrl}
@@ -143,10 +146,28 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                       sizes="(max-width: 768px) 48vw, 240px"
                     />
                   </div>
-                  <span className="absolute right-2 bottom-2 flex h-8 w-8 items-center justify-center rounded-full bg-[#a4a4a4]/85 text-white backdrop-blur-sm">
-                    <HeartIcon className="h-5 w-5" />
-                  </span>
+                </Link>
+
+                <div className="absolute right-2 bottom-2">
+                  <FavoriteToggleButton
+                    product={{
+                      shopSlug: shop.slug,
+                      shopName: shop.vendorName,
+                      productId: product.id,
+                      productName: product.name,
+                      priceUsd: product.priceUsd,
+                      imageUrl: product.imageUrl,
+                      alt: product.alt,
+                    }}
+                    baseClassName="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-white)] backdrop-blur-sm"
+                    activeClassName="bg-[var(--color-brand)]"
+                    inactiveClassName="bg-[var(--color-gray-500)]"
+                    iconClassName="h-5 w-5"
+                  />
                 </div>
+              </div>
+
+              <Link href={`/${shop.slug}/producto/${product.id}`} className="block">
                 <h2 className="text-lg font-bold leading-tight tracking-tight">
                   {product.name}
                 </h2>
@@ -178,31 +199,31 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
 
       {isShopMenuOpen ? (
         <div
-          className="fixed inset-0 z-40 overflow-y-auto bg-black/12 px-4 py-6 backdrop-blur-[1px]"
+          className="fixed inset-0 z-40 overflow-y-auto bg-[var(--overlay-black-012)] px-4 py-6 backdrop-blur-[1px]"
           onClick={() => setIsShopMenuOpen(false)}
           role="presentation"
         >
           <aside
-            className="mx-auto w-full max-w-md rounded-3xl border border-[#dddddd] bg-white p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]"
+            className="mx-auto w-full max-w-md rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4 shadow-[0_18px_40px_var(--shadow-black-012)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4a4a4a] text-sm font-semibold text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
                   N
                 </div>
                 <div>
-                  <p className="text-base font-bold text-[#1d1d1d]">{shop.vendorName}</p>
+                  <p className="text-base font-bold text-[var(--color-carbon)]">{shop.vendorName}</p>
                   <ShopRating
                     rating={shop.rating}
                     reviewCount={shop.reviewCount}
-                    className="text-xs font-medium text-[#4a4a4a]"
+                    className="text-xs font-medium text-[var(--color-carbon)]"
                   />
                 </div>
               </div>
               <button
                 type="button"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#dfdfdf] text-[#313131]"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray)] text-[var(--color-carbon)]"
                 aria-label="Cerrar menu"
                 onClick={() => setIsShopMenuOpen(false)}
               >
@@ -211,39 +232,39 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
             </div>
 
             <section className="space-y-3" aria-label="Informacion de tienda">
-              <article className="rounded-3xl bg-[#f7f7f7] p-4">
+              <article className="rounded-3xl bg-[var(--color-gray)] p-4">
                 <div className="mb-3">
-                  <h3 className="text-[1.8rem] font-bold leading-none text-[#1b1b1b]">
+                  <h3 className="text-[1.8rem] font-bold leading-none text-[var(--color-carbon)]">
                     Reviews
                   </h3>
                 </div>
 
                 <div className="mb-3 flex items-end justify-between">
                   <div>
-                    <p className="text-4xl leading-none font-bold text-[#212121]">
+                    <p className="text-4xl leading-none font-bold text-[var(--color-carbon)]">
                       {shop.rating}
                     </p>
-                    <p className="mt-1 text-sm text-[#616161]">
+                    <p className="mt-1 text-sm text-[var(--color-carbon)]">
                       {shop.reviewCount} calificaciones
                     </p>
                   </div>
-                  <p className="text-2xl tracking-[0.1em] text-[#222]">★★★★★</p>
+                  <p className="text-2xl tracking-[0.1em] text-[var(--color-carbon)]">★★★★★</p>
                 </div>
 
                 <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
                   {REVIEW_CARDS.map((review) => (
                     <article
                       key={review.id}
-                      className="min-w-[250px] snap-start rounded-2xl border border-[#ececec] bg-white p-3"
+                      className="min-w-[250px] snap-start rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3"
                     >
-                      <h4 className="text-sm font-semibold text-[#1f1f1f]">
+                      <h4 className="text-sm font-semibold text-[var(--color-carbon)]">
                         {review.title}
                       </h4>
-                      <p className="mt-1 line-clamp-3 text-xs leading-5 text-[#555]">
+                      <p className="mt-1 line-clamp-3 text-xs leading-5 text-[var(--color-carbon)]">
                         {review.body}
                       </p>
-                      <p className="mt-2 text-xs text-[#777]">★★★★★</p>
-                      <p className="mt-1 text-xs text-[#888]">
+                      <p className="mt-2 text-xs text-[var(--color-carbon)]">★★★★★</p>
+                      <p className="mt-1 text-xs text-[var(--color-carbon)]">
                         {review.author} · {review.time}
                       </p>
                     </article>
@@ -251,8 +272,8 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                 </div>
               </article>
 
-              <article className="rounded-3xl bg-[#f7f7f7] p-4">
-                <h3 className="text-[1.8rem] font-bold leading-none text-[#1b1b1b]">
+              <article className="rounded-3xl bg-[var(--color-gray)] p-4">
+                <h3 className="text-[1.8rem] font-bold leading-none text-[var(--color-carbon)]">
                   Politicas
                 </h3>
                 <div className="mt-3 space-y-2">
@@ -261,51 +282,51 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                       key={item}
                       className="flex items-center justify-between rounded-xl px-1 py-2.5"
                     >
-                      <p className="text-sm text-[#333]">{item}</p>
-                      <ChevronIcon className="h-4 w-4 text-[#676767]" />
+                      <p className="text-sm text-[var(--color-carbon)]">{item}</p>
+                      <ChevronIcon className="h-4 w-4 text-[var(--color-carbon)]" />
                     </div>
                   ))}
                 </div>
               </article>
 
-              <article className="rounded-3xl bg-[#f7f7f7] p-4">
-                <h3 className="text-[1.8rem] font-bold leading-none text-[#1b1b1b]">
+              <article className="rounded-3xl bg-[var(--color-gray)] p-4">
+                <h3 className="text-[1.8rem] font-bold leading-none text-[var(--color-carbon)]">
                   Contactar
                 </h3>
                 <div className="mt-3 grid gap-2">
                   <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b7b7b]">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
                       Instagram
                     </p>
-                    <p className="text-sm text-[#232323]">{instagramHandle}</p>
+                    <p className="text-sm text-[var(--color-carbon)]">{instagramHandle}</p>
                   </div>
                   <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b7b7b]">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
                       WhatsApp
                     </p>
-                    <p className="text-sm text-[#232323]">{whatsappNumber}</p>
+                    <p className="text-sm text-[var(--color-carbon)]">{whatsappNumber}</p>
                   </div>
                   <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b7b7b]">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
                       Email
                     </p>
-                    <p className="text-sm text-[#232323]">{contactEmail}</p>
+                    <p className="text-sm text-[var(--color-carbon)]">{contactEmail}</p>
                   </div>
                   <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b7b7b]">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
                       Horario
                     </p>
-                    <p className="text-sm text-[#232323]">{supportHours}</p>
+                    <p className="text-sm text-[var(--color-carbon)]">{supportHours}</p>
                   </div>
                 </div>
               </article>
 
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-2xl bg-[#f7f7f7] px-4 py-3 text-left text-base font-semibold text-[#1e1e1e]"
+                className="flex w-full items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3 text-left text-base font-semibold text-[var(--color-carbon)]"
               >
                 <span>Reportar tienda</span>
-                <InfoIcon className="h-[18px] w-[18px] text-[#575757]" />
+                <InfoIcon className="h-[18px] w-[18px] text-[var(--color-carbon)]" />
               </button>
             </section>
           </aside>

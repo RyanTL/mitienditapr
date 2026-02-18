@@ -25,7 +25,7 @@ export function FloatingCartLink({
   return (
     <Link href={href} className={mergedClassName} aria-label="Abrir carrito">
       <CartIcon />
-      <span className="absolute top-1.5 right-1.5 rounded-full bg-white px-1.5 text-[10px] font-bold leading-4 text-[#4f46e5]">
+      <span className="absolute top-1.5 right-1.5 rounded-full bg-[var(--color-white)] px-1.5 text-[10px] font-bold leading-4 text-[var(--color-brand)]">
         {count}
       </span>
     </Link>

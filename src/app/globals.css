@@ -1,16 +1,41 @@
 @import "tailwindcss";
 
 :root {
+  --color-white: #ffffff;
+  --color-white-95: rgba(255, 255, 255, 0.95);
+  --color-black: #000000;
+  --color-carbon: #1a1a1a;
+  --color-gray-100: #f2f2f2;
+  --color-gray-200: #e3e3e3;
+  --color-gray-300: #cdcdcd;
+  --color-gray-500: #6d6d6d;
+  --color-gray: var(--color-gray-200);
+  --color-danger: #d92f11;
+  --color-brand: #005468;
+
+  --overlay-black-012: rgba(0, 0, 0, 0.12);
+  --overlay-black-015: rgba(0, 0, 0, 0.15);
+  --overlay-black-055: rgba(0, 0, 0, 0.55);
+
+  --shadow-black-002: rgba(0, 0, 0, 0.02);
+  --shadow-black-003: rgba(0, 0, 0, 0.03);
+  --shadow-black-008: rgba(0, 0, 0, 0.08);
+  --shadow-black-012: rgba(0, 0, 0, 0.12);
+  --shadow-black-018: rgba(0, 0, 0, 0.18);
+  --shadow-black-035: rgba(0, 0, 0, 0.35);
+  --shadow-brand-020: rgba(0, 84, 104, 0.2);
+  --shadow-brand-024: rgba(0, 84, 104, 0.24);
+
   color-scheme: light;
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: var(--color-gray);
+  --foreground: var(--color-carbon);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Arial", "Helvetica", sans-serif;
+  --font-mono: "Menlo", "Monaco", "Courier New", monospace;
 }
 
 body {

@@ -99,22 +99,22 @@ const pastOrders: PastOrder[] = [
 
 export default function OrdersPage() {
   return (
-    <div className="min-h-screen bg-[#efefef] pb-36">
+    <div className="min-h-screen bg-[var(--color-gray)] pb-36">
       <main className="mx-auto w-full max-w-md px-4 pt-6">
         <header className="mb-8 flex items-center justify-between">
           <div className="w-8" />
-          <h1 className="text-4xl font-semibold tracking-tight text-black">Ordenes</h1>
-          <button type="button" className="text-black" aria-label="Mas opciones">
+          <h1 className="text-4xl font-semibold tracking-tight text-[var(--color-black)]">Ordenes</h1>
+          <button type="button" className="text-[var(--color-black)]" aria-label="Mas opciones">
             <DotsIcon />
           </button>
         </header>
 
         <section>
           <div className="mb-3 flex items-center gap-2">
-            <h2 className="text-3xl font-bold leading-none text-[#141414]">
+            <h2 className="text-3xl font-bold leading-none text-[var(--color-carbon)]">
               Compras en proceso
             </h2>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e7e7e7] text-[#121212]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-gray-icon)] text-[var(--color-carbon)]">
               <ChevronIcon />
             </span>
           </div>
@@ -123,7 +123,7 @@ export default function OrdersPage() {
             {inProgressOrders.map((item) => (
               <article
                 key={item.id}
-                className="relative min-w-[170px] snap-start overflow-hidden rounded-3xl border border-[#dddddd] bg-white"
+                className="relative min-w-[170px] snap-start overflow-hidden rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)]"
               >
                 <div className="relative h-[170px]">
                   <Image
@@ -135,12 +135,12 @@ export default function OrdersPage() {
                   />
                 </div>
                 {item.tag ? (
-                  <span className="absolute top-3 left-3 rounded-full bg-[#5a43e6] px-2 py-0.5 text-xs font-semibold text-white">
+                  <span className="absolute top-3 left-3 rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-xs font-semibold text-[var(--color-white)]">
                     {item.tag}
                   </span>
                 ) : null}
                 <button type="button"
-                  className="absolute right-3 bottom-3 flex h-14 w-14 items-center justify-center rounded-full bg-[#111] text-white"
+                  className="absolute right-3 bottom-3 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-carbon)] text-[var(--color-white)]"
                   aria-label={`Agregar ${item.title} al carrito`}
                 >
                   <CartIcon />
@@ -152,10 +152,10 @@ export default function OrdersPage() {
 
         <section className="mt-8">
           <div className="mb-4 flex items-center gap-2">
-            <h2 className="text-3xl font-bold leading-none text-[#141414]">
+            <h2 className="text-3xl font-bold leading-none text-[var(--color-carbon)]">
               Compras pasadas
             </h2>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e7e7e7] text-[#121212]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-gray-icon)] text-[var(--color-carbon)]">
               <ChevronIcon />
             </span>
           </div>
@@ -163,7 +163,7 @@ export default function OrdersPage() {
           <div className="space-y-4">
             {pastOrders.map((order) => (
               <article key={order.id} className="flex items-center gap-3">
-                <div className="relative h-[74px] w-[74px] overflow-hidden rounded-2xl border border-[#e0e0e0] bg-white">
+                <div className="relative h-[74px] w-[74px] overflow-hidden rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)]">
                   <Image
                     src={order.imageUrl}
                     alt={order.alt}
@@ -173,10 +173,10 @@ export default function OrdersPage() {
                   />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="truncate text-2xl font-bold leading-none text-[#121212]">
+                  <h3 className="truncate text-2xl font-bold leading-none text-[var(--color-carbon)]">
                     {order.title}
                   </h3>
-                  <p className="mt-1 truncate text-lg leading-none text-[#474747]">
+                  <p className="mt-1 truncate text-lg leading-none text-[var(--color-carbon)]">
                     {order.subtitle}
                   </p>
                 </div>

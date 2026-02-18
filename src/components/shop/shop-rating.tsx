@@ -6,7 +6,7 @@ type ShopRatingProps = {
 
 export function ShopRating({ rating, reviewCount, className }: ShopRatingProps) {
   return (
-    <p className={className ?? "text-sm font-semibold text-[#222]"}>
+    <p className={className ?? "text-sm font-semibold text-[var(--color-carbon)]"}>
       {rating}★ ({reviewCount})
     </p>
   );
