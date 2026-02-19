@@ -14,6 +14,13 @@ Required:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY` (server-only)
+- `ENABLE_VENDOR_MODE=true`
+
+Stripe (vendor onboarding + subscription):
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_VENDOR_PRICE_ID`
+- `NEXT_PUBLIC_APP_URL` (example: `http://localhost:3000`)
 
 ## 3) Auth URL configuration
 In Supabase Dashboard:
@@ -24,9 +31,11 @@ In Supabase Dashboard:
 ## 4) Run schema
 Open Supabase SQL Editor and run:
 - `supabase/schema.sql`
+- `supabase/migrations/20260218_vendor_mvp.sql`
 
 This creates:
 - profiles, shops, products, favorites, cart_items, orders, order_items, vendor_subscriptions
+- vendor_onboarding, product_variants, product_images, shop_policies, stripe_webhook_events
 - triggers for `updated_at`
 - profile auto-create trigger on `auth.users`
 - RLS policies for tenant/user isolation

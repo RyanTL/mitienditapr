@@ -17,6 +17,7 @@ import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-but
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { BOTTOM_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
+import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { formatUsd } from "@/lib/formatters";
 import type { ShopDetail } from "@/lib/mock-shop-data";
@@ -105,13 +106,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
             {isShopMenuOpen ? <CloseIcon className="h-6 w-6" /> : <MenuIcon />}
           </button>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm font-semibold text-[var(--color-carbon)]"
-              aria-label="Seguir vendedor"
-            >
-              Seguir
-            </button>
+            <FollowShopButton shopSlug={shop.slug} />
             <button
               type="button"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] text-[var(--color-carbon)]"

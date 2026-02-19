@@ -55,6 +55,17 @@ create table if not exists public.favorites (
 
 create index if not exists idx_favorites_profile_id on public.favorites(profile_id);
 
+-- ---------- Shop follows ----------
+create table if not exists public.shop_follows (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  shop_id uuid not null references public.shops(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (profile_id, shop_id)
+);
+
+create index if not exists idx_shop_follows_profile_id on public.shop_follows(profile_id);
+
 -- ---------- Cart ----------
 create table if not exists public.cart_items (
   id uuid primary key default gen_random_uuid(),
@@ -172,6 +183,7 @@ alter table public.profiles enable row level security;
 alter table public.shops enable row level security;
 alter table public.products enable row level security;
 alter table public.favorites enable row level security;
+alter table public.shop_follows enable row level security;
 alter table public.cart_items enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
@@ -270,6 +282,12 @@ using (
 drop policy if exists "favorites_own_all" on public.favorites;
 create policy "favorites_own_all"
 on public.favorites for all
+using (auth.uid() = profile_id)
+with check (auth.uid() = profile_id);
+
+drop policy if exists "shop_follows_own_all" on public.shop_follows;
+create policy "shop_follows_own_all"
+on public.shop_follows for all
 using (auth.uid() = profile_id)
 with check (auth.uid() = profile_id);
 

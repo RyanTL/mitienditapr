@@ -3,7 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 function isPrivatePath(pathname: string) {
-  if (pathname === "/favoritos" || pathname === "/ordenes") {
+  if (
+    pathname === "/favoritos" ||
+    pathname === "/ordenes" ||
+    pathname.startsWith("/vendedor")
+  ) {
     return true;
   }
 
