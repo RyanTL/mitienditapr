@@ -1,9 +1,9 @@
 "use client";
 
-import { createCatalogProductKey, getCatalogProductDatabaseId } from "@/lib/catalog-ids";
+import { createCatalogProductKey } from "@/lib/catalog-ids";
 import {
   getCatalogProductIdentityFromDatabaseId,
-  getCatalogProductDatabaseIdFromRoute,
+  resolveProductDatabaseId,
 } from "@/lib/catalog-mapping";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { ensureCatalogSeeded } from "@/lib/supabase/catalog-seed-client";
@@ -111,7 +111,7 @@ export async function fetchFavoriteProducts() {
   return productIds.flatMap((productId) => {
     const identity = getCatalogProductIdentityFromDatabaseId(productId);
     const product = productById.get(productId);
-    if (!identity || !product) {
+    if (!product) {
       return [];
     }
 
@@ -120,12 +120,16 @@ export async function fetchFavoriteProducts() {
       return [];
     }
 
+    const routeProductId = identity?.productId ?? product.id;
+    const routeShopSlug = identity?.shopSlug ?? shop.slug;
+    const favoriteId = createCatalogProductKey(routeShopSlug, routeProductId);
+
     return [
       {
-        id: createCatalogProductKey(identity.shopSlug, identity.productId),
-        shopSlug: shop.slug,
+        id: favoriteId,
+        shopSlug: routeShopSlug,
         shopName: shop.vendor_name,
-        productId: identity.productId,
+        productId: routeProductId,
         productName: product.name,
         priceUsd: Number(product.price_usd),
         imageUrl: product.image_url,
@@ -144,8 +148,7 @@ export async function upsertFavoriteProduct(shopSlug: string, productId: string)
   await ensureCatalogSeeded();
 
   const databaseProductId =
-    getCatalogProductDatabaseIdFromRoute(shopSlug, productId) ??
-    getCatalogProductDatabaseId(shopSlug, productId);
+    resolveProductDatabaseId(shopSlug, productId);
 
   const supabase = createSupabaseBrowserClient();
   const { error } = await supabase.from("favorites").upsert(
@@ -172,8 +175,7 @@ export async function deleteFavoriteProduct(shopSlug: string, productId: string)
   }
 
   const databaseProductId =
-    getCatalogProductDatabaseIdFromRoute(shopSlug, productId) ??
-    getCatalogProductDatabaseId(shopSlug, productId);
+    resolveProductDatabaseId(shopSlug, productId);
 
   const supabase = createSupabaseBrowserClient();
   const { error } = await supabase

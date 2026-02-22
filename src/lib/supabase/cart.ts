@@ -1,9 +1,8 @@
 "use client";
 
-import { getCatalogProductDatabaseId } from "@/lib/catalog-ids";
 import {
-  getCatalogProductDatabaseIdFromRoute,
   getCatalogProductIdentityFromDatabaseId,
+  resolveProductDatabaseId,
 } from "@/lib/catalog-mapping";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { ensureCatalogSeeded } from "@/lib/supabase/catalog-seed-client";
@@ -178,8 +177,7 @@ export async function addProductToCart(
   await ensureCatalogSeeded();
 
   const databaseProductId =
-    getCatalogProductDatabaseIdFromRoute(shopSlug, productId) ??
-    getCatalogProductDatabaseId(shopSlug, productId);
+    resolveProductDatabaseId(shopSlug, productId);
 
   const supabase = createSupabaseBrowserClient();
   const { data: existingItem, error: existingItemError } = await supabase

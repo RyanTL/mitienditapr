@@ -15,7 +15,7 @@ import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/n
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { formatUsd } from "@/lib/formatters";
-import { getShopBySlug } from "@/lib/mock-shop-data";
+import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data";
 
 type ProductPageProps = {
   params: Promise<{ shopSlug: string; productId: string }>;
@@ -23,7 +23,7 @@ type ProductPageProps = {
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { shopSlug, productId } = await params;
-  const shop = getShopBySlug(shopSlug);
+  const shop = await fetchShopDetailBySlugServer(shopSlug);
 
   if (!shop) {
     notFound();

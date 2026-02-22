@@ -5,6 +5,7 @@ import {
   serverErrorResponse,
   unauthorizedResponse,
 } from "@/lib/vendor/api";
+import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import {
   createStripeExpressAccount,
@@ -31,13 +32,34 @@ export async function POST(request: Request) {
   let dataClient = context.supabase;
   try {
     dataClient = createSupabaseAdminClient();
-  } catch (error) {
-    return serverErrorResponse(error, "Configura SUPABASE_SECRET_KEY para Stripe.");
+  } catch {
+    // Secret key is optional in development.
   }
 
   try {
     const profile = await ensureVendorRole(dataClient, context.profile);
     const shop = await ensureVendorShopForProfile(dataClient, profile);
+    const requestOrigin = new URL(request.url).origin;
+    const baseUrl = getAppBaseUrl({ requestOrigin });
+
+    if (isVendorBillingBypassEnabled) {
+      const fallbackConnectAccountId =
+        shop.stripe_connect_account_id ?? `dev_connect_${profile.id.slice(0, 8)}`;
+      const { error: updateShopError } = await dataClient
+        .from("shops")
+        .update({ stripe_connect_account_id: fallbackConnectAccountId })
+        .eq("id", shop.id)
+        .eq("vendor_profile_id", profile.id);
+
+      if (updateShopError) {
+        throw new Error(updateShopError.message);
+      }
+
+      return NextResponse.json({
+        url: `${baseUrl}/vendedor/onboarding?step=5&connect=done`,
+        stripeConnectAccountId: fallbackConnectAccountId,
+      });
+    }
 
     let connectAccountId = shop.stripe_connect_account_id;
     if (!connectAccountId) {
@@ -55,8 +77,6 @@ export async function POST(request: Request) {
       }
     }
 
-    const requestOrigin = new URL(request.url).origin;
-    const baseUrl = getAppBaseUrl({ requestOrigin });
     const accountLink = await createStripeExpressAccountLink({
       accountId: connectAccountId,
       refreshUrl: `${baseUrl}/vendedor/onboarding?step=5`,

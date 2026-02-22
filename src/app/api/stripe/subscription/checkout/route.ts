@@ -5,6 +5,7 @@ import {
   serverErrorResponse,
   unauthorizedResponse,
 } from "@/lib/vendor/api";
+import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import {
   createStripeCustomer,
@@ -33,14 +34,51 @@ export async function POST(request: Request) {
   let dataClient = context.supabase;
   try {
     dataClient = createSupabaseAdminClient();
-  } catch (error) {
-    return serverErrorResponse(error, "Configura SUPABASE_SECRET_KEY para Stripe.");
+  } catch {
+    // Secret key is optional in development.
   }
 
   try {
     const profile = await ensureVendorRole(dataClient, context.profile);
     const shop = await ensureVendorShopForProfile(dataClient, profile);
     const existingSubscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
+    const requestOrigin = new URL(request.url).origin;
+    const baseUrl = getAppBaseUrl({ requestOrigin });
+
+    if (isVendorBillingBypassEnabled) {
+      const periodEnd = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+      const fallbackCustomerId =
+        existingSubscription?.stripe_customer_id ?? `cus_dev_${profile.id.slice(0, 10)}`;
+      const fallbackSubscriptionId =
+        existingSubscription?.stripe_subscription_id ?? `sub_dev_${shop.id.slice(0, 10)}`;
+
+      const { error: upsertSubscriptionError } = await dataClient
+        .from("vendor_subscriptions")
+        .upsert(
+          {
+            shop_id: shop.id,
+            provider: "stripe",
+            status: "active",
+            stripe_customer_id: fallbackCustomerId,
+            stripe_subscription_id: fallbackSubscriptionId,
+            stripe_price_id:
+              existingSubscription?.stripe_price_id ?? "price_dev_bypass_monthly_10",
+            current_period_end: periodEnd,
+            last_invoice_status: "paid",
+            cancel_at_period_end: false,
+          },
+          { onConflict: "shop_id" },
+        );
+
+      if (upsertSubscriptionError) {
+        throw new Error(upsertSubscriptionError.message);
+      }
+
+      return NextResponse.json({
+        url: `${baseUrl}/vendedor/onboarding?step=6&subscription=success`,
+      });
+    }
+
     const priceId = readVendorPriceId();
 
     let customerId = existingSubscription?.stripe_customer_id ?? null;
@@ -52,8 +90,6 @@ export async function POST(request: Request) {
       customerId = customer.id;
     }
 
-    const requestOrigin = new URL(request.url).origin;
-    const baseUrl = getAppBaseUrl({ requestOrigin });
     const checkoutSession = await createStripeSubscriptionCheckoutSession({
       customerId,
       priceId,

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import {
   VENDOR_ONBOARDING_STEP_COUNT,
   type VendorOnboardingStatus,
@@ -426,12 +427,14 @@ export async function getVendorPublishChecks(
     blockingReasons.push("Completa nombre, slug y descripcion de la tienda.");
   }
 
-  if (!shop.stripe_connect_account_id) {
-    blockingReasons.push("Conecta Stripe Express para recibir pagos.");
-  }
+  if (!isVendorBillingBypassEnabled) {
+    if (!shop.stripe_connect_account_id) {
+      blockingReasons.push("Conecta Stripe Express para recibir pagos.");
+    }
 
-  if (!isActiveSubscriptionStatus(subscription?.status)) {
-    blockingReasons.push("Activa la suscripcion mensual de $10.");
+    if (!isActiveSubscriptionStatus(subscription?.status)) {
+      blockingReasons.push("Activa la suscripcion mensual de $10.");
+    }
   }
 
   if (activeVariantCount < 1) {

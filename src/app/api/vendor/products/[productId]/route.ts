@@ -27,6 +27,10 @@ type ProductRow = {
   shop_id: string;
 };
 
+type OrderItemRow = {
+  id: string;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -156,5 +160,85 @@ export async function PATCH(
     return NextResponse.json({ ok: true });
   } catch (error) {
     return serverErrorResponse(error, "No se pudo actualizar el producto.");
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ productId: string }> },
+) {
+  if (!isVendorModeEnabled) {
+    return badRequestResponse("Vendor mode is disabled.");
+  }
+
+  const context = await getVendorRequestContext();
+  if (!context) {
+    return unauthorizedResponse();
+  }
+
+  const { productId } = await params;
+  if (!productId) {
+    return badRequestResponse("Product id invalido.");
+  }
+
+  let dataClient = context.supabase;
+  try {
+    dataClient = createSupabaseAdminClient();
+  } catch {
+    // Secret key is optional in development.
+  }
+
+  try {
+    const profile = await ensureVendorRole(dataClient, context.profile);
+    const shop = await ensureVendorShopForProfile(dataClient, profile);
+
+    const { data: productRow, error: productError } = await dataClient
+      .from("products")
+      .select("id,shop_id")
+      .eq("id", productId)
+      .maybeSingle();
+
+    if (productError) {
+      throw new Error(productError.message);
+    }
+
+    const product = productRow as ProductRow | null;
+    if (!product || product.shop_id !== shop.id) {
+      return NextResponse.json({ error: "Producto no encontrado." }, { status: 404 });
+    }
+
+    const { data: orderItemRows, error: orderItemError } = await dataClient
+      .from("order_items")
+      .select("id")
+      .eq("product_id", product.id)
+      .limit(1);
+
+    if (orderItemError) {
+      throw new Error(orderItemError.message);
+    }
+
+    if ((orderItemRows as OrderItemRow[] | null)?.length) {
+      return NextResponse.json(
+        {
+          error:
+            "No puedes eliminar este producto porque tiene ordenes asociadas. Puedes desactivarlo.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const { error: deleteError } = await dataClient
+      .from("products")
+      .delete()
+      .eq("id", product.id)
+      .eq("shop_id", shop.id);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return serverErrorResponse(error, "No se pudo eliminar el producto.");
   }
 }

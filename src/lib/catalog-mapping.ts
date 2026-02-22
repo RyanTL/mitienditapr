@@ -8,6 +8,8 @@ export type CatalogProductIdentity = {
 
 const catalogProductDatabaseIdByKey = new Map<string, string>();
 const catalogProductIdentityByDatabaseId = new Map<string, CatalogProductIdentity>();
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 mockShopDetails.forEach((shop) => {
   shop.products.forEach((product) => {
@@ -33,4 +35,19 @@ export function getCatalogProductDatabaseIdFromRoute(shopSlug: string, productId
 
 export function getCatalogProductIdentityFromDatabaseId(databaseId: string) {
   return catalogProductIdentityByDatabaseId.get(databaseId) ?? null;
+}
+
+export function isUuidLike(value: string) {
+  return UUID_PATTERN.test(value);
+}
+
+export function resolveProductDatabaseId(shopSlug: string, productId: string) {
+  if (isUuidLike(productId)) {
+    return productId;
+  }
+
+  return (
+    getCatalogProductDatabaseIdFromRoute(shopSlug, productId) ??
+    getCatalogProductDatabaseId(shopSlug, productId)
+  );
 }

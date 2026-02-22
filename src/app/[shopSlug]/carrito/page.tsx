@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { getShopBySlug } from "@/lib/mock-shop-data";
+import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data";
 
 import CartPageClient from "./CartPageClient";
 
@@ -10,7 +10,7 @@ type CartPageProps = {
 
 export default async function CartPage({ params }: CartPageProps) {
   const { shopSlug } = await params;
-  const shop = getShopBySlug(shopSlug);
+  const shop = await fetchShopDetailBySlugServer(shopSlug);
 
   if (!shop) {
     notFound();

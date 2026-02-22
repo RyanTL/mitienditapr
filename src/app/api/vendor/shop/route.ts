@@ -36,7 +36,7 @@ type ShopPatchPayload = {
   };
 };
 
-const MUTABLE_STATUSES = new Set<VendorShopStatus>(["draft", "paused", "active"]);
+const MUTABLE_STATUSES = new Set<VendorShopStatus>(["paused", "active"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -199,8 +199,7 @@ export async function PATCH(request: Request) {
         updates.status = body.status;
         updates.is_active = false;
         updates.unpublished_at = new Date().toISOString();
-        updates.unpublished_reason =
-          body.status === "paused" ? "paused_by_vendor" : "moved_to_draft";
+        updates.unpublished_reason = "paused_by_vendor";
       }
     }
 

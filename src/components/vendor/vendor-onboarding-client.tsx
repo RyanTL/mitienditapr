@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 
 import { CheckIcon } from "@/components/icons";
 import { VendorPageShell } from "@/components/vendor/vendor-page-shell";
@@ -13,6 +14,7 @@ import {
   publishVendorShop,
   saveVendorOnboardingStep,
   startVendorOnboarding,
+  uploadVendorImage,
 } from "@/lib/vendor/client";
 import {
   VENDOR_ONBOARDING_STEPS,
@@ -170,6 +172,8 @@ export function VendorOnboardingClient() {
   const [formState, setFormState] = useState<FormState>(DEFAULT_FORM_STATE);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingFirstProductImage, setIsUploadingFirstProductImage] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -334,6 +338,50 @@ export function VendorOnboardingClient() {
       setIsSaving(false);
     }
   }, [formState, handleSaveStep]);
+
+  const handleUploadLogo = useCallback(async (file: File) => {
+    setIsUploadingLogo(true);
+    setErrorMessage(null);
+    setFeedback(null);
+
+    try {
+      const result = await uploadVendorImage(file);
+      setFormState((current) => ({
+        ...current,
+        logoUrl: result.url,
+      }));
+      setFeedback("Logo subido correctamente.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo subir el logo.";
+      setErrorMessage(message);
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  }, []);
+
+  const handleUploadFirstProductImage = useCallback(async (file: File) => {
+    setIsUploadingFirstProductImage(true);
+    setErrorMessage(null);
+    setFeedback(null);
+
+    try {
+      const result = await uploadVendorImage(file);
+      setFormState((current) => ({
+        ...current,
+        firstProductImageUrl: result.url,
+      }));
+      setFeedback("Imagen del producto subida correctamente.");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo subir la imagen del producto.";
+      setErrorMessage(message);
+    } finally {
+      setIsUploadingFirstProductImage(false);
+    }
+  }, []);
 
   const handlePublish = useCallback(async () => {
     setIsSaving(true);
@@ -609,18 +657,35 @@ export function VendorOnboardingClient() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">Logo URL</span>
+              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
+                Logo de tienda
+              </span>
               <input
-                type="text"
-                value={formState.logoUrl}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    logoUrl: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+                type="file"
+                accept="image/*"
+                disabled={isUploadingLogo}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) {
+                    void handleUploadLogo(file);
+                  }
+                }}
+                className="mt-1 block w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
               />
+              {isUploadingLogo ? (
+                <p className="mt-1 text-xs text-[var(--color-gray-500)]">Subiendo logo...</p>
+              ) : null}
+              {formState.logoUrl ? (
+                <Image
+                  src={formState.logoUrl}
+                  alt="Vista previa del logo"
+                  width={56}
+                  height={56}
+                  unoptimized
+                  className="mt-2 h-14 w-14 rounded-full border border-[var(--color-gray)] object-cover"
+                />
+              ) : null}
             </label>
           </div>
           <button
@@ -813,19 +878,36 @@ export function VendorOnboardingClient() {
             </label>
             <label className="block">
               <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Imagen URL (opcional)
+                Imagen del producto (opcional)
               </span>
               <input
-                type="text"
-                value={formState.firstProductImageUrl}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    firstProductImageUrl: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+                type="file"
+                accept="image/*"
+                disabled={isUploadingFirstProductImage}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) {
+                    void handleUploadFirstProductImage(file);
+                  }
+                }}
+                className="mt-1 block w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
               />
+              {isUploadingFirstProductImage ? (
+                <p className="mt-1 text-xs text-[var(--color-gray-500)]">
+                  Subiendo imagen...
+                </p>
+              ) : null}
+              {formState.firstProductImageUrl ? (
+                <Image
+                  src={formState.firstProductImageUrl}
+                  alt="Vista previa del producto"
+                  width={80}
+                  height={80}
+                  unoptimized
+                  className="mt-2 h-20 w-20 rounded-xl border border-[var(--color-gray)] object-cover"
+                />
+              ) : null}
             </label>
           </div>
           <button

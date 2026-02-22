@@ -1,10 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 
 import { VendorPageShell } from "@/components/vendor/vendor-page-shell";
 import {
   fetchVendorShopSettings,
+  uploadVendorImage,
   updateVendorShopSettings,
 } from "@/lib/vendor/client";
 import type { VendorShopStatus } from "@/lib/vendor/constants";
@@ -80,6 +82,7 @@ export function VendorShopSettingsClient() {
   const [formState, setFormState] = useState<ShopSettingsFormState>(DEFAULT_FORM_STATE);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
@@ -170,6 +173,27 @@ export function VendorShopSettingsClient() {
     }
   }, []);
 
+  const handleUploadLogo = useCallback(async (file: File) => {
+    setIsUploadingLogo(true);
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+
+    try {
+      const result = await uploadVendorImage(file);
+      setFormState((current) => ({
+        ...current,
+        logoUrl: result.url,
+      }));
+      setFeedbackMessage("Logo subido correctamente.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo subir el logo.";
+      setErrorMessage(message);
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  }, []);
+
   return (
     <VendorPageShell
       title="Ajustes de tienda"
@@ -216,14 +240,6 @@ export function VendorShopSettingsClient() {
                   onClick={() => void handleStatusUpdate("paused")}
                 >
                   Pausar
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-[var(--color-gray)] px-3 py-1 text-xs font-semibold"
-                  disabled={isSaving}
-                  onClick={() => void handleStatusUpdate("draft")}
-                >
-                  Borrador
                 </button>
               </div>
             </div>
@@ -284,18 +300,35 @@ export function VendorShopSettingsClient() {
                 />
               </label>
               <label className="block">
-                <span className="text-xs font-semibold text-[var(--color-gray-500)]">Logo URL</span>
+                <span className="text-xs font-semibold text-[var(--color-gray-500)]">
+                  Logo de tienda
+                </span>
                 <input
-                  type="text"
-                  value={formState.logoUrl}
-                  onChange={(event) =>
-                    setFormState((current) => ({
-                      ...current,
-                      logoUrl: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+                  type="file"
+                  accept="image/*"
+                  disabled={isUploadingLogo}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.currentTarget.value = "";
+                    if (file) {
+                      void handleUploadLogo(file);
+                    }
+                  }}
+                  className="mt-1 block w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
                 />
+                {isUploadingLogo ? (
+                  <p className="mt-1 text-xs text-[var(--color-gray-500)]">Subiendo logo...</p>
+                ) : null}
+                {formState.logoUrl ? (
+                  <Image
+                    src={formState.logoUrl}
+                    alt="Vista previa del logo"
+                    width={64}
+                    height={64}
+                    unoptimized
+                    className="mt-2 h-16 w-16 rounded-full border border-[var(--color-gray)] object-cover"
+                  />
+                ) : null}
               </label>
             </div>
           </article>

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ChevronIcon, FavoriteIcon, HomeIcon, OrdersIcon } from "@/components/icons";
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
@@ -12,9 +12,36 @@ import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { ProfileMenu } from "@/components/profile/profile-menu";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { marketplaceShopCards } from "@/lib/mock-shop-data";
+import { fetchMarketplaceShopCardsBrowser } from "@/lib/supabase/public-shop-data-browser";
 
 export default function HomePage() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [shopCards, setShopCards] = useState(marketplaceShopCards);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadShops() {
+      try {
+        const cards = await fetchMarketplaceShopCardsBrowser();
+        if (!isMounted) {
+          return;
+        }
+        setShopCards(cards);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+        setShopCards(marketplaceShopCards);
+      }
+    }
+
+    void loadShops();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[var(--color-gray-100)] pb-32">
@@ -34,7 +61,7 @@ export default function HomePage() {
         </header>
 
         <section className="space-y-3">
-          {marketplaceShopCards.map((shop) => (
+          {shopCards.map((shop) => (
             <Link
               key={shop.id}
               href={`/${shop.id}`}

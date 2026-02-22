@@ -191,11 +191,44 @@ export function archiveVendorProduct(productId: string) {
   });
 }
 
+export function deleteVendorProduct(productId: string) {
+  return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}`, {
+    method: "DELETE",
+  });
+}
+
 export function createVendorVariant(productId: string, payload: VendorVariantInput) {
   return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}/variants`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function addVendorProductImage(
+  productId: string,
+  payload: { imageUrl: string; alt?: string | null },
+) {
+  return fetchJson<{
+    image: {
+      id: string;
+      productId: string;
+      imageUrl: string;
+      alt: string | null;
+      sortOrder: number;
+    };
+  }>(`/api/vendor/products/${productId}/images`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteVendorProductImage(productId: string, imageId: string) {
+  return fetchJson<{ ok: true }>(
+    `/api/vendor/products/${productId}/images/${imageId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export function updateVendorVariant(
@@ -256,4 +289,32 @@ export function createStripeSubscriptionCheckout() {
   return fetchJson<{ url: string }>("/api/stripe/subscription/checkout", {
     method: "POST",
   });
+}
+
+export async function uploadVendorImage(file: File) {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  const response = await fetch("/api/vendor/uploads/image", {
+    method: "POST",
+    body: formData,
+  });
+
+  const body = (await response.json().catch(() => null)) as
+    | { url?: string; path?: string; bucket?: string; error?: string }
+    | null;
+
+  if (!response.ok) {
+    throw new Error(body?.error ?? `Request failed (${response.status}).`);
+  }
+
+  if (!body?.url) {
+    throw new Error("No se pudo obtener la URL de la imagen.");
+  }
+
+  return {
+    url: body.url,
+    path: body.path ?? null,
+    bucket: body.bucket ?? null,
+  };
 }
