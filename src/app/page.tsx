@@ -10,28 +10,53 @@ import { FloatingSearchButton } from "@/components/navigation/floating-search-bu
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { ProfileMenu } from "@/components/profile/profile-menu";
+import { HomeSearchOverlay } from "@/components/search/home-search-overlay";
 import { ShopRating } from "@/components/shop/shop-rating";
-import { marketplaceShopCards } from "@/lib/mock-shop-data";
-import { fetchMarketplaceShopCardsBrowser } from "@/lib/supabase/public-shop-data-browser";
+import { marketplaceShopCards, mockShopDetails } from "@/lib/mock-shop-data";
+import {
+  fetchMarketplaceSearchShopsBrowser,
+  mapSearchShopsToCards,
+  type MarketplaceSearchShop,
+} from "@/lib/supabase/public-shop-data-browser";
+
+const FALLBACK_SEARCH_SHOPS: MarketplaceSearchShop[] = mockShopDetails.map((shop) => ({
+  id: shop.slug,
+  slug: shop.slug,
+  name: shop.vendorName,
+  rating: shop.rating,
+  reviewCount: shop.reviewCount,
+  products: shop.products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    imageUrl: product.imageUrl,
+    alt: product.alt,
+  })),
+}));
 
 export default function HomePage() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [shopCards, setShopCards] = useState(marketplaceShopCards);
+  const [searchShops, setSearchShops] = useState<MarketplaceSearchShop[]>(
+    FALLBACK_SEARCH_SHOPS,
+  );
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadShops() {
       try {
-        const cards = await fetchMarketplaceShopCardsBrowser();
+        const shops = await fetchMarketplaceSearchShopsBrowser();
         if (!isMounted) {
           return;
         }
-        setShopCards(cards);
+        setSearchShops(shops);
+        setShopCards(mapSearchShopsToCards(shops));
       } catch {
         if (!isMounted) {
           return;
         }
+        setSearchShops(FALLBACK_SEARCH_SHOPS);
         setShopCards(marketplaceShopCards);
       }
     }
@@ -126,12 +151,18 @@ export default function HomePage() {
         }}
       />
 
-      <FloatingSearchButton />
+      <FloatingSearchButton onClick={() => setIsSearchOpen(true)} />
       <FloatingCartLink href="/calzado-urbano/carrito" />
 
       <ProfileMenu
         isOpen={isProfileMenuOpen}
         onClose={() => setIsProfileMenuOpen(false)}
+      />
+
+      <HomeSearchOverlay
+        isOpen={isSearchOpen}
+        shops={searchShops}
+        onClose={() => setIsSearchOpen(false)}
       />
     </div>
   );

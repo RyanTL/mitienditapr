@@ -1,6 +1,6 @@
 "use client";
 
-import { marketplaceShopCards } from "@/lib/mock-shop-data";
+import { marketplaceShopCards, mockShopDetails } from "@/lib/mock-shop-data";
 import { ensureCatalogSeeded } from "@/lib/supabase/catalog-seed-client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -9,7 +9,57 @@ import {
   type ShopRow,
 } from "@/lib/supabase/public-shop-data-shared";
 
-export async function fetchMarketplaceShopCardsBrowser() {
+export type MarketplaceSearchProduct = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  alt: string;
+};
+
+export type MarketplaceSearchShop = {
+  id: string;
+  slug: string;
+  name: string;
+  rating: string;
+  reviewCount: number;
+  products: MarketplaceSearchProduct[];
+};
+
+function mapMockSearchShops() {
+  return mockShopDetails.map((shop) => ({
+    id: shop.slug,
+    slug: shop.slug,
+    name: shop.vendorName,
+    rating: shop.rating,
+    reviewCount: shop.reviewCount,
+    products: shop.products.map((product) => ({
+      id: product.id,
+      name: product.name,
+      imageUrl: product.imageUrl,
+      alt: product.alt,
+    })),
+  }));
+}
+
+function mapSearchShopsFromRows(shops: ShopRow[], products: ProductRow[]) {
+  return shops.map((shop) => ({
+    id: shop.id,
+    slug: shop.slug,
+    name: shop.vendor_name,
+    rating: Number(shop.rating ?? 0).toFixed(1),
+    reviewCount: Number(shop.review_count ?? 0),
+    products: products
+      .filter((product) => product.shop_id === shop.id)
+      .map((product) => ({
+        id: product.id,
+        name: product.name,
+        imageUrl: product.image_url || "",
+        alt: product.name,
+      })),
+  }));
+}
+
+export async function fetchMarketplaceSearchShopsBrowser() {
   try {
     await ensureCatalogSeeded();
   } catch {
@@ -24,12 +74,12 @@ export async function fetchMarketplaceShopCardsBrowser() {
     .limit(40);
 
   if (shopsError || !shopsData || shopsData.length === 0) {
-    return marketplaceShopCards;
+    return mapMockSearchShops();
   }
 
   const shops = (shopsData as ShopRow[]).filter((shop) => shop.is_active);
   if (shops.length === 0) {
-    return marketplaceShopCards;
+    return mapMockSearchShops();
   }
 
   const shopIds = shops.map((shop) => shop.id);
@@ -41,8 +91,42 @@ export async function fetchMarketplaceShopCardsBrowser() {
     .order("created_at", { ascending: false });
 
   if (productsError || !productsData) {
-    return shops.map((shop) => buildShopCard(shop, []));
+    return mapSearchShopsFromRows(shops, []);
   }
 
-  return shops.map((shop) => buildShopCard(shop, productsData as ProductRow[]));
+  return mapSearchShopsFromRows(shops, productsData as ProductRow[]);
+}
+
+export function mapSearchShopsToCards(searchShops: MarketplaceSearchShop[]) {
+  if (searchShops.length === 0) {
+    return marketplaceShopCards;
+  }
+
+  return searchShops.map((shop) =>
+    buildShopCard(
+      {
+        id: shop.id,
+        slug: shop.slug,
+        vendor_name: shop.name,
+        rating: Number(shop.rating),
+        review_count: shop.reviewCount,
+        description: "",
+        is_active: true,
+      },
+      shop.products.map((product) => ({
+        id: product.id,
+        shop_id: shop.id,
+        name: product.name,
+        description: "",
+        price_usd: 0,
+        image_url: product.imageUrl || null,
+        is_active: true,
+      })),
+    ),
+  );
+}
+
+export async function fetchMarketplaceShopCardsBrowser() {
+  const searchShops = await fetchMarketplaceSearchShopsBrowser();
+  return mapSearchShopsToCards(searchShops);
 }

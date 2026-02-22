@@ -350,7 +350,7 @@ export default async function OrdersPage() {
         }}
       />
 
-      <FloatingSearchButton />
+      <FloatingSearchButton href="/" />
       <FloatingCartLink href="/calzado-urbano/carrito" />
     </div>
   );
