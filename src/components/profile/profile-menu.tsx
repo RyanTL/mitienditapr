@@ -109,7 +109,7 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
     const timeoutId = window.setTimeout(() => {
       void refreshUserEmail();
       void refreshVendorMenuEntry();
-      if (isFollowingListOpen) {
+      if (isOpen) {
         void refreshFollowedShops();
       }
     }, 0);
@@ -120,7 +120,7 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
     } = supabase.auth.onAuthStateChange(() => {
       void refreshUserEmail();
       void refreshVendorMenuEntry();
-      if (isFollowingListOpen) {
+      if (isOpen) {
         void refreshFollowedShops();
       }
     });
@@ -130,14 +130,14 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
       subscription.unsubscribe();
     };
   }, [
-    isFollowingListOpen,
+    isOpen,
     refreshFollowedShops,
     refreshUserEmail,
     refreshVendorMenuEntry,
   ]);
 
   useEffect(() => {
-    if (!isFollowingListOpen) {
+    if (!isOpen) {
       return;
     }
 
@@ -153,7 +153,7 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
         handleFollowsChanged,
       );
     };
-  }, [isFollowingListOpen, refreshFollowedShops]);
+  }, [isOpen, refreshFollowedShops]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -207,7 +207,7 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
                   }
                 }}
               >
-                <span>Siguiendo</span>
+                <span>Seguidos</span>
                 <ChevronDownIcon
                   className={[
                     "h-4 w-4 transition-transform duration-200",

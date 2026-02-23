@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CheckIcon } from "@/components/icons";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchShopFollowState,
   followShop,
@@ -22,10 +23,22 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
 
   const [isFollowing, setIsFollowing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const stateRequestVersionRef = useRef(0);
+
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
 
   const refreshFollowState = useCallback(async () => {
+    const requestVersion = stateRequestVersionRef.current + 1;
+    stateRequestVersionRef.current = requestVersion;
+
     try {
       const state = await fetchShopFollowState(shopSlug);
+      if (stateRequestVersionRef.current !== requestVersion || isSubmittingRef.current) {
+        return;
+      }
       setIsFollowing(state.isFollowing);
     } catch (error) {
       console.error("No se pudo cargar el estado de seguimiento:", error);
@@ -37,6 +50,13 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
       void refreshFollowState();
     }, 0);
 
+    const supabase = createSupabaseBrowserClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void refreshFollowState();
+    });
+
     const handleShopFollowsChanged = () => {
       void refreshFollowState();
     };
@@ -45,6 +65,7 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
 
     return () => {
       window.clearTimeout(timeoutId);
+      subscription.unsubscribe();
       window.removeEventListener(
         SHOP_FOLLOWS_CHANGED_EVENT,
         handleShopFollowsChanged,
@@ -61,6 +82,7 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
     const nextState = !previousState;
 
     setIsSubmitting(true);
+    isSubmittingRef.current = true;
     setIsFollowing(nextState);
 
     try {
@@ -83,6 +105,8 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
       setIsFollowing(previousState);
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
+      void refreshFollowState();
     }
   };
 

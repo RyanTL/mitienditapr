@@ -6,8 +6,6 @@ import { getCurrentProfileId } from "@/lib/supabase/favorites";
 
 export const SHOP_FOLLOWS_CHANGED_EVENT = "mitienditapr:shop-follows-changed";
 const LOCAL_SHOP_FOLLOWS_KEY_PREFIX = "mitienditapr.shop-follows";
-const ALLOW_LOCAL_FOLLOWS_FALLBACK =
-  process.env.NEXT_PUBLIC_ENABLE_LOCAL_FOLLOWS_FALLBACK === "true";
 
 export type FollowedShopSummary = {
   shopId: string;
@@ -30,20 +28,52 @@ type ShopRow = {
   is_active: boolean;
 };
 
-function notifyShopFollowsChanged() {
+type ShopFollowsChangedDetail = {
+  shopId?: string;
+  shopSlug?: string;
+  isFollowing?: boolean;
+};
+
+function notifyShopFollowsChanged(detail?: ShopFollowsChangedDetail) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.dispatchEvent(new Event(SHOP_FOLLOWS_CHANGED_EVENT));
+  window.dispatchEvent(
+    new CustomEvent<ShopFollowsChangedDetail>(
+      SHOP_FOLLOWS_CHANGED_EVENT,
+      { detail },
+    ),
+  );
 }
 
-function isMissingShopFollowsTableError(error: { message: string } | null) {
+type SupabaseErrorLike = {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+} | null;
+
+function isMissingShopFollowsTableError(error: SupabaseErrorLike) {
   if (!error) {
     return false;
   }
 
-  return error.message.includes("public.shop_follows");
+  const content = [
+    error.message ?? "",
+    error.details ?? "",
+    error.hint ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const isMissingRelationCode = error.code === "PGRST205";
+  const mentionsShopFollows =
+    content.includes("shop_follows") ||
+    content.includes("public.shop_follows");
+  const mentionsSchemaCache = content.includes("schema cache");
+
+  return isMissingRelationCode || (mentionsShopFollows && mentionsSchemaCache);
 }
 
 function getLocalShopFollowsStorageKey(profileId: string) {
@@ -125,7 +155,7 @@ export async function fetchShopFollowState(shopSlug: string) {
     .eq("shop_id", shop.id)
     .maybeSingle();
 
-  if (ALLOW_LOCAL_FOLLOWS_FALLBACK && isMissingShopFollowsTableError(error)) {
+  if (isMissingShopFollowsTableError(error)) {
     const localShopIds = getLocalFollowedShopIds(profileId);
     return {
       isFollowing: localShopIds.includes(shop.id),
@@ -165,14 +195,18 @@ export async function followShop(shopSlug: string) {
     },
   );
 
-  if (ALLOW_LOCAL_FOLLOWS_FALLBACK && isMissingShopFollowsTableError(error)) {
+  if (isMissingShopFollowsTableError(error)) {
     const localShopIds = getLocalFollowedShopIds(profileId);
     const nextShopIds = localShopIds.includes(shop.id)
       ? localShopIds
       : [shop.id, ...localShopIds];
 
     saveLocalFollowedShopIds(profileId, nextShopIds);
-    notifyShopFollowsChanged();
+    notifyShopFollowsChanged({
+      shopId: shop.id,
+      shopSlug,
+      isFollowing: true,
+    });
     return { ok: true as const, unauthorized: false as const };
   }
 
@@ -180,7 +214,11 @@ export async function followShop(shopSlug: string) {
     throw new Error(error.message);
   }
 
-  notifyShopFollowsChanged();
+  notifyShopFollowsChanged({
+    shopId: shop.id,
+    shopSlug,
+    isFollowing: true,
+  });
 
   return { ok: true as const, unauthorized: false as const };
 }
@@ -203,12 +241,16 @@ export async function unfollowShop(shopSlug: string) {
     .eq("profile_id", profileId)
     .eq("shop_id", shop.id);
 
-  if (ALLOW_LOCAL_FOLLOWS_FALLBACK && isMissingShopFollowsTableError(error)) {
+  if (isMissingShopFollowsTableError(error)) {
     const localShopIds = getLocalFollowedShopIds(profileId);
     const nextShopIds = localShopIds.filter((shopId) => shopId !== shop.id);
 
     saveLocalFollowedShopIds(profileId, nextShopIds);
-    notifyShopFollowsChanged();
+    notifyShopFollowsChanged({
+      shopId: shop.id,
+      shopSlug,
+      isFollowing: false,
+    });
     return { ok: true as const, unauthorized: false as const };
   }
 
@@ -216,7 +258,11 @@ export async function unfollowShop(shopSlug: string) {
     throw new Error(error.message);
   }
 
-  notifyShopFollowsChanged();
+  notifyShopFollowsChanged({
+    shopId: shop.id,
+    shopSlug,
+    isFollowing: false,
+  });
 
   return { ok: true as const, unauthorized: false as const };
 }
@@ -236,7 +282,7 @@ export async function fetchFollowedShops() {
 
   let shopIds: string[] = [];
 
-  if (ALLOW_LOCAL_FOLLOWS_FALLBACK && isMissingShopFollowsTableError(followsError)) {
+  if (isMissingShopFollowsTableError(followsError)) {
     shopIds = getLocalFollowedShopIds(profileId);
   } else if (followsError || !followRows) {
     throw new Error(followsError?.message ?? "No se pudieron cargar los seguidos.");

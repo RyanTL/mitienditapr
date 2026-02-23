@@ -1,5 +1,12 @@
 let catalogSeedPromise: Promise<void> | null = null;
 
+function isDuplicateKeyError(message: string | undefined) {
+  return Boolean(
+    message &&
+      message.includes("duplicate key value violates unique constraint"),
+  );
+}
+
 async function runCatalogSeedRequest() {
   const response = await fetch("/api/catalog/seed", { method: "POST" });
 
@@ -11,8 +18,14 @@ async function runCatalogSeedRequest() {
     const body = (await response.json().catch(() => null)) as
       | { error?: string }
       | null;
+    const errorMessage = body?.error;
 
-    throw new Error(body?.error ?? "No se pudo sincronizar el catalogo.");
+    // Seed requests can race across tabs/sessions; duplicate-key means rows already exist.
+    if (isDuplicateKeyError(errorMessage)) {
+      return;
+    }
+
+    throw new Error(errorMessage ?? "No se pudo sincronizar el catalogo.");
   }
 }
 

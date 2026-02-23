@@ -27,9 +27,9 @@ export async function POST() {
 
   const { error: upsertShopsError } = await admin
     .from("shops")
-    .upsert(shops, { onConflict: "slug", ignoreDuplicates: true });
+    .upsert(shops, { onConflict: "id", ignoreDuplicates: true });
 
-  if (upsertShopsError) {
+  if (upsertShopsError && upsertShopsError.code !== "23505") {
     return NextResponse.json(
       { error: upsertShopsError.message },
       { status: 500 },
