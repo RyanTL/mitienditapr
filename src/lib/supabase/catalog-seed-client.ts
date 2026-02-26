@@ -1,4 +1,6 @@
 let catalogSeedPromise: Promise<void> | null = null;
+let catalogSeedLastCompletedAt = 0;
+const CATALOG_SEED_MIN_INTERVAL_MS = 15_000;
 
 function isDuplicateKeyError(message: string | undefined) {
   return Boolean(
@@ -34,12 +36,21 @@ export async function ensureCatalogSeeded() {
     return;
   }
 
-  if (!catalogSeedPromise) {
-    catalogSeedPromise = runCatalogSeedRequest().catch((error) => {
-      catalogSeedPromise = null;
-      throw error;
-    });
+  const shouldStartNewSeed =
+    !catalogSeedPromise &&
+    Date.now() - catalogSeedLastCompletedAt > CATALOG_SEED_MIN_INTERVAL_MS;
+
+  if (shouldStartNewSeed) {
+    catalogSeedPromise = runCatalogSeedRequest()
+      .then(() => {
+        catalogSeedLastCompletedAt = Date.now();
+      })
+      .finally(() => {
+        catalogSeedPromise = null;
+      });
   }
 
-  await catalogSeedPromise;
+  if (catalogSeedPromise) {
+    await catalogSeedPromise;
+  }
 }

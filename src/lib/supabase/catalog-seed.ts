@@ -10,6 +10,7 @@ type SeedShopRow = {
   rating: number;
   review_count: number;
   is_active: boolean;
+  status: "active";
 };
 
 type SeedProductRow = {
@@ -32,6 +33,7 @@ export function buildCatalogSeedRows(ownerProfileId: string) {
     rating: Number(shop.rating),
     review_count: shop.reviewCount,
     is_active: true,
+    status: "active",
   }));
 
   const products: SeedProductRow[] = mockShopDetails.flatMap((shop) =>

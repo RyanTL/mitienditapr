@@ -27,7 +27,7 @@ export async function POST() {
 
   const { error: upsertShopsError } = await admin
     .from("shops")
-    .upsert(shops, { onConflict: "id", ignoreDuplicates: true });
+    .upsert(shops, { onConflict: "id" });
 
   if (upsertShopsError && upsertShopsError.code !== "23505") {
     return NextResponse.json(
