@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -37,6 +36,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const { addFavorite } = useFavoriteProducts();
 
   const loadShopCartItems = useCallback(async () => {
@@ -77,6 +77,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
     () => cartItems.find((item) => item.id === menuItemId) ?? null,
     [cartItems, menuItemId],
   );
+  const shouldShowShopHeader = !isLoading && !loadError && cartItems.length > 0;
 
   useEffect(() => {
     if (menuItemId && !activeMenuItem) {
@@ -190,6 +191,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
 
   const handleCheckout = useCallback(async () => {
     setIsCheckingOut(true);
+    setCheckoutError(null);
 
     try {
       const result = await checkoutCartByShop(shop.slug);
@@ -200,6 +202,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
       }
 
       if (result.empty) {
+        setCheckoutError("Tu carrito no tiene productos para procesar.");
         return;
       }
 
@@ -208,6 +211,9 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
       router.refresh();
     } catch (error) {
       console.error("No se pudo completar la orden:", error);
+      setCheckoutError(
+        error instanceof Error ? error.message : "No se pudo completar la orden.",
+      );
     } finally {
       setIsCheckingOut(false);
     }
@@ -217,19 +223,21 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
     <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 text-[var(--color-carbon)]">
       <main className="mx-auto w-full max-w-md">
         <section className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]">
-          <header className="mb-5 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-icon)] text-xl font-bold text-[var(--color-carbon)]">
-              N
-            </div>
-            <div>
-              <h1 className="text-base font-bold leading-none text-[var(--color-carbon)]">
-                {shop.vendorName}
-              </h1>
-              <p className="mt-1 text-xs font-medium leading-none text-[var(--color-carbon)]">
-                {shop.rating} ★ ({shop.reviewCount})
-              </p>
-            </div>
-          </header>
+          {shouldShowShopHeader ? (
+            <header className="mb-5 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-icon)] text-xl font-bold text-[var(--color-carbon)]">
+                N
+              </div>
+              <div>
+                <h1 className="text-base font-bold leading-none text-[var(--color-carbon)]">
+                  {shop.vendorName}
+                </h1>
+                <p className="mt-1 text-xs font-medium leading-none text-[var(--color-carbon)]">
+                  {shop.rating} ★ ({shop.reviewCount})
+                </p>
+              </div>
+            </header>
+          ) : null}
 
           {isLoading ? (
             <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
@@ -244,15 +252,6 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
           ) : cartItems.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
               <p className="text-base font-semibold text-[var(--color-carbon)]">Tu carrito esta vacio.</p>
-              <p className="mt-2 text-sm text-[var(--color-carbon)]">
-                Agrega productos para continuar con tu compra.
-              </p>
-              <Link
-                href={`/${shop.slug}`}
-                className="mt-5 inline-flex rounded-full bg-[var(--color-gray)] px-4 py-2 text-sm font-semibold text-[var(--color-carbon)]"
-              >
-                Volver a la tienda
-              </Link>
             </div>
           ) : (
             <>
@@ -316,6 +315,12 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                   {formatUsd(subtotal)}
                 </p>
               </div>
+
+              {checkoutError ? (
+                <p className="mb-3 rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-3 py-2 text-xs text-[var(--color-danger)]">
+                  {checkoutError}
+                </p>
+              ) : null}
 
               <button
                 type="button"

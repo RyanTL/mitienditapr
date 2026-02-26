@@ -4,13 +4,10 @@ import {
   CartIcon,
   ChevronIcon,
   DotsIcon,
-  HomeIcon,
-  OrdersIcon,
 } from "@/components/icons";
+import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { FloatingSearchButton } from "@/components/navigation/floating-search-button";
-import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
-import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { formatUsd } from "@/lib/formatters";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -335,23 +332,10 @@ export default async function OrdersPage() {
         </section>
       </main>
 
-      <TwoItemBottomNav
-        containerClassName={FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS}
-        firstItem={{
-          ariaLabel: "Inicio",
-          icon: <HomeIcon />,
-          href: "/",
-        }}
-        secondItem={{
-          ariaLabel: "Ordenes",
-          icon: <OrdersIcon />,
-          href: "/ordenes",
-          isActive: true,
-        }}
-      />
+      <BackHomeBottomNav />
 
       <FloatingSearchButton href="/" />
-      <FloatingCartLink href="/calzado-urbano/carrito" />
+      <FloatingCartLink href="/carrito" resolveFromCart />
     </div>
   );
 }

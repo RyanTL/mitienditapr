@@ -4,15 +4,15 @@ import { notFound } from "next/navigation";
 
 import {
   BackIcon,
-  ChevronDownIcon,
   ChevronIcon,
   HomeIcon,
   ShareIcon,
 } from "@/components/icons";
-import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-button";
+import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
+import { ProductPurchasePanel } from "@/components/product/product-purchase-panel";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { formatUsd } from "@/lib/formatters";
 import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data";
@@ -99,32 +99,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          <button type="button" className="mt-5 inline-flex items-center gap-1.5 text-sm text-[var(--color-carbon)]">
-            Ship to 00667
-            <span className="inline-flex items-center justify-center">
-              <ChevronDownIcon />
-            </span>
-          </button>
-
-          <div className="mt-6">
-            <p className="text-sm text-[var(--color-carbon)]">Cantidad</p>
-            <div className="mt-1 inline-flex items-center gap-4 rounded-full border border-[var(--color-gray)] px-3 py-1 text-lg leading-none text-[var(--color-carbon)]">
-              <button type="button" aria-label="Restar cantidad">−</button>
-              <span>1</span>
-              <button type="button" aria-label="Sumar cantidad">+</button>
-            </div>
-          </div>
-
-          <div className="mt-8 space-y-3">
-            <AddToCartButton
-              shopSlug={shop.slug}
-              productId={product.id}
-              className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)] disabled:opacity-70"
-            />
-            <button type="button" className="w-full rounded-3xl bg-[var(--color-black)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)]">
-              Comprar ahora
-            </button>
-          </div>
+          <ProductPurchasePanel shopSlug={shop.slug} productId={product.id} />
         </section>
 
         <section className="mt-8">
@@ -186,6 +161,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           href: "/",
         }}
       />
+
+      <FloatingCartLink href="/carrito" />
     </div>
   );
 }

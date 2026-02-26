@@ -152,7 +152,7 @@ export default function HomePage() {
       />
 
       <FloatingSearchButton onClick={() => setIsSearchOpen(true)} />
-      <FloatingCartLink href="/calzado-urbano/carrito" />
+      <FloatingCartLink href="/carrito" resolveFromCart />
 
       <ProfileMenu
         isOpen={isProfileMenuOpen}

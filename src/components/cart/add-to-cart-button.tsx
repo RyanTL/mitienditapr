@@ -24,6 +24,7 @@ export function AddToCartButton({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(
     () => () => {
@@ -35,6 +36,13 @@ export function AddToCartButton({
   );
 
   const handleClick = async () => {
+    setErrorMessage(null);
+
+    if (quantity < 1) {
+      setErrorMessage("La cantidad debe ser mayor a 0.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -46,25 +54,39 @@ export function AddToCartButton({
       }
 
       setIsAdded(true);
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
       timeoutRef.current = window.setTimeout(() => {
         setIsAdded(false);
       }, 1700);
-      router.refresh();
     } catch (error) {
       console.error("No se pudo agregar al carrito:", error);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo agregar el producto al carrito.",
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <button
-      type="button"
-      disabled={isSubmitting}
-      className={className}
-      onClick={() => void handleClick()}
-    >
-      {isSubmitting ? "Agregando..." : isAdded ? "Anadido" : "Anadir al carrito"}
-    </button>
+    <>
+      <button
+        type="button"
+        disabled={isSubmitting}
+        className={className}
+        onClick={() => void handleClick()}
+      >
+        {isSubmitting ? "Agregando..." : isAdded ? "Anadido" : "Anadir al carrito"}
+      </button>
+      {errorMessage ? (
+        <p className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-3 py-2 text-xs text-[var(--color-danger)]">
+          {errorMessage}
+        </p>
+      ) : null}
+    </>
   );
 }

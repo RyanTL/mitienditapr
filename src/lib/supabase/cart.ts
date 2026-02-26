@@ -2,6 +2,7 @@
 
 import {
   getCatalogProductIdentityFromDatabaseId,
+  isUuidLike,
   resolveProductDatabaseId,
 } from "@/lib/catalog-mapping";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -46,12 +47,63 @@ type ShopRow = {
   vendor_name: string;
 };
 
+type ProductVariantRow = {
+  id: string;
+  product_id: string;
+};
+
+type SupabaseErrorLike = {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+} | null;
+
 function notifyCartChanged() {
   if (typeof window === "undefined") {
     return;
   }
 
   window.dispatchEvent(new Event(CART_CHANGED_EVENT));
+}
+
+function isMissingProductVariantsTableError(error: SupabaseErrorLike) {
+  if (!error) {
+    return false;
+  }
+
+  const content = [
+    error.message ?? "",
+    error.details ?? "",
+    error.hint ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    error.code === "PGRST205" &&
+    content.includes("product_variants") &&
+    content.includes("schema cache")
+  );
+}
+
+async function cleanupOrderAfterCheckoutFailure(
+  profileId: string,
+  orderId: string,
+  fallbackMessage: string,
+) {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from("orders")
+    .delete()
+    .eq("id", orderId)
+    .eq("profile_id", profileId);
+
+  if (!error) {
+    throw new Error(fallbackMessage);
+  }
+
+  throw new Error(`${fallbackMessage} (Rollback fallido: ${error.message})`);
 }
 
 export async function fetchCartQuantityTotal() {
@@ -79,7 +131,12 @@ export async function fetchCartItems() {
     return [] as CartItem[];
   }
 
-  await ensureCatalogSeeded();
+  try {
+    await ensureCatalogSeeded();
+  } catch (error) {
+    // Seed is only required for mock catalog IDs; ignore failures for real DB products.
+    console.error("No se pudo sincronizar el catalogo del carrito:", error);
+  }
 
   const supabase = createSupabaseBrowserClient();
   const { data: cartRows, error: cartError } = await supabase
@@ -135,14 +192,15 @@ export async function fetchCartItems() {
       return [];
     }
 
-    const shop = shopById.get(product.shop_id);
-    if (!shop) {
-      return [];
-    }
-
     const identity = getCatalogProductIdentityFromDatabaseId(product.id);
+    const shop = shopById.get(product.shop_id);
+    const shopSlug = identity?.shopSlug ?? shop?.slug ?? "";
     const productId = identity?.productId ?? product.id;
-    const shopSlug = identity?.shopSlug ?? shop.slug;
+    const fallbackShopName =
+      identity?.shopSlug
+        ?.split("-")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ") ?? "Tienda";
 
     return [
       {
@@ -152,7 +210,7 @@ export async function fetchCartItems() {
           databaseId: product.id,
           shopId: product.shop_id,
           shopSlug,
-          shopName: shop.vendor_name,
+          shopName: shop?.vendor_name ?? fallbackShopName,
           productId,
           name: product.name,
           priceUsd: Number(product.price_usd),
@@ -162,6 +220,62 @@ export async function fetchCartItems() {
       } satisfies CartItem,
     ];
   });
+}
+
+export async function fetchPrimaryCartShopSlug() {
+  const profileId = await getCurrentProfileId();
+  if (!profileId) {
+    return null;
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  const { data: cartRow, error: cartError } = await supabase
+    .from("cart_items")
+    .select("product_id")
+    .eq("profile_id", profileId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ product_id: string }>();
+
+  if (cartError) {
+    throw new Error(cartError.message);
+  }
+
+  if (!cartRow) {
+    return null;
+  }
+
+  const { data: productRow, error: productError } = await supabase
+    .from("products")
+    .select("shop_id")
+    .eq("id", cartRow.product_id)
+    .maybeSingle<{ shop_id: string }>();
+
+  if (productError) {
+    throw new Error(productError.message);
+  }
+
+  if (!productRow) {
+    const identity = getCatalogProductIdentityFromDatabaseId(cartRow.product_id);
+    return identity?.shopSlug ?? null;
+  }
+
+  const { data: shopRow, error: shopError } = await supabase
+    .from("shops")
+    .select("slug")
+    .eq("id", productRow.shop_id)
+    .maybeSingle<{ slug: string }>();
+
+  if (shopError) {
+    throw new Error(shopError.message);
+  }
+
+  if (shopRow?.slug) {
+    return shopRow.slug;
+  }
+
+  const identity = getCatalogProductIdentityFromDatabaseId(cartRow.product_id);
+  return identity?.shopSlug ?? null;
 }
 
 export async function addProductToCart(
@@ -174,7 +288,9 @@ export async function addProductToCart(
     return { ok: false as const, unauthorized: true as const };
   }
 
-  await ensureCatalogSeeded();
+  if (!isUuidLike(productId)) {
+    await ensureCatalogSeeded();
+  }
 
   const databaseProductId =
     resolveProductDatabaseId(shopSlug, productId);
@@ -299,6 +415,36 @@ export async function checkoutCartByShop(shopSlug: string) {
   );
 
   const supabase = createSupabaseBrowserClient();
+  const productIds = Array.from(
+    new Set(shopCartItems.map((item) => item.product.databaseId)),
+  );
+  let firstVariantIdByProductId = new Map<string, string>();
+
+  if (productIds.length > 0) {
+    const { data: variantRows, error: variantsError } = await supabase
+      .from("product_variants")
+      .select("id,product_id")
+      .in("product_id", productIds)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+
+    if (variantsError && !isMissingProductVariantsTableError(variantsError)) {
+      throw new Error(variantsError.message);
+    }
+
+    if (variantRows && !variantsError) {
+      firstVariantIdByProductId = (variantRows as ProductVariantRow[]).reduce(
+        (map, row) => {
+          if (!map.has(row.product_id)) {
+            map.set(row.product_id, row.id);
+          }
+          return map;
+        },
+        new Map<string, string>(),
+      );
+    }
+  }
+
   const { data: orderRow, error: createOrderError } = await supabase
     .from("orders")
     .insert({
@@ -318,13 +464,18 @@ export async function checkoutCartByShop(shopSlug: string) {
     shopCartItems.map((item) => ({
       order_id: orderRow.id,
       product_id: item.product.databaseId,
+      product_variant_id: firstVariantIdByProductId.get(item.product.databaseId) ?? null,
       quantity: item.quantity,
       unit_price_usd: item.product.priceUsd,
     })),
   );
 
   if (createOrderItemsError) {
-    throw new Error(createOrderItemsError.message);
+    await cleanupOrderAfterCheckoutFailure(
+      profileId,
+      orderRow.id,
+      `No se pudo crear los items de la orden: ${createOrderItemsError.message}`,
+    );
   }
 
   const cartItemIds = shopCartItems.map((item) => item.id);
@@ -335,7 +486,11 @@ export async function checkoutCartByShop(shopSlug: string) {
     .in("id", cartItemIds);
 
   if (clearCartError) {
-    throw new Error(clearCartError.message);
+    await cleanupOrderAfterCheckoutFailure(
+      profileId,
+      orderRow.id,
+      `No se pudo limpiar el carrito: ${clearCartError.message}`,
+    );
   }
 
   notifyCartChanged();
