@@ -2,6 +2,8 @@ export type Product = {
   id: string;
   name: string;
   priceUsd: number;
+  rating?: string;
+  reviewCount?: number;
   imageUrl: string;
   alt: string;
   description: string;

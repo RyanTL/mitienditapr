@@ -85,7 +85,7 @@ export async function fetchMarketplaceSearchShopsBrowser() {
   const shopIds = shops.map((shop) => shop.id);
   const { data: productsData, error: productsError } = await supabase
     .from("products")
-    .select("id,shop_id,name,description,price_usd,image_url,is_active")
+    .select("id,shop_id,name,description,price_usd,rating,review_count,image_url,is_active")
     .in("shop_id", shopIds)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
@@ -119,6 +119,8 @@ export function mapSearchShopsToCards(searchShops: MarketplaceSearchShop[]) {
         name: product.name,
         description: "",
         price_usd: 0,
+        rating: 0,
+        review_count: 0,
         image_url: product.imageUrl || null,
         is_active: true,
       })),

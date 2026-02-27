@@ -19,6 +19,8 @@ export type ProductRow = {
   name: string;
   description: string;
   price_usd: number;
+  rating: number;
+  review_count: number;
   image_url: string | null;
   is_active: boolean;
 };
@@ -32,6 +34,8 @@ export function mapProductRowToDetailProduct(product: ProductRow) {
     id: product.id,
     name: product.name,
     priceUsd: Number(product.price_usd ?? 0),
+    rating: formatRating(product.rating),
+    reviewCount: Number(product.review_count ?? 0),
     imageUrl: product.image_url || FALLBACK_IMAGE_URL,
     alt: product.name,
     description: product.description ?? "",

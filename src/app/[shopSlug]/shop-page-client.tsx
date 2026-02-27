@@ -20,35 +20,13 @@ import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { formatUsd } from "@/lib/formatters";
+import { fetchShopReviews } from "@/lib/reviews/client";
+import type { ShopReviewsResponse } from "@/lib/reviews/types";
 import type { ShopDetail } from "@/lib/mock-shop-data";
 
 type ShopPageClientProps = {
   shop: ShopDetail;
 };
-
-const REVIEW_CARDS = [
-  {
-    id: "1",
-    title: "Excelente servicio",
-    body: "Me llego rapido y la calidad supero mis expectativas. Volveria a comprar sin dudar.",
-    author: "Andrea",
-    time: "Hoy",
-  },
-  {
-    id: "2",
-    title: "Muy recomendado",
-    body: "El empaque estuvo muy bien cuidado y la atencion por mensaje fue clara y amable.",
-    author: "Luis",
-    time: "Hace 2 dias",
-  },
-  {
-    id: "3",
-    title: "Buena compra",
-    body: "Producto tal como en las fotos. Talla correcta y envio sin contratiempos.",
-    author: "Camila",
-    time: "Esta semana",
-  },
-];
 
 const POLICY_ITEMS = [
   "Politica de reembolso",
@@ -61,12 +39,76 @@ function getContactEmail(shopSlug: string) {
   return `hola+${shopSlug}@mitienditapr.com`;
 }
 
+function renderStars(rating: number) {
+  const clamped = Math.max(0, Math.min(5, Math.round(rating)));
+  return `${"★".repeat(clamped)}${"☆".repeat(5 - clamped)}`;
+}
+
+function formatReviewDate(value: string) {
+  return new Intl.DateTimeFormat("es-PR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 export function ShopPageClient({ shop }: ShopPageClientProps) {
   const [isShopMenuOpen, setIsShopMenuOpen] = useState(false);
+  const [shopReviewsData, setShopReviewsData] = useState<ShopReviewsResponse | null>(
+    null,
+  );
+  const [isLoadingShopReviews, setIsLoadingShopReviews] = useState(false);
+  const [shopReviewsError, setShopReviewsError] = useState<string | null>(null);
   const contactEmail = getContactEmail(shop.slug);
   const instagramHandle = `@${shop.slug.replaceAll("-", "")}`;
   const whatsappNumber = "+1 (939) 555-0192";
   const supportHours = "Lunes a Viernes, 9:00 AM - 5:00 PM";
+
+  useEffect(() => {
+    if (!isShopMenuOpen) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadShopReviews() {
+      setIsLoadingShopReviews(true);
+      setShopReviewsError(null);
+
+      try {
+        const response = await fetchShopReviews(shop.slug, 8);
+        if (!isMounted) {
+          return;
+        }
+        setShopReviewsData(response);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setShopReviewsError(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las reviews de la tienda.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingShopReviews(false);
+        }
+      }
+    }
+
+    void loadShopReviews();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isShopMenuOpen, shop.slug]);
+
+  const shopReviewSummary = shopReviewsData?.summary ?? {
+    averageRating: shop.rating,
+    reviewCount: shop.reviewCount,
+  };
 
   useEffect(() => {
     if (!isShopMenuOpen) {
@@ -210,8 +252,8 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                 <div>
                   <p className="text-base font-bold text-[var(--color-carbon)]">{shop.vendorName}</p>
                   <ShopRating
-                    rating={shop.rating}
-                    reviewCount={shop.reviewCount}
+                    rating={shopReviewSummary.averageRating}
+                    reviewCount={shopReviewSummary.reviewCount}
                     className="text-xs font-medium text-[var(--color-carbon)]"
                   />
                 </div>
@@ -237,34 +279,48 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                 <div className="mb-3 flex items-end justify-between">
                   <div>
                     <p className="text-4xl leading-none font-bold text-[var(--color-carbon)]">
-                      {shop.rating}
+                      {shopReviewSummary.averageRating}
                     </p>
                     <p className="mt-1 text-sm text-[var(--color-carbon)]">
-                      {shop.reviewCount} calificaciones
+                      {shopReviewSummary.reviewCount} calificaciones
                     </p>
                   </div>
-                  <p className="text-2xl tracking-[0.1em] text-[var(--color-carbon)]">★★★★★</p>
+                  <p className="text-2xl tracking-[0.1em] text-[var(--color-carbon)]">
+                    {renderStars(Number(shopReviewSummary.averageRating))}
+                  </p>
                 </div>
 
-                <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
-                  {REVIEW_CARDS.map((review) => (
-                    <article
-                      key={review.id}
-                      className="min-w-[250px] snap-start rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3"
-                    >
-                      <h4 className="text-sm font-semibold text-[var(--color-carbon)]">
-                        {review.title}
-                      </h4>
-                      <p className="mt-1 line-clamp-3 text-xs leading-5 text-[var(--color-carbon)]">
-                        {review.body}
-                      </p>
-                      <p className="mt-2 text-xs text-[var(--color-carbon)]">★★★★★</p>
-                      <p className="mt-1 text-xs text-[var(--color-carbon)]">
-                        {review.author} · {review.time}
-                      </p>
-                    </article>
-                  ))}
-                </div>
+                {isLoadingShopReviews ? (
+                  <p className="text-sm text-[var(--color-carbon)]">Cargando reviews...</p>
+                ) : shopReviewsError ? (
+                  <p className="text-sm text-[var(--color-danger)]">{shopReviewsError}</p>
+                ) : !shopReviewsData || shopReviewsData.reviews.length === 0 ? (
+                  <p className="text-sm text-[var(--color-carbon)]">
+                    Aun no hay reviews en esta tienda.
+                  </p>
+                ) : (
+                  <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
+                    {shopReviewsData.reviews.map((review) => (
+                      <article
+                        key={review.id}
+                        className="min-w-[250px] snap-start rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3"
+                      >
+                        <h4 className="text-sm font-semibold text-[var(--color-carbon)]">
+                          {review.productName}
+                        </h4>
+                        <p className="mt-1 line-clamp-3 text-xs leading-5 text-[var(--color-carbon)]">
+                          {review.comment ?? "Sin comentario."}
+                        </p>
+                        <p className="mt-2 text-xs text-[var(--color-brand)]">
+                          {renderStars(review.rating)}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--color-carbon)]">
+                          {review.reviewerDisplayName} · {formatReviewDate(review.createdAt)}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </article>
 
               <article className="rounded-3xl bg-[var(--color-gray)] p-4">

@@ -13,6 +13,7 @@ import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { ProductPurchasePanel } from "@/components/product/product-purchase-panel";
+import { ProductReviewsSection } from "@/components/reviews/product-reviews-section";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { formatUsd } from "@/lib/formatters";
 import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data";
@@ -66,8 +67,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <div>
               <h1 className="text-[1.75rem] font-medium leading-none">{product.name}</h1>
               <ShopRating
-                rating={shop.rating}
-                reviewCount={shop.reviewCount}
+                rating={product.rating ?? shop.rating}
+                reviewCount={product.reviewCount ?? shop.reviewCount}
                 className="mt-1.5 text-sm font-semibold text-[var(--color-carbon)]"
               />
               <p className="mt-1 text-[1.25rem] leading-none">
@@ -105,6 +106,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <section className="mt-8">
           <h2 className="text-3xl font-bold text-[var(--color-carbon)]">Descripcion</h2>
           <p className="mt-2 text-sm text-[var(--color-carbon)]">{product.description}</p>
+
+          <ProductReviewsSection
+            shopSlug={shop.slug}
+            productId={product.id}
+            initialSummary={{
+              averageRating: product.rating ?? shop.rating,
+              reviewCount: product.reviewCount ?? shop.reviewCount,
+            }}
+          />
         </section>
 
         <section className="mt-10 pb-4">

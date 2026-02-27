@@ -21,7 +21,7 @@ export async function fetchShopDetailBySlugServer(shopSlug: string) {
   const shop = shopData as ShopRow;
   const { data: productsData, error: productsError } = await supabase
     .from("products")
-    .select("id,shop_id,name,description,price_usd,image_url,is_active")
+    .select("id,shop_id,name,description,price_usd,rating,review_count,image_url,is_active")
     .eq("shop_id", shop.id)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
