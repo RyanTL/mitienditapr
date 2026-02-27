@@ -444,6 +444,7 @@ export function VendorOnboardingClient() {
       title="Conviertete en vendedor"
       subtitle="Completa este checklist para abrir tu tienda."
     >
+      <div className="grid gap-3 md:grid-cols-2 md:items-start">
       <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-semibold text-[var(--color-carbon)]">
@@ -498,6 +499,7 @@ export function VendorOnboardingClient() {
           })}
         </ul>
       </article>
+      </div>
 
       {feedback ? (
         <article className="rounded-2xl border border-[var(--color-brand)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-brand)]">
@@ -510,6 +512,7 @@ export function VendorOnboardingClient() {
         </article>
       ) : null}
 
+      <div className="md:max-w-3xl">
       {currentStep === 1 ? (
         <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
           <p className="text-sm text-[var(--color-gray-500)]">
@@ -949,6 +952,7 @@ export function VendorOnboardingClient() {
           </button>
         </article>
       ) : null}
+      </div>
     </VendorPageShell>
   );
 }

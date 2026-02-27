@@ -70,7 +70,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[var(--color-gray-100)] pb-32">
-      <main className="mx-auto w-full max-w-md px-3 py-5">
+      <main className="mx-auto w-full max-w-md px-3 py-5 md:max-w-3xl md:px-5 lg:max-w-5xl">
         <header className="mb-6 flex items-center justify-between">
           <button type="button"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)] shadow-sm"
@@ -85,12 +85,12 @@ export default function HomePage() {
           </Link>
         </header>
 
-        <section className="space-y-3">
+        <section className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
           {shopCards.map((shop) => (
             <Link
               key={shop.id}
               href={`/${shop.id}`}
-              className="block rounded-3xl bg-[var(--color-white)] px-4 py-3 shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)]"
+              className="block rounded-3xl bg-[var(--color-white)] px-4 py-3 shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)] md:px-5 md:py-4"
             >
               <div className="mb-3 flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
@@ -106,10 +106,7 @@ export default function HomePage() {
 
               <div className="mb-4 grid grid-cols-3 gap-3">
                 {shop.products.map((product) => (
-                  <div
-                    key={product.id}
-                    className="relative h-[120px] overflow-hidden rounded-3xl bg-[var(--color-gray)]"
-                  >
+                  <div key={product.id} className="relative h-[120px] overflow-hidden rounded-3xl bg-[var(--color-gray)] md:h-[128px]">
                     <Image
                       src={product.imageUrl}
                       alt={product.alt}
@@ -122,7 +119,7 @@ export default function HomePage() {
               </div>
 
               <div className="flex items-center justify-between">
-                <p className="text-[2rem] leading-none font-extrabold text-[var(--color-carbon)]">
+                <p className="text-[2rem] leading-none font-extrabold text-[var(--color-carbon)] md:text-[2.15rem]">
                   Ver mas
                 </p>
                 <span

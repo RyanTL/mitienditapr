@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { VendorShopShareAction } from "@/components/share/vendor-shop-share-action";
 import { VendorPageShell } from "@/components/vendor/vendor-page-shell";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
@@ -56,6 +57,7 @@ export default async function VendorPanelPage() {
       title="Panel de vendedor"
       subtitle="Resumen rapido de tu tienda y acciones clave."
     >
+      <div className="grid gap-3 md:grid-cols-2 md:items-start">
       <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
         <h2 className="text-base font-bold">Estado de tienda</h2>
         <div className="mt-3 grid grid-cols-2 gap-3">
@@ -109,8 +111,10 @@ export default async function VendorPanelPage() {
           >
             Ver tienda publica
           </Link>
+          <VendorShopShareAction />
         </div>
       </article>
+      </div>
 
       {snapshot.checks.blockingReasons.length > 0 ? (
         <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">

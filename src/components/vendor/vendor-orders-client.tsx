@@ -99,7 +99,7 @@ export function VendorOrdersClient() {
             Aun no has recibido pedidos.
           </p>
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
             {orders.map((order) => {
               const currentStatus = order.vendorStatus;
               const nextStatuses = VENDOR_ORDER_TRANSITIONS[currentStatus] ?? [];

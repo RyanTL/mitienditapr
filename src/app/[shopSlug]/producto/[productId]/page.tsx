@@ -40,8 +40,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
     .slice(0, 2);
 
   return (
-    <div className="min-h-screen bg-[var(--color-white)] px-4 py-5 pb-28 text-[var(--color-carbon)]">
-      <main className="mx-auto w-full max-w-md">
+    <div className="min-h-screen bg-[var(--color-white)] px-4 py-5 pb-28 text-[var(--color-carbon)] md:px-5">
+      <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
         <header className="mb-4 flex items-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-lg font-bold text-[var(--color-white)]">
             N
@@ -51,7 +51,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         <section>
           <div className="relative overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-            <div className="relative h-[360px]">
+            <div className="relative h-[360px] md:h-[420px]">
               <Image
                 src={product.imageUrl}
                 alt={product.alt}
@@ -63,7 +63,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          <div className="mt-3 flex items-start justify-between">
+          <div className="mt-3 flex items-start justify-between md:mt-4">
             <div>
               <h1 className="text-[1.75rem] font-medium leading-none">{product.name}</h1>
               <ShopRating
@@ -130,12 +130,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {relatedProducts.map((related) => (
               <article key={related.id}>
                 <Link href={`/${shop.slug}/producto/${related.id}`} className="block">
                   <div className="relative overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-                    <div className="relative h-[180px]">
+                    <div className="relative h-[180px] md:h-[190px]">
                       <Image
                         src={related.imageUrl}
                         alt={related.alt}

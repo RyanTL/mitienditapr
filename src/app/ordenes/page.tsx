@@ -236,7 +236,7 @@ export default async function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-[var(--color-gray)] pb-36">
-      <main className="mx-auto w-full max-w-md px-4 pt-6">
+      <main className="mx-auto w-full max-w-md px-4 pt-6 md:max-w-3xl md:px-5 lg:max-w-4xl">
         <header className="mb-8 flex items-center justify-between">
           <div className="w-8" />
           <h1 className="text-4xl font-semibold tracking-tight text-[var(--color-black)]">Ordenes</h1>
@@ -260,11 +260,11 @@ export default async function OrdersPage() {
               No tienes compras en proceso.
             </div>
           ) : (
-            <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
+            <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 md:grid md:grid-cols-3 md:gap-3 md:overflow-visible md:px-0">
               {inProgressOrders.map((item) => (
                 <article
                   key={item.id}
-                  className="relative min-w-[170px] snap-start overflow-hidden rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)]"
+                  className="relative min-w-[170px] snap-start overflow-hidden rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] md:min-w-0"
                 >
                   <div className="relative h-[170px]">
                     <Image

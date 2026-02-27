@@ -16,8 +16,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const nextPath = normalizeNextPath(next);
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-8">
-      <main className="mx-auto w-full max-w-sm rounded-3xl border border-[var(--color-gray-border)] bg-[var(--color-white)] p-5 shadow-[0_14px_30px_var(--shadow-black-012)]">
+    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-8 md:flex md:items-center md:justify-center md:px-6">
+      <main className="mx-auto w-full max-w-sm rounded-3xl border border-[var(--color-gray-border)] bg-[var(--color-white)] p-5 shadow-[0_14px_30px_var(--shadow-black-012)] md:max-w-md md:p-6">
         <h1 className="text-2xl font-bold text-[var(--color-carbon)]">Iniciar sesion</h1>
         <p className="mt-1 mb-5 text-sm text-[var(--color-carbon)]">
           Accede a tus favoritos, carrito y ordenes.

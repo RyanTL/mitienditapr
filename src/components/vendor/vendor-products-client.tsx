@@ -645,6 +645,7 @@ export function VendorProductsClient() {
         </article>
       ) : null}
 
+      <div className="space-y-3 md:grid md:grid-cols-[minmax(0,340px)_minmax(0,1fr)] md:items-start md:gap-4 md:space-y-0">
       <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
         <h2 className="text-base font-bold">Nuevo producto</h2>
         <p className="mt-1 text-xs text-[var(--color-gray-500)]">
@@ -762,7 +763,7 @@ export function VendorProductsClient() {
                     No tienes productos activos.
                   </p>
                 ) : (
-                  <ul className="mt-3 space-y-3">{activeProducts.map(renderProductCard)}</ul>
+                  <ul className="mt-3 space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">{activeProducts.map(renderProductCard)}</ul>
                 )
               ) : null}
             </section>
@@ -792,7 +793,7 @@ export function VendorProductsClient() {
                     No tienes productos desactivados.
                   </p>
                 ) : (
-                  <ul className="mt-3 space-y-3">
+                  <ul className="mt-3 space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
                     {inactiveProducts.map(renderProductCard)}
                   </ul>
                 )
@@ -801,6 +802,7 @@ export function VendorProductsClient() {
           </div>
         )}
       </article>
+      </div>
     </VendorPageShell>
   );
 }

@@ -175,10 +175,10 @@ export function ProductReviewsSection({
   }, [handleUnauthorized, loadReviews, productId, shopSlug]);
 
   return (
-    <section className="mt-8 rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4">
+    <section className="mt-8 rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4 md:p-5">
       <header className="mb-4 flex items-end justify-between">
         <div>
-          <h3 className="text-2xl font-bold leading-none text-[var(--color-carbon)]">
+          <h3 className="text-2xl font-bold leading-none text-[var(--color-carbon)] md:text-[1.65rem]">
             Reviews
           </h3>
           <p className="mt-1 text-sm text-[var(--color-carbon)]">

@@ -118,8 +118,8 @@ export function GlobalCartPageClient() {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 text-[var(--color-carbon)]">
-      <main className="mx-auto w-full max-w-md">
+    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 text-[var(--color-carbon)] md:px-5">
+      <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
         <section className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]">
           <header className="mb-5">
             <h1 className="text-2xl font-bold leading-none text-[var(--color-carbon)]">
@@ -145,7 +145,7 @@ export function GlobalCartPageClient() {
             </div>
           ) : (
             <>
-              <div className="space-y-4">
+              <div className="space-y-4 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
                 {cartItems.map((item) => {
                   const hasProductRoute = Boolean(item.product.shopSlug);
                   const productHref = hasProductRoute

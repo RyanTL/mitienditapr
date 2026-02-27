@@ -13,8 +13,8 @@ export function FavoritesPageClient() {
   const { favorites, removeFavoriteById } = useFavoriteProducts();
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-5 pb-28 text-[var(--color-carbon)]">
-      <main className="mx-auto w-full max-w-md">
+    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-5 pb-28 text-[var(--color-carbon)] md:px-5">
+      <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
         <header className="mb-5">
           <h1 className="text-[2rem] leading-none font-extrabold text-[var(--color-carbon)]">
             Favoritos
@@ -40,7 +40,7 @@ export function FavoritesPageClient() {
             </Link>
           </section>
         ) : (
-          <section className="space-y-3">
+          <section className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
             {favorites.map((favorite) => (
               <article
                 key={favorite.id}

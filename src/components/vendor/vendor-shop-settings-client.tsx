@@ -252,6 +252,7 @@ export function VendorShopSettingsClient() {
             ) : null}
           </article>
 
+          <div className="grid gap-3 md:grid-cols-2 md:items-start">
           <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
             <div className="space-y-3">
               <label className="block">
@@ -434,6 +435,7 @@ export function VendorShopSettingsClient() {
               {isSaving ? "Guardando..." : "Guardar cambios"}
             </button>
           </article>
+          </div>
         </>
       )}
     </VendorPageShell>

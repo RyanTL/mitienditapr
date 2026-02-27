@@ -13,6 +13,7 @@ export type VendorStatusResponse = {
   shop: {
     id: string;
     slug: string;
+    share_code: string;
     vendor_name: string;
     description: string;
     logo_url: string | null;

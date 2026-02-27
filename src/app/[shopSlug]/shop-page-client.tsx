@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   BackIcon,
@@ -17,8 +17,10 @@ import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-but
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { BOTTOM_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
+import { ShopSharePopup } from "@/components/share/shop-share-popup";
 import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
+import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { formatUsd } from "@/lib/formatters";
 import { fetchShopReviews } from "@/lib/reviews/client";
 import type { ShopReviewsResponse } from "@/lib/reviews/types";
@@ -54,6 +56,8 @@ function formatReviewDate(value: string) {
 
 export function ShopPageClient({ shop }: ShopPageClientProps) {
   const [isShopMenuOpen, setIsShopMenuOpen] = useState(false);
+  const [isSharePopupOpen, setIsSharePopupOpen] = useState(false);
+  const [isOwnerViewingShop, setIsOwnerViewingShop] = useState(false);
   const [shopReviewsData, setShopReviewsData] = useState<ShopReviewsResponse | null>(
     null,
   );
@@ -63,6 +67,54 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
   const instagramHandle = `@${shop.slug.replaceAll("-", "")}`;
   const whatsappNumber = "+1 (939) 555-0192";
   const supportHours = "Lunes a Viernes, 9:00 AM - 5:00 PM";
+  const closeShopMenu = useCallback(() => setIsShopMenuOpen(false), []);
+
+  useBodyScrollLock(isShopMenuOpen);
+  useEscapeKey(isShopMenuOpen, closeShopMenu);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function resolveOwnerMode() {
+      try {
+        const response = await fetch("/api/vendor/status", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (isMounted) {
+            setIsOwnerViewingShop(false);
+          }
+          return;
+        }
+
+        const body = (await response.json().catch(() => null)) as
+          | {
+              shop?: {
+                slug?: string;
+              } | null;
+            }
+          | null;
+
+        if (!isMounted) {
+          return;
+        }
+
+        setIsOwnerViewingShop(body?.shop?.slug === shop.slug);
+      } catch {
+        if (isMounted) {
+          setIsOwnerViewingShop(false);
+        }
+      }
+    }
+
+    void resolveOwnerMode();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [shop.slug]);
 
   useEffect(() => {
     if (!isShopMenuOpen) {
@@ -110,33 +162,9 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
     reviewCount: shop.reviewCount,
   };
 
-  useEffect(() => {
-    if (!isShopMenuOpen) {
-      return;
-    }
-
-    const { body, documentElement } = document;
-    const previousBodyOverflow = body.style.overflow;
-    const previousHtmlOverflow = documentElement.style.overflow;
-    const previousBodyOverscrollBehavior = body.style.overscrollBehavior;
-    const previousHtmlOverscrollBehavior = documentElement.style.overscrollBehavior;
-
-    body.style.overflow = "hidden";
-    documentElement.style.overflow = "hidden";
-    body.style.overscrollBehavior = "none";
-    documentElement.style.overscrollBehavior = "none";
-
-    return () => {
-      body.style.overflow = previousBodyOverflow;
-      documentElement.style.overflow = previousHtmlOverflow;
-      body.style.overscrollBehavior = previousBodyOverscrollBehavior;
-      documentElement.style.overscrollBehavior = previousHtmlOverscrollBehavior;
-    };
-  }, [isShopMenuOpen]);
-
   return (
-    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-4 pb-28 text-[var(--color-carbon)]">
-      <main className="mx-auto w-full max-w-md">
+    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-4 pb-28 text-[var(--color-carbon)] md:px-5">
+      <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-5xl">
         <header className="mb-14 flex items-center justify-between">
           <button
             type="button"
@@ -153,20 +181,21 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
               type="button"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] text-[var(--color-carbon)]"
               aria-label="Compartir tienda"
+              onClick={() => setIsSharePopupOpen(true)}
             >
               <ShareIcon className="h-5 w-5" />
             </button>
           </div>
         </header>
 
-        <section className="mb-20 text-center">
+        <section className="mb-20 text-center md:mb-14">
           <h1 className="text-5xl font-extrabold tracking-tight">{shop.vendorName}</h1>
           <p className="mx-auto mt-6 max-w-[32ch] text-lg leading-6 text-[var(--color-carbon)]">
             {shop.description}
           </p>
         </section>
 
-        <section className="grid grid-cols-2 gap-x-3 gap-y-6 pb-6">
+        <section className="grid grid-cols-2 gap-x-3 gap-y-6 pb-6 md:grid-cols-3 lg:grid-cols-4">
           {shop.products.map((product) => (
             <article key={product.id}>
               <div className="relative mb-2">
@@ -174,7 +203,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                   href={`/${shop.slug}/producto/${product.id}`}
                   className="block overflow-hidden rounded-3xl bg-[var(--color-gray)]"
                 >
-                  <div className="relative h-[190px]">
+                  <div className="relative h-[190px] md:h-[200px]">
                     <Image
                       src={product.imageUrl}
                       alt={product.alt}
@@ -217,7 +246,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
         </section>
       </main>
 
-      <div className="fixed right-4 bottom-6 left-4 z-20 flex items-center justify-between">
+      <div className="fixed right-4 bottom-6 left-4 z-20 flex items-center justify-between md:right-6 md:bottom-8 md:left-6">
         <TwoItemBottomNav
           containerClassName={BOTTOM_NAV_CONTAINER_CLASS}
           firstItem={{
@@ -237,11 +266,11 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
       {isShopMenuOpen ? (
         <div
           className="fixed inset-0 z-40 overflow-y-auto bg-[var(--overlay-black-012)] px-4 py-6 backdrop-blur-[1px]"
-          onClick={() => setIsShopMenuOpen(false)}
+          onClick={closeShopMenu}
           role="presentation"
         >
           <aside
-            className="mx-auto w-full max-w-md rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4 shadow-[0_18px_40px_var(--shadow-black-012)]"
+            className="mx-auto w-full max-w-md rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4 shadow-[0_18px_40px_var(--shadow-black-012)] md:max-w-2xl lg:max-w-3xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -262,7 +291,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                 type="button"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray)] text-[var(--color-carbon)]"
                 aria-label="Cerrar menu"
-                onClick={() => setIsShopMenuOpen(false)}
+                onClick={closeShopMenu}
               >
                 <CloseIcon className="h-5 w-5" />
               </button>
@@ -303,7 +332,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                     {shopReviewsData.reviews.map((review) => (
                       <article
                         key={review.id}
-                        className="min-w-[250px] snap-start rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3"
+                        className="min-w-[250px] snap-start rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3 md:min-w-[300px]"
                       >
                         <h4 className="text-sm font-semibold text-[var(--color-carbon)]">
                           {review.productName}
@@ -383,6 +412,13 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
           </aside>
         </div>
       ) : null}
+
+      <ShopSharePopup
+        isOpen={isSharePopupOpen}
+        onClose={() => setIsSharePopupOpen(false)}
+        shopSlug={shop.slug}
+        ownerMode={isOwnerViewingShop}
+      />
     </div>
   );
 }

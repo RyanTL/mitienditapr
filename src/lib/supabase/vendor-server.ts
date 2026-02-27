@@ -23,6 +23,7 @@ export type ProfileRow = {
 export type VendorShopRow = {
   id: string;
   slug: string;
+  share_code: string;
   vendor_profile_id: string;
   vendor_name: string;
   description: string;
@@ -153,7 +154,7 @@ export async function getVendorShopByProfileId(
   const { data, error } = await supabase
     .from("shops")
     .select(
-      "id,slug,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,published_at,unpublished_at,unpublished_reason",
+      "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,published_at,unpublished_at,unpublished_reason",
     )
     .eq("vendor_profile_id", profileId)
     .order("created_at", { ascending: true })
@@ -274,7 +275,7 @@ export async function ensureVendorShopForProfile(
         is_active: false,
       })
       .select(
-        "id,slug,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,published_at,unpublished_at,unpublished_reason",
+        "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,published_at,unpublished_at,unpublished_reason",
       )
       .maybeSingle();
 

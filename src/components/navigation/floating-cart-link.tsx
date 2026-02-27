@@ -77,7 +77,7 @@ export function FloatingCartLink({
 
   const resolvedCount = typeof count === "number" ? count : dynamicCount;
   const resolvedHref = resolveFromCart ? (dynamicHref ?? href) : href;
-  const placementClass = fixed ? "fixed right-4 bottom-6 z-20" : "relative";
+  const placementClass = fixed ? "fixed right-4 bottom-6 z-20 md:right-6 md:bottom-8" : "relative";
   const mergedClassName = [placementClass, FLOATING_CART_BUTTON_CLASS, className]
     .filter(Boolean)
     .join(" ");

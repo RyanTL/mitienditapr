@@ -67,7 +67,7 @@ export function VendorTopNav() {
   }, []);
 
   return (
-    <nav className="mb-5 overflow-x-auto pb-1">
+    <nav className="mb-5 overflow-x-auto pb-1 md:mb-6">
       <ul className="flex min-w-max items-center gap-2">
         {NAV_LINKS.map((item) => {
           const isActive = isActivePath(pathname, item.href);

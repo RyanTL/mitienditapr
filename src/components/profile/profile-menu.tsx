@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ChevronDownIcon, SettingsIcon } from "@/components/icons";
+import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchFollowedShops,
@@ -29,6 +30,9 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
   const [isLoadingFollowedShops, setIsLoadingFollowedShops] = useState(false);
   const [followedShopsError, setFollowedShopsError] = useState<string | null>(null);
   const [vendorMenuEntry, setVendorMenuEntry] = useState<VendorMenuEntry | null>(null);
+
+  useBodyScrollLock(isOpen);
+  useEscapeKey(isOpen, onClose);
 
   const refreshUserEmail = useCallback(async () => {
     const supabase = createSupabaseBrowserClient();
@@ -173,7 +177,7 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
         onClick={onClose}
       />
 
-      <section className="absolute top-4 left-4 w-[min(86vw,320px)] rounded-[1.6rem] border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-4 text-[var(--color-carbon)] shadow-[0_22px_54px_var(--shadow-black-018)]">
+      <section className="absolute top-4 left-4 w-[min(86vw,320px)] rounded-[1.6rem] border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-4 text-[var(--color-carbon)] shadow-[0_22px_54px_var(--shadow-black-018)] md:top-6 md:left-6 md:w-[min(46vw,360px)]">
         <header className="mb-2 px-1 pt-1 pb-3">
           <p className="text-lg font-bold leading-none">Mi cuenta</p>
           <p className="mt-1 text-sm text-[var(--color-carbon)]">{userEmail}</p>

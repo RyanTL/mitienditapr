@@ -15,6 +15,7 @@ import {
 import { useFavoriteProducts } from "@/hooks/use-favorite-products";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
+import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { formatUsd } from "@/lib/formatters";
 import type { ShopDetail } from "@/lib/mock-shop-data";
 import {
@@ -78,6 +79,9 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
     [cartItems, menuItemId],
   );
   const shouldShowShopHeader = !isLoading && !loadError && cartItems.length > 0;
+
+  useBodyScrollLock(Boolean(menuItemId));
+  useEscapeKey(Boolean(menuItemId), () => setMenuItemId(null));
 
   useEffect(() => {
     if (menuItemId && !activeMenuItem) {
@@ -220,8 +224,8 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   }, [loadShopCartItems, router, shop.slug]);
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 text-[var(--color-carbon)]">
-      <main className="mx-auto w-full max-w-md">
+    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 text-[var(--color-carbon)] md:px-5">
+      <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
         <section className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]">
           {shouldShowShopHeader ? (
             <header className="mb-5 flex items-center gap-3">
@@ -255,8 +259,9 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
             </div>
           ) : (
             <>
+              <div className="space-y-5 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
               {cartItems.map((item) => (
-                <article key={item.id} className="mb-5">
+                <article key={item.id}>
                   <div className="mb-4 flex items-start gap-3">
                     <div className="relative h-[94px] w-[94px] overflow-hidden rounded-2xl bg-[var(--color-gray)]">
                       <Image
@@ -308,6 +313,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                   </div>
                 </article>
               ))}
+              </div>
 
               <div className="mb-5 flex items-center justify-between">
                 <p className="text-lg font-medium leading-none text-[var(--color-carbon)]">Subtotal</p>
@@ -357,7 +363,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
             onClick={() => setMenuItemId(null)}
           />
 
-          <section className="absolute inset-x-4 top-1/2 mx-auto max-w-3xl -translate-y-1/2 rounded-[2.25rem] bg-[var(--color-white)] p-8 shadow-[0_30px_80px_var(--shadow-black-035)]">
+          <section className="absolute inset-x-4 top-1/2 mx-auto max-w-3xl -translate-y-1/2 rounded-[2.25rem] bg-[var(--color-white)] p-8 shadow-[0_30px_80px_var(--shadow-black-035)] md:max-w-2xl">
             <div className="mb-7 flex items-start justify-between">
               <h3 className="text-3xl font-bold leading-none text-[var(--color-black)]">
                 Administrar producto

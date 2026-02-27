@@ -57,11 +57,11 @@ export function ProductPurchasePanel({
           shopSlug={shopSlug}
           productId={productId}
           quantity={quantity}
-          className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)] disabled:opacity-70"
+          className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)] disabled:opacity-70 md:text-2xl"
         />
         <button
           type="button"
-          className="w-full rounded-3xl bg-[var(--color-black)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)]"
+          className="w-full rounded-3xl bg-[var(--color-black)] px-6 py-3.5 text-3xl font-bold text-[var(--color-white)] md:text-2xl"
         >
           Comprar ahora
         </button>

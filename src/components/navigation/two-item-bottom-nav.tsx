@@ -2,10 +2,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import {
-  BOTTOM_NAV_BUTTON_ACTIVE_CLASS,
-  BOTTOM_NAV_BUTTON_INACTIVE_CLASS,
   BOTTOM_NAV_CONTAINER_CLASS,
   BOTTOM_NAV_LIST_CLASS,
+  getBottomNavButtonClass,
 } from "./nav-styles";
 
 type NavItem = {
@@ -14,6 +13,7 @@ type NavItem = {
   href?: string;
   isActive?: boolean;
   onClick?: () => void;
+  className?: string;
 };
 
 type TwoItemBottomNavProps = {
@@ -23,13 +23,18 @@ type TwoItemBottomNavProps = {
 };
 
 function NavItemButton({ item }: { item: NavItem }) {
-  const className = item.isActive
-    ? BOTTOM_NAV_BUTTON_ACTIVE_CLASS
-    : BOTTOM_NAV_BUTTON_INACTIVE_CLASS;
+  const className = [getBottomNavButtonClass(item.isActive), item.className]
+    .filter(Boolean)
+    .join(" ");
 
   if (item.href) {
     return (
-      <Link href={item.href} className={className} aria-label={item.ariaLabel}>
+      <Link
+        href={item.href}
+        className={className}
+        aria-label={item.ariaLabel}
+        aria-current={item.isActive ? "page" : undefined}
+      >
         {item.icon}
       </Link>
     );

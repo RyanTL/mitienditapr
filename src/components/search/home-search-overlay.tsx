@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SearchIcon } from "@/components/icons";
+import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import type { MarketplaceSearchShop } from "@/lib/supabase/public-shop-data-browser";
 
 type HomeSearchOverlayProps = {
@@ -49,6 +50,9 @@ export function HomeSearchOverlay({
     onClose();
   }, [onClose]);
 
+  useBodyScrollLock(isOpen);
+  useEscapeKey(isOpen, handleClose);
+
   useEffect(() => {
     if (isOpen) {
       const focusTimer = window.setTimeout(() => {
@@ -57,37 +61,6 @@ export function HomeSearchOverlay({
 
       return () => window.clearTimeout(focusTimer);
     }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        handleClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [handleClose, isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
   }, [isOpen]);
 
   const searchText = toSearchText(query);
@@ -149,7 +122,7 @@ export function HomeSearchOverlay({
 
       <section
         className={[
-          "absolute top-4 right-3 left-3 mx-auto w-full max-w-md origin-top-right rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] shadow-[0_18px_44px_var(--shadow-black-018)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "absolute top-4 right-3 left-3 mx-auto w-full max-w-md origin-top-right rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] shadow-[0_18px_44px_var(--shadow-black-018)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:top-6 md:max-w-2xl lg:max-w-3xl",
           isOpen
             ? "translate-y-0 scale-100 opacity-100"
             : "translate-y-4 scale-[0.96] opacity-0",

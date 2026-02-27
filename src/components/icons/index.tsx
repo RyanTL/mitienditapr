@@ -99,6 +99,32 @@ export function ShareIcon({ className = "h-6 w-6", ...props }: IconProps) {
   );
 }
 
+export function LinkIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M10.7 13.3 13.3 10.7M8.4 15.6l-1.9 1.9a3.2 3.2 0 0 1-4.5-4.5l1.9-1.9a3.2 3.2 0 0 1 4.5 0M15.6 8.4l1.9-1.9a3.2 3.2 0 0 1 4.5 4.5l-1.9 1.9a3.2 3.2 0 0 1-4.5 0"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function QrCodeIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 2h2m2 0h2m-6 4h2m4-2h-2m0-4v2m-4-2h2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 type HeartIconProps = IconProps & {
   filled?: boolean;
 };
