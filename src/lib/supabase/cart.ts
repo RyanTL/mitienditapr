@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  getCatalogProductIdentityFromDatabaseId,
-  isUuidLike,
-  resolveProductDatabaseId,
-} from "@/lib/catalog-mapping";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { ensureCatalogSeeded } from "@/lib/supabase/catalog-seed-client";
 import { getCurrentProfileId } from "@/lib/supabase/favorites";
 
 export const CART_CHANGED_EVENT = "mitienditapr:cart-changed";
@@ -58,6 +52,13 @@ type SupabaseErrorLike = {
   hint?: string;
   code?: string;
 } | null;
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuidLike(value: string) {
+  return UUID_PATTERN.test(value);
+}
 
 function notifyCartChanged() {
   if (typeof window === "undefined") {
@@ -131,13 +132,6 @@ export async function fetchCartItems() {
     return [] as CartItem[];
   }
 
-  try {
-    await ensureCatalogSeeded();
-  } catch (error) {
-    // Seed is only required for mock catalog IDs; ignore failures for real DB products.
-    console.error("No se pudo sincronizar el catalogo del carrito:", error);
-  }
-
   const supabase = createSupabaseBrowserClient();
   const { data: cartRows, error: cartError } = await supabase
     .from("cart_items")
@@ -192,15 +186,10 @@ export async function fetchCartItems() {
       return [];
     }
 
-    const identity = getCatalogProductIdentityFromDatabaseId(product.id);
     const shop = shopById.get(product.shop_id);
-    const shopSlug = identity?.shopSlug ?? shop?.slug ?? "";
-    const productId = identity?.productId ?? product.id;
-    const fallbackShopName =
-      identity?.shopSlug
-        ?.split("-")
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ") ?? "Tienda";
+    if (!shop) {
+      return [];
+    }
 
     return [
       {
@@ -209,9 +198,9 @@ export async function fetchCartItems() {
         product: {
           databaseId: product.id,
           shopId: product.shop_id,
-          shopSlug,
-          shopName: shop?.vendor_name ?? fallbackShopName,
-          productId,
+          shopSlug: shop.slug,
+          shopName: shop.vendor_name,
+          productId: product.id,
           name: product.name,
           priceUsd: Number(product.price_usd),
           imageUrl: product.image_url,
@@ -256,8 +245,7 @@ export async function fetchPrimaryCartShopSlug() {
   }
 
   if (!productRow) {
-    const identity = getCatalogProductIdentityFromDatabaseId(cartRow.product_id);
-    return identity?.shopSlug ?? null;
+    return null;
   }
 
   const { data: shopRow, error: shopError } = await supabase
@@ -274,12 +262,11 @@ export async function fetchPrimaryCartShopSlug() {
     return shopRow.slug;
   }
 
-  const identity = getCatalogProductIdentityFromDatabaseId(cartRow.product_id);
-  return identity?.shopSlug ?? null;
+  return null;
 }
 
 export async function addProductToCart(
-  shopSlug: string,
+  _shopSlug: string,
   productId: string,
   quantityToAdd = 1,
 ) {
@@ -288,19 +275,17 @@ export async function addProductToCart(
     return { ok: false as const, unauthorized: true as const };
   }
 
-  if (!isUuidLike(productId)) {
-    await ensureCatalogSeeded();
+  const normalizedProductId = productId.trim();
+  if (!isUuidLike(normalizedProductId)) {
+    throw new Error("ID de producto invalido.");
   }
-
-  const databaseProductId =
-    resolveProductDatabaseId(shopSlug, productId);
 
   const supabase = createSupabaseBrowserClient();
   const { data: existingItem, error: existingItemError } = await supabase
     .from("cart_items")
     .select("id,quantity")
     .eq("profile_id", profileId)
-    .eq("product_id", databaseProductId)
+    .eq("product_id", normalizedProductId)
     .maybeSingle();
 
   if (existingItemError) {
@@ -321,7 +306,7 @@ export async function addProductToCart(
   } else {
     const { error: insertError } = await supabase.from("cart_items").insert({
       profile_id: profileId,
-      product_id: databaseProductId,
+      product_id: normalizedProductId,
       quantity: Math.max(1, quantityToAdd),
     });
 

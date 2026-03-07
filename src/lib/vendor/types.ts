@@ -2,6 +2,7 @@ import type { VendorOnboardingStatus, VendorShopStatus } from "@/lib/vendor/cons
 
 export type VendorStatusResponse = {
   userId: string;
+  billingBypassEnabled: boolean;
   profile: {
     id: string;
     email: string | null;

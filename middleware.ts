@@ -4,6 +4,7 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 function isPrivatePath(pathname: string) {
   if (
+    pathname === "/cuenta" ||
     pathname === "/favoritos" ||
     pathname === "/ordenes" ||
     pathname.startsWith("/vendedor")

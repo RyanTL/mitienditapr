@@ -1,4 +1,3 @@
-import { getShopBySlug } from "@/lib/mock-shop-data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   buildShopDetail,
@@ -14,11 +13,19 @@ export async function fetchShopDetailBySlugServer(shopSlug: string) {
     .eq("slug", shopSlug)
     .maybeSingle();
 
-  if (shopError || !shopData || !(shopData as ShopRow).is_active) {
-    return getShopBySlug(shopSlug) ?? null;
+  if (shopError) {
+    throw new Error(shopError.message);
+  }
+
+  if (!shopData) {
+    return null;
   }
 
   const shop = shopData as ShopRow;
+  if (!shop.is_active) {
+    return null;
+  }
+
   const { data: productsData, error: productsError } = await supabase
     .from("products")
     .select("id,shop_id,name,description,price_usd,rating,review_count,image_url,is_active")
@@ -26,9 +33,9 @@ export async function fetchShopDetailBySlugServer(shopSlug: string) {
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
-  if (productsError || !productsData) {
-    return buildShopDetail(shop, []);
+  if (productsError) {
+    throw new Error(productsError.message);
   }
 
-  return buildShopDetail(shop, productsData as ProductRow[]);
+  return buildShopDetail(shop, (productsData as ProductRow[] | null) ?? []);
 }

@@ -1,6 +1,8 @@
 let catalogSeedPromise: Promise<void> | null = null;
 let catalogSeedLastCompletedAt = 0;
 const CATALOG_SEED_MIN_INTERVAL_MS = 15_000;
+const IS_CATALOG_SEED_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_CATALOG_SEED?.toLowerCase() === "true";
 
 function isDuplicateKeyError(message: string | undefined) {
   return Boolean(
@@ -10,9 +12,13 @@ function isDuplicateKeyError(message: string | undefined) {
 }
 
 async function runCatalogSeedRequest() {
+  if (!IS_CATALOG_SEED_ENABLED) {
+    return;
+  }
+
   const response = await fetch("/api/catalog/seed", { method: "POST" });
 
-  if (response.status === 401) {
+  if (response.status === 401 || response.status === 403 || response.status === 404) {
     return;
   }
 

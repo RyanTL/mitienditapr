@@ -1,7 +1,5 @@
 "use client";
 
-import { marketplaceShopCards, mockShopDetails } from "@/lib/mock-shop-data";
-import { ensureCatalogSeeded } from "@/lib/supabase/catalog-seed-client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   buildShopCard,
@@ -25,22 +23,6 @@ export type MarketplaceSearchShop = {
   products: MarketplaceSearchProduct[];
 };
 
-function mapMockSearchShops() {
-  return mockShopDetails.map((shop) => ({
-    id: shop.slug,
-    slug: shop.slug,
-    name: shop.vendorName,
-    rating: shop.rating,
-    reviewCount: shop.reviewCount,
-    products: shop.products.map((product) => ({
-      id: product.id,
-      name: product.name,
-      imageUrl: product.imageUrl,
-      alt: product.alt,
-    })),
-  }));
-}
-
 function mapSearchShopsFromRows(shops: ShopRow[], products: ProductRow[]) {
   return shops.map((shop) => ({
     id: shop.id,
@@ -60,26 +42,21 @@ function mapSearchShopsFromRows(shops: ShopRow[], products: ProductRow[]) {
 }
 
 export async function fetchMarketplaceSearchShopsBrowser() {
-  try {
-    await ensureCatalogSeeded();
-  } catch {
-    // Ignore seed errors for anonymous visitors.
-  }
-
   const supabase = createSupabaseBrowserClient();
   const { data: shopsData, error: shopsError } = await supabase
     .from("shops")
     .select("id,slug,vendor_name,rating,review_count,description,is_active")
+    .eq("is_active", true)
     .order("created_at", { ascending: false })
     .limit(40);
 
-  if (shopsError || !shopsData || shopsData.length === 0) {
-    return mapMockSearchShops();
+  if (shopsError) {
+    throw new Error(shopsError.message);
   }
 
-  const shops = (shopsData as ShopRow[]).filter((shop) => shop.is_active);
+  const shops = (shopsData as ShopRow[] | null) ?? [];
   if (shops.length === 0) {
-    return mapMockSearchShops();
+    return [];
   }
 
   const shopIds = shops.map((shop) => shop.id);
@@ -90,16 +67,16 @@ export async function fetchMarketplaceSearchShopsBrowser() {
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
-  if (productsError || !productsData) {
-    return mapSearchShopsFromRows(shops, []);
+  if (productsError) {
+    throw new Error(productsError.message);
   }
 
-  return mapSearchShopsFromRows(shops, productsData as ProductRow[]);
+  return mapSearchShopsFromRows(shops, (productsData as ProductRow[] | null) ?? []);
 }
 
 export function mapSearchShopsToCards(searchShops: MarketplaceSearchShop[]) {
   if (searchShops.length === 0) {
-    return marketplaceShopCards;
+    return [];
   }
 
   return searchShops.map((shop) =>

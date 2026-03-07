@@ -511,6 +511,12 @@ export function VendorOnboardingClient() {
           {errorMessage}
         </article>
       ) : null}
+      {status.billingBypassEnabled ? (
+        <article className="rounded-2xl border border-[var(--color-brand)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-brand)]">
+          Modo prueba activo: los pasos de facturacion se pueden omitir temporalmente
+          mientras validas onboarding y publicacion.
+        </article>
+      ) : null}
 
       <div className="md:max-w-3xl">
       {currentStep === 1 ? (
@@ -796,33 +802,69 @@ export function VendorOnboardingClient() {
 
       {currentStep === 5 ? (
         <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <p className="text-sm text-[var(--color-gray-500)]">
-            Necesitas Stripe Connect Express para recibir pagos de compradores.
-          </p>
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-            disabled={isSaving}
-            onClick={() => void handleConnectStripe()}
-          >
-            {isSaving ? "Abriendo..." : "Conectar Stripe Express"}
-          </button>
+          {status.billingBypassEnabled ? (
+            <>
+              <p className="text-sm text-[var(--color-gray-500)]">
+                Modo prueba: puedes continuar sin Stripe Connect por ahora.
+              </p>
+              <button
+                type="button"
+                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
+                disabled={isSaving}
+                onClick={() => void handleSaveStep(5, { billingBypass: true })}
+              >
+                {isSaving ? "Guardando..." : "Continuar en modo prueba"}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-[var(--color-gray-500)]">
+                Necesitas Stripe Connect Express para recibir pagos de compradores.
+              </p>
+              <button
+                type="button"
+                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
+                disabled={isSaving}
+                onClick={() => void handleConnectStripe()}
+              >
+                {isSaving ? "Abriendo..." : "Conectar Stripe Express"}
+              </button>
+            </>
+          )}
         </article>
       ) : null}
 
       {currentStep === 6 ? (
         <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <p className="text-sm text-[var(--color-gray-500)]">
-            Activa la suscripcion de $10/mes para publicar tu tienda.
-          </p>
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-            disabled={isSaving}
-            onClick={() => void handleStartSubscription()}
-          >
-            {isSaving ? "Abriendo..." : "Ir a checkout de suscripcion"}
-          </button>
+          {status.billingBypassEnabled ? (
+            <>
+              <p className="text-sm text-[var(--color-gray-500)]">
+                Modo prueba: la suscripcion mensual esta temporalmente omitida.
+              </p>
+              <button
+                type="button"
+                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
+                disabled={isSaving}
+                onClick={() => void handleSaveStep(6, { billingBypass: true })}
+              >
+                {isSaving ? "Guardando..." : "Continuar en modo prueba"}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-[var(--color-gray-500)]">
+                Activa la suscripcion de $10/mes para publicar tu tienda.
+              </p>
+              <button
+                type="button"
+                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
+                disabled={isSaving}
+                onClick={() => void handleStartSubscription()}
+              >
+                {isSaving ? "Abriendo..." : "Ir a checkout de suscripcion"}
+              </button>
+            </>
+          )}
         </article>
       ) : null}
 

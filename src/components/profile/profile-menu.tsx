@@ -186,9 +186,13 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
         <nav>
           <ul className="space-y-0.5">
             <li>
-              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]">
+              <Link
+                href="/cuenta"
+                onClick={onClose}
+                className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
+              >
                 Cuenta
-              </button>
+              </Link>
             </li>
             <li>
               <Link

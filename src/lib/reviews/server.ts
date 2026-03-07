@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { resolveProductDatabaseId } from "@/lib/catalog-mapping";
 import type { ReviewSummary } from "@/lib/reviews/types";
 
 type ShopRow = {
@@ -100,11 +99,10 @@ export async function resolveActiveShopAndProduct(
     return null;
   }
 
-  const databaseProductId = resolveProductDatabaseId(shopSlug, productId);
   const { data: productRow, error: productError } = await supabase
     .from("products")
     .select("id,shop_id,name,is_active,rating,review_count")
-    .eq("id", databaseProductId)
+    .eq("id", productId)
     .eq("shop_id", shop.id)
     .maybeSingle();
 

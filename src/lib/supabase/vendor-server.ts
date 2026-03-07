@@ -490,6 +490,7 @@ export async function getVendorStatusSnapshot(context: VendorRequestContext) {
 
   return {
     userId,
+    billingBypassEnabled: isVendorBillingBypassEnabled,
     profile,
     isVendor: profile.role === "vendor" || profile.role === "admin",
     hasShop: Boolean(shop),

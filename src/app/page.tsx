@@ -12,39 +12,29 @@ import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { ProfileMenu } from "@/components/profile/profile-menu";
 import { HomeSearchOverlay } from "@/components/search/home-search-overlay";
 import { ShopRating } from "@/components/shop/shop-rating";
-import { marketplaceShopCards, mockShopDetails } from "@/lib/mock-shop-data";
 import {
   fetchMarketplaceSearchShopsBrowser,
   mapSearchShopsToCards,
   type MarketplaceSearchShop,
 } from "@/lib/supabase/public-shop-data-browser";
 
-const FALLBACK_SEARCH_SHOPS: MarketplaceSearchShop[] = mockShopDetails.map((shop) => ({
-  id: shop.slug,
-  slug: shop.slug,
-  name: shop.vendorName,
-  rating: shop.rating,
-  reviewCount: shop.reviewCount,
-  products: shop.products.map((product) => ({
-    id: product.id,
-    name: product.name,
-    imageUrl: product.imageUrl,
-    alt: product.alt,
-  })),
-}));
-
 export default function HomePage() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [shopCards, setShopCards] = useState(marketplaceShopCards);
-  const [searchShops, setSearchShops] = useState<MarketplaceSearchShop[]>(
-    FALLBACK_SEARCH_SHOPS,
+  const [shopCards, setShopCards] = useState<ReturnType<typeof mapSearchShopsToCards>>(
+    [],
   );
+  const [searchShops, setSearchShops] = useState<MarketplaceSearchShop[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLoadingShops, setIsLoadingShops] = useState(true);
+  const [shopsError, setShopsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadShops() {
+      setIsLoadingShops(true);
+      setShopsError(null);
+
       try {
         const shops = await fetchMarketplaceSearchShopsBrowser();
         if (!isMounted) {
@@ -52,12 +42,21 @@ export default function HomePage() {
         }
         setSearchShops(shops);
         setShopCards(mapSearchShopsToCards(shops));
-      } catch {
+      } catch (error) {
         if (!isMounted) {
           return;
         }
-        setSearchShops(FALLBACK_SEARCH_SHOPS);
-        setShopCards(marketplaceShopCards);
+        setSearchShops([]);
+        setShopCards([]);
+        setShopsError(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las tiendas.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingShops(false);
+        }
       }
     }
 
@@ -85,52 +84,80 @@ export default function HomePage() {
           </Link>
         </header>
 
-        <section className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-          {shopCards.map((shop) => (
-            <Link
-              key={shop.id}
-              href={`/${shop.id}`}
-              className="block rounded-3xl bg-[var(--color-white)] px-4 py-3 shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)] md:px-5 md:py-4"
-            >
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
-                  N
-                </div>
-                <div>
-                  <h2 className="text-lg leading-tight font-extrabold text-[var(--color-carbon)]">
-                    {shop.name}
-                  </h2>
-                  <ShopRating rating={shop.rating} reviewCount={shop.reviewCount} />
-                </div>
-              </div>
+        {shopsError ? (
+          <section className="rounded-3xl bg-[var(--color-white)] px-4 py-5 text-center shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)]">
+            <p className="text-sm font-semibold text-[var(--color-danger)]">
+              No se pudieron cargar las tiendas.
+            </p>
+            <p className="mt-1 text-xs text-[var(--color-gray-500)]">{shopsError}</p>
+          </section>
+        ) : null}
 
-              <div className="mb-4 grid grid-cols-3 gap-3">
-                {shop.products.map((product) => (
-                  <div key={product.id} className="relative h-[120px] overflow-hidden rounded-3xl bg-[var(--color-gray)] md:h-[128px]">
-                    <Image
-                      src={product.imageUrl}
-                      alt={product.alt}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 33vw, 220px"
-                    />
+        {isLoadingShops && !shopsError ? (
+          <section className="rounded-3xl bg-[var(--color-white)] px-4 py-5 text-center shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)]">
+            <p className="text-sm text-[var(--color-gray-500)]">Cargando tiendas...</p>
+          </section>
+        ) : null}
+
+        {!isLoadingShops && !shopsError && shopCards.length === 0 ? (
+          <section className="rounded-3xl bg-[var(--color-white)] px-4 py-5 text-center shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)]">
+            <p className="text-sm font-semibold text-[var(--color-carbon)]">
+              No hay tiendas disponibles.
+            </p>
+          </section>
+        ) : null}
+
+        {!isLoadingShops && !shopsError && shopCards.length > 0 ? (
+          <section className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
+            {shopCards.map((shop) => (
+              <Link
+                key={shop.id}
+                href={`/${shop.id}`}
+                className="block rounded-3xl bg-[var(--color-white)] px-4 py-3 shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)] md:px-5 md:py-4"
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
+                    N
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <h2 className="text-lg leading-tight font-extrabold text-[var(--color-carbon)]">
+                      {shop.name}
+                    </h2>
+                    <ShopRating rating={shop.rating} reviewCount={shop.reviewCount} />
+                  </div>
+                </div>
 
-              <div className="flex items-center justify-between">
-                <p className="text-[2rem] leading-none font-extrabold text-[var(--color-carbon)] md:text-[2.15rem]">
-                  Ver mas
-                </p>
-                <span
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray-300)] bg-[var(--color-gray-icon)] text-xl text-[var(--color-carbon)]"
-                >
-                  <ChevronIcon className="h-5 w-5" />
-                </span>
-              </div>
-            </Link>
-          ))}
-        </section>
+                <div className="mb-4 grid grid-cols-3 gap-3">
+                  {shop.products.map((product) => (
+                    <div
+                      key={product.id}
+                      className="relative h-[120px] overflow-hidden rounded-3xl bg-[var(--color-gray)] md:h-[128px]"
+                    >
+                      <Image
+                        src={product.imageUrl}
+                        alt={product.alt}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 33vw, 220px"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <p className="text-[2rem] leading-none font-extrabold text-[var(--color-carbon)] md:text-[2.15rem]">
+                    Ver mas
+                  </p>
+                  <span
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray-300)] bg-[var(--color-gray-icon)] text-xl text-[var(--color-carbon)]"
+                  >
+                    <ChevronIcon className="h-5 w-5" />
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </section>
+        ) : null}
       </main>
 
       <TwoItemBottomNav

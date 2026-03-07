@@ -1,12 +1,6 @@
 "use client";
 
-import { createCatalogProductKey } from "@/lib/catalog-ids";
-import {
-  getCatalogProductIdentityFromDatabaseId,
-  resolveProductDatabaseId,
-} from "@/lib/catalog-mapping";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { ensureCatalogSeeded } from "@/lib/supabase/catalog-seed-client";
 
 export type FavoriteProduct = {
   id: string;
@@ -56,8 +50,6 @@ export async function fetchFavoriteProducts() {
   if (!profileId) {
     return [] as FavoriteProduct[];
   }
-
-  await ensureCatalogSeeded();
 
   const supabase = createSupabaseBrowserClient();
   const { data: favoriteRows, error: favoritesError } = await supabase
@@ -109,7 +101,6 @@ export async function fetchFavoriteProducts() {
   );
 
   return productIds.flatMap((productId) => {
-    const identity = getCatalogProductIdentityFromDatabaseId(productId);
     const product = productById.get(productId);
     if (!product) {
       return [];
@@ -120,16 +111,14 @@ export async function fetchFavoriteProducts() {
       return [];
     }
 
-    const routeProductId = identity?.productId ?? product.id;
-    const routeShopSlug = identity?.shopSlug ?? shop.slug;
-    const favoriteId = createCatalogProductKey(routeShopSlug, routeProductId);
+    const favoriteId = `${shop.slug}:${product.id}`;
 
     return [
       {
         id: favoriteId,
-        shopSlug: routeShopSlug,
+        shopSlug: shop.slug,
         shopName: shop.vendor_name,
-        productId: routeProductId,
+        productId: product.id,
         productName: product.name,
         priceUsd: Number(product.price_usd),
         imageUrl: product.image_url,
@@ -139,22 +128,22 @@ export async function fetchFavoriteProducts() {
   });
 }
 
-export async function upsertFavoriteProduct(shopSlug: string, productId: string) {
+export async function upsertFavoriteProduct(_shopSlug: string, productId: string) {
   const profileId = await getCurrentProfileId();
   if (!profileId) {
     return { ok: false as const, unauthorized: true as const };
   }
 
-  await ensureCatalogSeeded();
-
-  const databaseProductId =
-    resolveProductDatabaseId(shopSlug, productId);
+  const normalizedProductId = productId.trim();
+  if (!normalizedProductId) {
+    throw new Error("Producto invalido.");
+  }
 
   const supabase = createSupabaseBrowserClient();
   const { error } = await supabase.from("favorites").upsert(
     {
       profile_id: profileId,
-      product_id: databaseProductId,
+      product_id: normalizedProductId,
     },
     {
       onConflict: "profile_id,product_id",
@@ -168,21 +157,23 @@ export async function upsertFavoriteProduct(shopSlug: string, productId: string)
   return { ok: true as const, unauthorized: false as const };
 }
 
-export async function deleteFavoriteProduct(shopSlug: string, productId: string) {
+export async function deleteFavoriteProduct(_shopSlug: string, productId: string) {
   const profileId = await getCurrentProfileId();
   if (!profileId) {
     return { ok: false as const, unauthorized: true as const };
   }
 
-  const databaseProductId =
-    resolveProductDatabaseId(shopSlug, productId);
+  const normalizedProductId = productId.trim();
+  if (!normalizedProductId) {
+    throw new Error("Producto invalido.");
+  }
 
   const supabase = createSupabaseBrowserClient();
   const { error } = await supabase
     .from("favorites")
     .delete()
     .eq("profile_id", profileId)
-    .eq("product_id", databaseProductId);
+    .eq("product_id", normalizedProductId);
 
   if (error) {
     throw new Error(error.message);

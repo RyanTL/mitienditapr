@@ -57,6 +57,13 @@ export default async function VendorPanelPage() {
       title="Panel de vendedor"
       subtitle="Resumen rapido de tu tienda y acciones clave."
     >
+      {snapshot.billingBypassEnabled ? (
+        <article className="rounded-3xl border border-[var(--color-brand)] bg-[var(--color-white)] p-4 text-sm text-[var(--color-brand)] shadow-[0_10px_20px_var(--shadow-black-008)]">
+          Modo prueba activo: la validacion de facturacion esta omitida temporalmente
+          para pruebas publicas.
+        </article>
+      ) : null}
+
       <div className="grid gap-3 md:grid-cols-2 md:items-start">
       <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
         <h2 className="text-base font-bold">Estado de tienda</h2>
