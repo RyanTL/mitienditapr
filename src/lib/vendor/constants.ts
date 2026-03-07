@@ -4,7 +4,11 @@ export const VENDOR_ONBOARDING_STEPS = [
   { step: 3, title: "Configurar tienda", description: "Nombre, slug y descripcion de tu tienda." },
   { step: 4, title: "Envios y politicas", description: "Define tarifa de envio y politicas basicas." },
   { step: 5, title: "Conectar cobros", description: "Conecta Stripe Express para recibir pagos." },
-  { step: 6, title: "Suscripcion", description: "Activa plan mensual para poder publicar." },
+  {
+    step: 6,
+    title: "Suscripcion",
+    description: "Activa plan mensual o redime codigo de acceso para publicar.",
+  },
   { step: 7, title: "Primer producto", description: "Crea al menos un producto con variante." },
   { step: 8, title: "Publicar tienda", description: "Revisa requisitos y publica tu tienda." },
 ] as const;

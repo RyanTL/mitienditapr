@@ -37,7 +37,9 @@ export type VendorStatusResponse = {
   subscription: {
     id: string;
     shop_id: string;
+    provider: string;
     status: string;
+    provider_subscription_id: string | null;
     stripe_subscription_id: string | null;
     stripe_customer_id: string | null;
     stripe_price_id: string | null;
