@@ -164,7 +164,7 @@ export function AccountPageClient({
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-6 pb-32 text-[var(--color-carbon)] md:px-5">
+    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-6 pb-32 lg:pb-8 text-[var(--color-carbon)] md:px-5">
       <main className="mx-auto w-full max-w-md space-y-4 md:max-w-3xl lg:max-w-4xl">
         <header>
           <h1 className="text-3xl font-bold leading-tight">Cuenta</h1>

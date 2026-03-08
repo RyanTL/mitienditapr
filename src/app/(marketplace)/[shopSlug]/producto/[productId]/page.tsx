@@ -40,7 +40,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     .slice(0, 2);
 
   return (
-    <div className="min-h-screen bg-[var(--color-white)] px-4 py-5 pb-28 text-[var(--color-carbon)] md:px-5">
+    <div className="min-h-screen bg-[var(--color-white)] px-4 py-5 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
       <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
         <header className="mb-4 flex items-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-lg font-bold text-[var(--color-white)]">
@@ -54,73 +54,80 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </Link>
         </header>
 
-        <section>
-          <div className="relative overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-            <div className="relative h-[360px] md:h-[420px]">
-              <Image
-                src={product.imageUrl}
-                alt={product.alt}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 460px"
-                priority
-              />
+        {/* Desktop: side-by-side. Mobile: stacked. */}
+        <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-12">
+          {/* Image column */}
+          <section>
+            <div className="relative overflow-hidden rounded-2xl bg-[var(--color-gray)]">
+              <div className="relative h-[360px] md:h-[420px] lg:h-[520px]">
+                <Image
+                  src={product.imageUrl}
+                  alt={product.alt}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 460px, 560px"
+                  priority
+                />
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div className="mt-3 flex items-start justify-between md:mt-4">
-            <div>
-              <h1 className="text-[1.75rem] font-medium leading-none">{product.name}</h1>
-              <ShopRating
-                rating={product.rating ?? shop.rating}
-                reviewCount={product.reviewCount ?? shop.reviewCount}
-                className="mt-1.5 text-sm font-semibold text-[var(--color-carbon)]"
-              />
-              <p className="mt-1 text-[1.25rem] leading-none">
-                {formatUsd(product.priceUsd)}
-              </p>
+          {/* Info column */}
+          <section>
+            <div className="mt-3 flex items-start justify-between md:mt-4 lg:mt-0">
+              <div>
+                <h1 className="text-[1.75rem] font-medium leading-none">{product.name}</h1>
+                <ShopRating
+                  rating={product.rating ?? shop.rating}
+                  reviewCount={product.reviewCount ?? shop.reviewCount}
+                  className="mt-1.5 text-sm font-semibold text-[var(--color-carbon)]"
+                />
+                <p className="mt-1 text-[1.25rem] leading-none">
+                  {formatUsd(product.priceUsd)}
+                </p>
+              </div>
+              <div className="mt-0.5 flex items-center gap-2">
+                <FavoriteToggleButton
+                  product={{
+                    shopSlug: shop.slug,
+                    shopName: shop.vendorName,
+                    productId: product.id,
+                    productName: product.name,
+                    priceUsd: product.priceUsd,
+                    imageUrl: product.imageUrl,
+                    alt: product.alt,
+                  }}
+                  baseClassName="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-gray-border)]"
+                  activeClassName="border-[var(--color-brand)] bg-[var(--color-brand)] text-[var(--color-white)]"
+                  inactiveClassName="bg-[var(--color-gray-100)] text-[var(--color-carbon)]"
+                  iconClassName="h-6 w-6"
+                />
+                <ProductShareButton
+                  shopSlug={shop.slug}
+                  productId={product.id}
+                  productName={product.name}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-100)] text-[var(--color-carbon)]"
+                />
+              </div>
             </div>
-            <div className="mt-0.5 flex items-center gap-2">
-              <FavoriteToggleButton
-                product={{
-                  shopSlug: shop.slug,
-                  shopName: shop.vendorName,
-                  productId: product.id,
-                  productName: product.name,
-                  priceUsd: product.priceUsd,
-                  imageUrl: product.imageUrl,
-                  alt: product.alt,
-                }}
-                baseClassName="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-gray-border)]"
-                activeClassName="border-[var(--color-brand)] bg-[var(--color-brand)] text-[var(--color-white)]"
-                inactiveClassName="bg-[var(--color-gray-100)] text-[var(--color-carbon)]"
-                iconClassName="h-6 w-6"
-              />
-              <ProductShareButton
+
+            <ProductPurchasePanel shopSlug={shop.slug} productId={product.id} />
+
+            <section className="mt-8">
+              <h2 className="text-3xl font-bold text-[var(--color-carbon)]">Descripcion</h2>
+              <p className="mt-2 text-sm text-[var(--color-carbon)]">{product.description}</p>
+
+              <ProductReviewsSection
                 shopSlug={shop.slug}
                 productId={product.id}
-                productName={product.name}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-100)] text-[var(--color-carbon)]"
+                initialSummary={{
+                  averageRating: product.rating ?? shop.rating,
+                  reviewCount: product.reviewCount ?? shop.reviewCount,
+                }}
               />
-            </div>
-          </div>
-
-          <ProductPurchasePanel shopSlug={shop.slug} productId={product.id} />
-        </section>
-
-        <section className="mt-8">
-          <h2 className="text-3xl font-bold text-[var(--color-carbon)]">Descripcion</h2>
-          <p className="mt-2 text-sm text-[var(--color-carbon)]">{product.description}</p>
-
-          <ProductReviewsSection
-            shopSlug={shop.slug}
-            productId={product.id}
-            initialSummary={{
-              averageRating: product.rating ?? shop.rating,
-              reviewCount: product.reviewCount ?? shop.reviewCount,
-            }}
-          />
-        </section>
+            </section>
+          </section>
+        </div>
 
         <section className="mt-10 pb-4">
           <div className="mb-4 flex items-center gap-2">

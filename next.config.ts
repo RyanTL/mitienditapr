@@ -18,6 +18,9 @@ const supabaseHost = getSupabaseHost();
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   reactCompiler: true,
+  turbopack: {
+    root: process.cwd(),
+  },
   images: {
     remotePatterns: [
       {

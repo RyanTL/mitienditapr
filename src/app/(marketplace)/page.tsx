@@ -68,20 +68,32 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray-100)] pb-32">
+    <div className="min-h-screen bg-[var(--color-gray-100)] pb-32 lg:pb-8">
       <main className="mx-auto w-full max-w-md px-3 py-5 md:max-w-3xl md:px-5 lg:max-w-5xl">
         <header className="mb-6 flex items-center justify-between">
+          {/* Mobile-only profile + favorites */}
           <button type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)] shadow-sm"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)] shadow-sm lg:hidden"
             aria-label="Perfil"
             onClick={() => setIsProfileMenuOpen(true)}
           >
             N
           </button>
-          <Link href="/favoritos" className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-1.5 text-sm font-medium text-[var(--color-carbon)] shadow-sm">
+          <Link href="/favoritos" className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-1.5 text-sm font-medium text-[var(--color-carbon)] shadow-sm lg:hidden">
             <FavoriteIcon />
             Favoritos
           </Link>
+          {/* Desktop-only page heading */}
+          <h1 className="hidden text-2xl font-extrabold tracking-tight text-[var(--color-carbon)] lg:block">
+            Tiendas
+          </h1>
+          <button
+            type="button"
+            className="hidden items-center gap-2 rounded-full border border-[var(--color-gray-200)] bg-[var(--color-white)] px-4 py-2 text-sm font-medium text-[var(--color-gray-500)] shadow-sm transition-colors hover:bg-[var(--color-gray-100)] lg:inline-flex"
+            onClick={() => setIsSearchOpen(true)}
+          >
+            Buscar tiendas...
+          </button>
         </header>
 
         {shopsError ? (
@@ -108,7 +120,7 @@ export default function HomePage() {
         ) : null}
 
         {!isLoadingShops && !shopsError && shopCards.length > 0 ? (
-          <section className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
+          <section className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 lg:grid-cols-3">
             {shopCards.map((shop) => (
               <Link
                 key={shop.id}
@@ -131,7 +143,7 @@ export default function HomePage() {
                   {shop.products.map((product) => (
                     <div
                       key={product.id}
-                      className="relative h-[120px] overflow-hidden rounded-3xl bg-[var(--color-gray)] md:h-[128px]"
+                      className="relative h-[120px] overflow-hidden rounded-3xl bg-[var(--color-gray)] md:h-[128px] lg:h-[140px]"
                     >
                       <Image
                         src={product.imageUrl}
