@@ -12,6 +12,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 type VendorSubscriptionRow = {
   id: string;
   shop_id: string;
+  provider: string;
+  provider_subscription_id: string | null;
   status: string;
   stripe_subscription_id: string | null;
   stripe_customer_id: string | null;
@@ -63,6 +65,12 @@ function normalizeSubscriptionStatus(status: string | undefined) {
   return "inactive";
 }
 
+function shouldHandleStripeManagedSubscription(
+  subscription: VendorSubscriptionRow | null,
+): subscription is VendorSubscriptionRow {
+  return Boolean(subscription && subscription.provider === "stripe");
+}
+
 async function findVendorSubscriptionByStripeRefs(input: {
   subscriptionId?: string | null;
   customerId?: string | null;
@@ -73,7 +81,9 @@ async function findVendorSubscriptionByStripeRefs(input: {
   if (subscriptionId) {
     const { data, error } = await admin
       .from("vendor_subscriptions")
-      .select("id,shop_id,status,stripe_subscription_id,stripe_customer_id")
+      .select(
+        "id,shop_id,provider,provider_subscription_id,status,stripe_subscription_id,stripe_customer_id",
+      )
       .eq("stripe_subscription_id", subscriptionId)
       .maybeSingle();
 
@@ -89,7 +99,9 @@ async function findVendorSubscriptionByStripeRefs(input: {
   if (customerId) {
     const { data, error } = await admin
       .from("vendor_subscriptions")
-      .select("id,shop_id,status,stripe_subscription_id,stripe_customer_id")
+      .select(
+        "id,shop_id,provider,provider_subscription_id,status,stripe_subscription_id,stripe_customer_id",
+      )
       .eq("stripe_customer_id", customerId)
       .maybeSingle();
 
@@ -208,7 +220,7 @@ async function handleInvoiceEvent(event: StripeWebhookEvent<StripeInvoiceEventOb
     customerId,
   });
 
-  if (!subscription) {
+  if (!shouldHandleStripeManagedSubscription(subscription)) {
     return;
   }
 
@@ -303,7 +315,7 @@ async function handleSubscriptionEvent(
     customerId,
   });
 
-  if (!subscription) {
+  if (!shouldHandleStripeManagedSubscription(subscription)) {
     return;
   }
 

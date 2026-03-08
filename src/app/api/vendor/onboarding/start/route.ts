@@ -39,22 +39,31 @@ async function ensureVendorPoliciesAndSubscription(
     }
   }
 
-  const { error: subscriptionError } = await supabase
+  const { data: existingSubscription, error: existingSubscriptionError } = await supabase
     .from("vendor_subscriptions")
-    .upsert(
-      {
+    .select("id")
+    .eq("shop_id", shopId)
+    .maybeSingle();
+
+  if (existingSubscriptionError) {
+    throw new Error(existingSubscriptionError.message);
+  }
+
+  if (!existingSubscription) {
+    const { error: subscriptionError } = await supabase
+      .from("vendor_subscriptions")
+      .insert({
         shop_id: shopId,
         provider: "stripe",
         status: "inactive",
         stripe_customer_id: null,
         stripe_subscription_id: null,
         stripe_price_id: null,
-      },
-      { onConflict: "shop_id" },
-    );
+      });
 
-  if (subscriptionError) {
-    throw new Error(subscriptionError.message);
+    if (subscriptionError) {
+      throw new Error(subscriptionError.message);
+    }
   }
 
 }

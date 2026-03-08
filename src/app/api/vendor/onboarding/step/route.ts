@@ -23,6 +23,13 @@ import {
   getShopPoliciesByShopId,
   upsertVendorOnboardingStep,
 } from "@/lib/supabase/vendor-server";
+import {
+  createVendorPolicyAcceptance,
+  getCurrentShopPolicyVersions,
+  getRequiredPolicyIds,
+  publishShopPolicyVersion,
+} from "@/lib/supabase/vendor-policy-server";
+import { DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT } from "@/lib/policies/constants";
 
 type StepPayload = {
   step: number;
@@ -153,19 +160,23 @@ async function applyStepSideEffects(input: {
       throw new Error(shopError.message);
     }
 
-    const currentPolicies = await getShopPoliciesByShopId(supabase, shopId);
-    const refundPolicy = readString(payload, "refundPolicy", currentPolicies?.refund_policy ?? "");
+    const currentPolicySnapshot = await getShopPoliciesByShopId(supabase, shopId);
+    const refundPolicy = readString(
+      payload,
+      "refundPolicy",
+      currentPolicySnapshot?.refund_policy ?? "",
+    );
     const shippingPolicy = readString(
       payload,
       "shippingPolicy",
-      currentPolicies?.shipping_policy ?? "",
+      currentPolicySnapshot?.shipping_policy ?? "",
     );
     const privacyPolicy = readString(
       payload,
       "privacyPolicy",
-      currentPolicies?.privacy_policy ?? "",
+      currentPolicySnapshot?.privacy_policy ?? "",
     );
-    const terms = readString(payload, "terms", currentPolicies?.terms ?? "");
+    const terms = readString(payload, "terms", currentPolicySnapshot?.terms ?? "");
 
     const { error: policiesError } = await supabase.from("shop_policies").upsert(
       {
@@ -181,6 +192,76 @@ async function applyStepSideEffects(input: {
     if (policiesError) {
       throw new Error(policiesError.message);
     }
+
+    const publishedTerms = terms.trim().length > 0;
+    const publishedShipping = shippingPolicy.trim().length > 0;
+    const publishedRefund = refundPolicy.trim().length > 0;
+    const publishedPrivacy = privacyPolicy.trim().length > 0;
+
+    if (publishedTerms) {
+      await publishShopPolicyVersion({
+        supabase,
+        shopId,
+        policyType: "terms",
+        title: "Terminos y condiciones",
+        body: terms.trim(),
+        sourceTemplateId: null,
+        publishedBy: profileId,
+      });
+    }
+
+    if (publishedShipping) {
+      await publishShopPolicyVersion({
+        supabase,
+        shopId,
+        policyType: "shipping",
+        title: "Politica de envio",
+        body: shippingPolicy.trim(),
+        sourceTemplateId: null,
+        publishedBy: profileId,
+      });
+    }
+
+    if (publishedRefund) {
+      await publishShopPolicyVersion({
+        supabase,
+        shopId,
+        policyType: "refund",
+        title: "Politica de reembolso",
+        body: refundPolicy.trim(),
+        sourceTemplateId: null,
+        publishedBy: profileId,
+      });
+    }
+
+    if (publishedPrivacy) {
+      await publishShopPolicyVersion({
+        supabase,
+        shopId,
+        policyType: "privacy",
+        title: "Politica de privacidad",
+        body: privacyPolicy.trim(),
+        sourceTemplateId: null,
+        publishedBy: profileId,
+      });
+    }
+
+    const currentPolicyVersions = await getCurrentShopPolicyVersions(supabase, shopId);
+    const requiredIds = getRequiredPolicyIds(currentPolicyVersions);
+    if (requiredIds) {
+      await createVendorPolicyAcceptance({
+        supabase,
+        shopId,
+        acceptedByProfileId: profileId,
+        acceptanceScope: "update",
+        termsVersionId: requiredIds.terms,
+        shippingVersionId: requiredIds.shipping,
+        refundVersionId: currentPolicyVersions.refund?.id ?? null,
+        privacyVersionId: currentPolicyVersions.privacy?.id ?? null,
+        acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
+      });
+    }
+
     return;
   }
 

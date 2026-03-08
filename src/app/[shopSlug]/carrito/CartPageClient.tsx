@@ -17,6 +17,8 @@ import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/n
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { formatUsd } from "@/lib/formatters";
+import { fetchPublicShopPolicies } from "@/lib/policies/client";
+import type { PublicShopPoliciesResponse, PolicyType } from "@/lib/policies/types";
 import type { ShopDetail } from "@/lib/mock-shop-data";
 import {
   checkoutCartByShop,
@@ -38,6 +40,11 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [policiesData, setPoliciesData] = useState<PublicShopPoliciesResponse | null>(null);
+  const [isLoadingPolicies, setIsLoadingPolicies] = useState(false);
+  const [policiesError, setPoliciesError] = useState<string | null>(null);
+  const [hasAcceptedRequiredPolicies, setHasAcceptedRequiredPolicies] = useState(false);
+  const [activePolicyModalType, setActivePolicyModalType] = useState<PolicyType | null>(null);
   const { addFavorite } = useFavoriteProducts();
 
   const loadShopCartItems = useCallback(async () => {
@@ -79,15 +86,58 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
     [cartItems, menuItemId],
   );
   const shouldShowShopHeader = !isLoading && !loadError && cartItems.length > 0;
+  const canCheckout = Boolean(
+    policiesData?.requiredPolicyVersionIds &&
+      hasAcceptedRequiredPolicies &&
+      !isLoadingPolicies,
+  );
+  const activePolicyModal =
+    activePolicyModalType && policiesData?.policies
+      ? policiesData.policies[activePolicyModalType] ?? null
+      : null;
+  const activePolicyModalTitle =
+    activePolicyModalType === "terms"
+      ? "Terminos y condiciones"
+      : activePolicyModalType === "shipping"
+        ? "Politica de envio"
+        : activePolicyModalType === "refund"
+          ? "Politica de reembolso"
+          : activePolicyModalType === "privacy"
+            ? "Politica de privacidad"
+            : "";
 
-  useBodyScrollLock(Boolean(menuItemId));
-  useEscapeKey(Boolean(menuItemId), () => setMenuItemId(null));
+  useBodyScrollLock(Boolean(menuItemId || activePolicyModalType));
+  useEscapeKey(Boolean(menuItemId || activePolicyModalType), () => {
+    setMenuItemId(null);
+    setActivePolicyModalType(null);
+  });
 
   useEffect(() => {
     if (menuItemId && !activeMenuItem) {
       setMenuItemId(null);
     }
   }, [activeMenuItem, menuItemId]);
+
+  const loadPolicies = useCallback(async () => {
+    setIsLoadingPolicies(true);
+    setPoliciesError(null);
+
+    try {
+      const response = await fetchPublicShopPolicies(shop.slug);
+      setPoliciesData(response);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudieron cargar las politicas.";
+      setPoliciesError(message);
+      setPoliciesData(null);
+    } finally {
+      setIsLoadingPolicies(false);
+    }
+  }, [shop.slug]);
+
+  useEffect(() => {
+    void loadPolicies();
+  }, [loadPolicies]);
 
   const removeLineItem = useCallback(
     async (lineItemId: string) => {
@@ -194,11 +244,29 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   }, [activeMenuItem, addFavorite, cartItems]);
 
   const handleCheckout = useCallback(async () => {
+    if (!policiesData?.requiredPolicyVersionIds) {
+      setCheckoutError(
+        "La tienda no tiene Terminos y Politica de envio publicados. No se puede continuar.",
+      );
+      return;
+    }
+
+    if (!hasAcceptedRequiredPolicies) {
+      setCheckoutError("Debes aceptar Terminos y Politica de envio para continuar.");
+      return;
+    }
+
     setIsCheckingOut(true);
     setCheckoutError(null);
 
     try {
-      const result = await checkoutCartByShop(shop.slug);
+      const result = await checkoutCartByShop(shop.slug, {
+        shopId: policiesData.shopId,
+        termsVersionId: policiesData.requiredPolicyVersionIds.terms,
+        shippingVersionId: policiesData.requiredPolicyVersionIds.shipping,
+        acceptedAt: new Date().toISOString(),
+        acceptanceText: "Acepto Terminos y Politica de envio de esta tienda.",
+      });
 
       if (result.unauthorized) {
         router.push(`/sign-in?next=${encodeURIComponent(`/${shop.slug}/carrito`)}`);
@@ -221,7 +289,13 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
     } finally {
       setIsCheckingOut(false);
     }
-  }, [loadShopCartItems, router, shop.slug]);
+  }, [
+    hasAcceptedRequiredPolicies,
+    loadShopCartItems,
+    policiesData,
+    router,
+    shop.slug,
+  ]);
 
   return (
     <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 text-[var(--color-carbon)] md:px-5">
@@ -322,6 +396,51 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                 </p>
               </div>
 
+              <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3">
+                <p className="text-xs font-semibold text-[var(--color-gray-500)]">
+                  Politicas requeridas
+                </p>
+                {isLoadingPolicies ? (
+                  <p className="mt-1 text-xs text-[var(--color-carbon)]">Cargando politicas...</p>
+                ) : policiesError ? (
+                  <p className="mt-1 text-xs text-[var(--color-danger)]">{policiesError}</p>
+                ) : policiesData?.requiredPolicyVersionIds ? (
+                  <>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full border border-[var(--color-gray)] px-3 py-1 text-xs font-semibold"
+                        onClick={() => setActivePolicyModalType("terms")}
+                      >
+                        Ver Terminos
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-[var(--color-gray)] px-3 py-1 text-xs font-semibold"
+                        onClick={() => setActivePolicyModalType("shipping")}
+                      >
+                        Ver Politica de envio
+                      </button>
+                    </div>
+                    <label className="mt-3 flex items-start gap-2 text-xs text-[var(--color-carbon)]">
+                      <input
+                        type="checkbox"
+                        checked={hasAcceptedRequiredPolicies}
+                        onChange={(event) =>
+                          setHasAcceptedRequiredPolicies(event.target.checked)
+                        }
+                        className="mt-0.5"
+                      />
+                      <span>Acepto Terminos y Politica de envio de esta tienda.</span>
+                    </label>
+                  </>
+                ) : (
+                  <p className="mt-1 text-xs text-[var(--color-danger)]">
+                    Esta tienda aun no tiene politicas requeridas publicadas.
+                  </p>
+                )}
+              </div>
+
               {checkoutError ? (
                 <p className="mb-3 rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-3 py-2 text-xs text-[var(--color-danger)]">
                   {checkoutError}
@@ -330,7 +449,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
 
               <button
                 type="button"
-                disabled={isCheckingOut}
+                disabled={isCheckingOut || !canCheckout}
                 className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-base font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)] disabled:opacity-70"
                 onClick={() => void handleCheckout()}
               >
@@ -354,6 +473,38 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
           href: "/",
         }}
       />
+
+      {activePolicyModalType ? (
+        <div className="fixed inset-0 z-40">
+          <button
+            type="button"
+            className="absolute inset-0 bg-[var(--overlay-black-055)]"
+            aria-label="Cerrar politica"
+            onClick={() => setActivePolicyModalType(null)}
+          />
+          <section className="absolute inset-x-4 top-1/2 mx-auto max-w-3xl -translate-y-1/2 rounded-3xl bg-[var(--color-white)] p-5 shadow-[0_30px_80px_var(--shadow-black-035)] md:max-w-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-[var(--color-carbon)]">
+                {activePolicyModalTitle}
+              </h3>
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-gray)] text-[var(--color-carbon)]"
+                onClick={() => setActivePolicyModalType(null)}
+                aria-label="Cerrar"
+              >
+                <CloseIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[58vh] overflow-y-auto rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-3">
+              <p className="whitespace-pre-line text-sm leading-6 text-[var(--color-carbon)]">
+                {activePolicyModal?.body ?? "No disponible."}
+              </p>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {menuItemId ? (
         <div className="fixed inset-0 z-40">

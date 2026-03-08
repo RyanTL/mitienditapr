@@ -12,6 +12,7 @@ import {
   createVendorProduct,
   fetchVendorStatus,
   publishVendorShop,
+  redeemVendorAccessCode,
   saveVendorOnboardingStep,
   startVendorOnboarding,
   uploadVendorImage,
@@ -37,6 +38,7 @@ type FormState = {
   shippingPolicy: string;
   privacyPolicy: string;
   terms: string;
+  accessCode: string;
   firstProductName: string;
   firstProductDescription: string;
   firstProductPriceUsd: string;
@@ -59,6 +61,7 @@ const DEFAULT_FORM_STATE: FormState = {
   shippingPolicy: "Envios de 1 a 3 dias laborables.",
   privacyPolicy: "Tus datos se usan solo para procesar ordenes.",
   terms: "Al comprar aceptas los terminos de la tienda.",
+  accessCode: "",
   firstProductName: "",
   firstProductDescription: "",
   firstProductPriceUsd: "10",
@@ -107,6 +110,7 @@ function hydrateFormFromStatus(
   const step2 = mapStepPayload(snapshot.onboarding?.data_json, 2);
   const step3 = mapStepPayload(snapshot.onboarding?.data_json, 3);
   const step4 = mapStepPayload(snapshot.onboarding?.data_json, 4);
+  const step6 = mapStepPayload(snapshot.onboarding?.data_json, 6);
   const step7 = mapStepPayload(snapshot.onboarding?.data_json, 7);
 
   return {
@@ -134,6 +138,7 @@ function hydrateFormFromStatus(
     shippingPolicy: getString(step4, "shippingPolicy", currentFormState.shippingPolicy),
     privacyPolicy: getString(step4, "privacyPolicy", currentFormState.privacyPolicy),
     terms: getString(step4, "terms", currentFormState.terms),
+    accessCode: getString(step6, "accessCode", currentFormState.accessCode),
     firstProductName: getString(step7, "firstProductName", currentFormState.firstProductName),
     firstProductDescription: getString(
       step7,
@@ -227,6 +232,8 @@ export function VendorOnboardingClient() {
       setFeedback("Stripe Connect completado. Continua con el siguiente paso.");
     } else if (searchParams.get("subscription") === "success") {
       setFeedback("Suscripcion activada correctamente.");
+    } else if (searchParams.get("subscription") === "already_active") {
+      setFeedback("Tu suscripcion ya esta activa.");
     } else if (searchParams.get("subscription") === "cancel") {
       setFeedback("Puedes intentar el checkout de suscripcion nuevamente.");
     }
@@ -298,6 +305,38 @@ export function VendorOnboardingClient() {
       setIsSaving(false);
     }
   }, [handleSaveStep]);
+
+  const handleRedeemAccessCode = useCallback(async () => {
+    const code = formState.accessCode.trim();
+    if (!code) {
+      setErrorMessage("Debes escribir un codigo de acceso.");
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMessage(null);
+    setFeedback(null);
+
+    try {
+      const result = await redeemVendorAccessCode(code);
+      await refreshStatus();
+      setFeedback(
+        result.alreadyRedeemed
+          ? "Este codigo ya estaba aplicado a tu cuenta."
+          : "Codigo aplicado correctamente. Ya puedes continuar.",
+      );
+      setFormState((current) => ({
+        ...current,
+        accessCode: "",
+      }));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo redimir el codigo.";
+      setErrorMessage(message);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [formState.accessCode, refreshStatus]);
 
   const handleCreateFirstProduct = useCallback(async () => {
     const name = formState.firstProductName.trim();
@@ -863,6 +902,34 @@ export function VendorOnboardingClient() {
               >
                 {isSaving ? "Abriendo..." : "Ir a checkout de suscripcion"}
               </button>
+
+              <div className="mt-5 rounded-2xl bg-[var(--color-gray-100)] p-3">
+                <p className="text-xs font-semibold text-[var(--color-carbon)]">
+                  Tengo codigo de acceso
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={formState.accessCode}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        accessCode: event.target.value,
+                      }))
+                    }
+                    placeholder="Ej: MTP-XXXXXX-XXXXXX-XXXXXX"
+                    className="w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-xs font-semibold text-[var(--color-carbon)]"
+                    disabled={isSaving}
+                    onClick={() => void handleRedeemAccessCode()}
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              </div>
             </>
           )}
         </article>

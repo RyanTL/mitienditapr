@@ -18,6 +18,11 @@ import {
   getVendorShopByProfileId,
   getVendorSubscriptionByShopId,
 } from "@/lib/supabase/vendor-server";
+import {
+  buildVendorPolicyCompletion,
+  getCurrentShopPolicyVersions,
+  getRequiredPolicyIds,
+} from "@/lib/supabase/vendor-policy-server";
 import type { VendorShopStatus } from "@/lib/vendor/constants";
 
 type ShopPatchPayload = {
@@ -103,10 +108,13 @@ export async function GET() {
     getVendorSubscriptionByShopId(dataClient, shop.id),
     getVendorPublishChecks(dataClient, context.userId),
   ]);
+  const currentPolicyVersions = await getCurrentShopPolicyVersions(dataClient, shop.id);
 
   return NextResponse.json({
     shop,
     policies,
+    policyCompletion: buildVendorPolicyCompletion(currentPolicyVersions),
+    currentPolicyVersionIds: getRequiredPolicyIds(currentPolicyVersions),
     subscription,
     checks,
   });
@@ -253,11 +261,21 @@ export async function PATCH(request: Request) {
     const nextPolicies = nextShop
       ? await getShopPoliciesByShopId(dataClient, nextShop.id)
       : null;
+    const currentPolicyVersions = nextShop
+      ? await getCurrentShopPolicyVersions(dataClient, nextShop.id)
+      : {
+          terms: null,
+          shipping: null,
+          refund: null,
+          privacy: null,
+        };
     const checks = await getVendorPublishChecks(dataClient, profile.id);
 
     return NextResponse.json({
       shop: nextShop,
       policies: nextPolicies,
+      policyCompletion: buildVendorPolicyCompletion(currentPolicyVersions),
+      currentPolicyVersionIds: getRequiredPolicyIds(currentPolicyVersions),
       checks,
     });
   } catch (error) {

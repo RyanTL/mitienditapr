@@ -21,6 +21,10 @@ import {
   getVendorSubscriptionByShopId,
 } from "@/lib/supabase/vendor-server";
 
+function isActiveSubscriptionStatus(status: string | null | undefined) {
+  return status === "active" || status === "trialing";
+}
+
 export async function POST(request: Request) {
   if (!isVendorModeEnabled) {
     return badRequestResponse("Vendor mode is disabled.");
@@ -44,6 +48,12 @@ export async function POST(request: Request) {
     const existingSubscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
     const requestOrigin = new URL(request.url).origin;
     const baseUrl = getAppBaseUrl({ requestOrigin });
+
+    if (isActiveSubscriptionStatus(existingSubscription?.status)) {
+      return NextResponse.json({
+        url: `${baseUrl}/vendedor/onboarding?step=6&subscription=already_active`,
+      });
+    }
 
     if (isVendorBillingBypassEnabled) {
       const periodEnd = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
