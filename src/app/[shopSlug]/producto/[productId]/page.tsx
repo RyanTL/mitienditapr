@@ -6,7 +6,6 @@ import {
   BackIcon,
   ChevronIcon,
   HomeIcon,
-  ShareIcon,
 } from "@/components/icons";
 import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-button";
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
@@ -14,6 +13,7 @@ import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/n
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { ProductPurchasePanel } from "@/components/product/product-purchase-panel";
 import { ProductReviewsSection } from "@/components/reviews/product-reviews-section";
+import { ProductShareButton } from "@/components/share/product-share-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { formatUsd } from "@/lib/formatters";
 import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data";
@@ -46,7 +46,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-lg font-bold text-[var(--color-white)]">
             N
           </div>
-          <p className="text-lg font-bold text-[var(--color-carbon)]">{shop.vendorName}</p>
+          <Link
+            href={`/${shop.slug}`}
+            className="text-lg font-bold text-[var(--color-carbon)] hover:opacity-80"
+          >
+            {shop.vendorName}
+          </Link>
         </header>
 
         <section>
@@ -91,12 +96,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 inactiveClassName="bg-[var(--color-gray-100)] text-[var(--color-carbon)]"
                 iconClassName="h-6 w-6"
               />
-              <button type="button"
+              <ProductShareButton
+                shopSlug={shop.slug}
+                productId={product.id}
+                productName={product.name}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-100)] text-[var(--color-carbon)]"
-                aria-label="Compartir producto"
-              >
-                <ShareIcon />
-              </button>
+              />
             </div>
           </div>
 

@@ -80,6 +80,17 @@ export function fetchVendorShopSettings() {
       privacy_policy: string;
       terms: string;
     } | null;
+    policyCompletion?: {
+      terms: "completed" | "recommended" | "required";
+      shipping: "completed" | "recommended" | "required";
+      refund: "completed" | "recommended" | "required";
+      privacy: "completed" | "recommended" | "required";
+      requiredReady: boolean;
+    };
+    currentPolicyVersionIds?: {
+      terms: string;
+      shipping: string;
+    } | null;
     checks: VendorStatusResponse["checks"];
   }>("/api/vendor/shop", {
     method: "GET",
@@ -288,6 +299,94 @@ export function createStripeConnectAccountLink() {
 export function createStripeSubscriptionCheckout() {
   return fetchJson<{ url: string }>("/api/stripe/subscription/checkout", {
     method: "POST",
+  });
+}
+
+export function redeemVendorAccessCode(code: string) {
+  return fetchJson<{
+    ok: boolean;
+    alreadyRedeemed: boolean;
+    benefitType: "free_months" | "lifetime_free";
+    benefitMonths: number | null;
+    currentPeriodEnd: string | null;
+  }>("/api/vendor/subscription/redeem-code", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function fetchAdminVendorAccessCodes() {
+  return fetchJson<{
+    codes: Array<{
+      id: string;
+      label: string;
+      isActive: boolean;
+      maxRedemptions: number | null;
+      redeemedCount: number;
+      benefitType: "free_months" | "lifetime_free";
+      benefitMonths: number | null;
+      expiresAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>("/api/admin/vendor-access-codes", {
+    method: "GET",
+    cache: "no-store",
+  });
+}
+
+export function createAdminVendorAccessCode(payload: {
+  label: string;
+  benefitType: "free_months" | "lifetime_free";
+  benefitMonths?: number | null;
+  maxRedemptions?: number | null;
+  expiresAt?: string | null;
+}) {
+  return fetchJson<{
+    code: {
+      id: string;
+      label: string;
+      plainCode: string;
+      isActive: boolean;
+      maxRedemptions: number | null;
+      redeemedCount: number;
+      benefitType: "free_months" | "lifetime_free";
+      benefitMonths: number | null;
+      expiresAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>("/api/admin/vendor-access-codes", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminVendorAccessCode(
+  codeId: string,
+  payload: {
+    label?: string;
+    isActive?: boolean;
+    maxRedemptions?: number | null;
+    expiresAt?: string | null;
+  },
+) {
+  return fetchJson<{
+    code: {
+      id: string;
+      label: string;
+      isActive: boolean;
+      maxRedemptions: number | null;
+      redeemedCount: number;
+      benefitType: "free_months" | "lifetime_free";
+      benefitMonths: number | null;
+      expiresAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>(`/api/admin/vendor-access-codes/${codeId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
 

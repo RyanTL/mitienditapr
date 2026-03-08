@@ -9,6 +9,13 @@ const REQUIRED_ENV_VARS = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_SECRET_KEY",
+  "NEXT_PUBLIC_APP_URL",
+] as const;
+
+const STRIPE_REQUIRED_ENV_VARS = [
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_VENDOR_PRICE_ID",
 ] as const;
 
 const REQUIRED_TABLES = [
@@ -25,6 +32,12 @@ const REQUIRED_TABLES = [
   "product_variants",
   "product_reviews",
   "shop_policies",
+  "policy_templates",
+  "shop_policy_versions",
+  "vendor_policy_acceptances",
+  "order_policy_snapshots",
+  "vendor_access_codes",
+  "vendor_access_code_redemptions",
 ] as const;
 
 type ReadinessResult = {
@@ -35,6 +48,7 @@ type ReadinessResult = {
     strictDbMode: boolean;
     catalogSeedEnabled: boolean;
     vendorBillingBypassEnabled: boolean;
+    productionBillingBypassDisabled: boolean;
   };
   dbConnected: boolean;
   missingTables: string[];
@@ -42,6 +56,8 @@ type ReadinessResult = {
     shopsShareCode: boolean;
     profilesPhone: boolean;
     profilesAddress: boolean;
+    shopPoliciesTermsVersion: boolean;
+    shopPoliciesShippingVersion: boolean;
   };
   errors: string[];
 };
@@ -85,9 +101,13 @@ async function checkColumnExists(
 }
 
 export async function GET() {
-  const missingEnv = REQUIRED_ENV_VARS.filter(
-    (envName) => !process.env[envName],
-  );
+  const vendorBillingBypassEnabled = process.env.ENABLE_VENDOR_BILLING_BYPASS === "true";
+  const dynamicRequiredEnv = [
+    ...REQUIRED_ENV_VARS,
+    ...(vendorBillingBypassEnabled ? [] : STRIPE_REQUIRED_ENV_VARS),
+  ] as string[];
+
+  const missingEnv = dynamicRequiredEnv.filter((envName) => !process.env[envName]);
 
   const result: ReadinessResult = {
     ok: false,
@@ -96,8 +116,9 @@ export async function GET() {
     flags: {
       strictDbMode: process.env.ENABLE_STRICT_DB_MODE === "true",
       catalogSeedEnabled: process.env.ENABLE_CATALOG_SEED === "true",
-      vendorBillingBypassEnabled:
-        process.env.ENABLE_VENDOR_BILLING_BYPASS === "true",
+      vendorBillingBypassEnabled,
+      productionBillingBypassDisabled:
+        process.env.NODE_ENV !== "production" || !vendorBillingBypassEnabled,
     },
     dbConnected: false,
     missingTables: [],
@@ -105,6 +126,8 @@ export async function GET() {
       shopsShareCode: false,
       profilesPhone: false,
       profilesAddress: false,
+      shopPoliciesTermsVersion: false,
+      shopPoliciesShippingVersion: false,
     },
     errors: [],
   };
@@ -140,6 +163,16 @@ export async function GET() {
       "profiles",
       "id,address",
     );
+    result.checks.shopPoliciesTermsVersion = await checkColumnExists(
+      admin,
+      "shop_policies",
+      "shop_id,terms_version_id",
+    );
+    result.checks.shopPoliciesShippingVersion = await checkColumnExists(
+      admin,
+      "shop_policies",
+      "shop_id,shipping_version_id",
+    );
     result.dbConnected = true;
   } catch (error) {
     result.errors.push(
@@ -152,10 +185,13 @@ export async function GET() {
     result.missingEnv.length === 0 &&
     result.flags.strictDbMode &&
     !result.flags.catalogSeedEnabled &&
+    result.flags.productionBillingBypassDisabled &&
     result.missingTables.length === 0 &&
     result.checks.shopsShareCode &&
     result.checks.profilesPhone &&
     result.checks.profilesAddress &&
+    result.checks.shopPoliciesTermsVersion &&
+    result.checks.shopPoliciesShippingVersion &&
     result.errors.length === 0;
 
   return NextResponse.json(result, { status: result.ok ? 200 : 503 });

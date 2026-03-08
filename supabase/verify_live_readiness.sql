@@ -93,6 +93,48 @@ begin
   ) then
     raise exception 'Missing table: public.shop_policies';
   end if;
+
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'policy_templates'
+  ) then
+    raise exception 'Missing table: public.policy_templates';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'shop_policy_versions'
+  ) then
+    raise exception 'Missing table: public.shop_policy_versions';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'vendor_policy_acceptances'
+  ) then
+    raise exception 'Missing table: public.vendor_policy_acceptances';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'order_policy_snapshots'
+  ) then
+    raise exception 'Missing table: public.order_policy_snapshots';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'vendor_access_codes'
+  ) then
+    raise exception 'Missing table: public.vendor_access_codes';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'vendor_access_code_redemptions'
+  ) then
+    raise exception 'Missing table: public.vendor_access_code_redemptions';
+  end if;
 end $$;
 
 do $$
@@ -116,6 +158,20 @@ begin
     where table_schema = 'public' and table_name = 'profiles' and column_name = 'address'
   ) then
     raise exception 'Missing column: public.profiles.address';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'shop_policies' and column_name = 'terms_version_id'
+  ) then
+    raise exception 'Missing column: public.shop_policies.terms_version_id';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'shop_policies' and column_name = 'shipping_version_id'
+  ) then
+    raise exception 'Missing column: public.shop_policies.shipping_version_id';
   end if;
 end $$;
 
