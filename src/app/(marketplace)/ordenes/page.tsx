@@ -235,7 +235,7 @@ export default async function OrdersPage() {
   const { inProgressOrders, pastOrders } = await loadOrdersForCurrentUser();
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray)] pb-36">
+    <div className="min-h-screen bg-[var(--color-gray)] pb-36 lg:pb-8">
       <main className="mx-auto w-full max-w-md px-4 pt-6 md:max-w-3xl md:px-5 lg:max-w-4xl">
         <header className="mb-8 flex items-center justify-between">
           <div className="w-8" />

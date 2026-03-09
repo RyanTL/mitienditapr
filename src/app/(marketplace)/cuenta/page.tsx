@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { AccountPageClient } from "@/app/cuenta/account-page-client";
+import { AccountPageClient } from "@/app/(marketplace)/cuenta/account-page-client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type ProfileRow = {

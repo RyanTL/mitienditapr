@@ -218,7 +218,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
     : null;
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-4 pb-28 text-[var(--color-carbon)] md:px-5">
+    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-4 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
       <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-5xl">
         <header className="mb-14 flex items-center justify-between">
           <button
@@ -301,7 +301,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
         </section>
       </main>
 
-      <div className="fixed right-4 bottom-6 left-4 z-20 flex items-center justify-between md:right-6 md:bottom-8 md:left-6">
+      <div className="fixed right-4 bottom-6 left-4 z-20 flex items-center justify-between md:right-6 md:bottom-8 md:left-6 lg:hidden">
         <TwoItemBottomNav
           containerClassName={BOTTOM_NAV_CONTAINER_CLASS}
           firstItem={{

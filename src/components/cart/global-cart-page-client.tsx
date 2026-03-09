@@ -118,118 +118,148 @@ export function GlobalCartPageClient() {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 text-[var(--color-carbon)] md:px-5">
+    <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
       <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
-        <section className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]">
-          <header className="mb-5">
-            <h1 className="text-2xl font-bold leading-none text-[var(--color-carbon)]">
-              Carrito
-            </h1>
-          </header>
+        <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+          {/* Cart items */}
+          <section className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]">
+            <header className="mb-5">
+              <h1 className="text-2xl font-bold leading-none text-[var(--color-carbon)]">
+                Carrito
+              </h1>
+            </header>
 
-          {isLoading ? (
-            <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
-              <p className="text-base font-semibold text-[var(--color-carbon)]">
-                Cargando carrito...
-              </p>
-            </div>
-          ) : errorMessage ? (
-            <div className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-danger)]">
-              {errorMessage}
-            </div>
-          ) : cartItems.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
-              <p className="text-base font-semibold text-[var(--color-carbon)]">
-                Tu carrito esta vacio.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="space-y-4 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
-                {cartItems.map((item) => {
-                  const hasProductRoute = Boolean(item.product.shopSlug);
-                  const productHref = hasProductRoute
-                    ? `/${item.product.shopSlug}/producto/${item.product.productId}`
-                    : null;
-
-                  return (
-                    <article key={item.id} className="rounded-2xl border border-[var(--color-gray)] p-3">
-                      <div className="flex gap-3">
-                        <div className="relative h-[84px] w-[84px] overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-                          <Image
-                            src={item.product.imageUrl}
-                            alt={item.product.alt}
-                            fill
-                            className="object-cover"
-                            sizes="84px"
-                          />
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-[var(--color-gray-500)]">
-                            {item.product.shopName}
-                          </p>
-
-                          {productHref ? (
-                            <Link
-                              href={productHref}
-                              className="mt-0.5 block truncate text-sm font-semibold text-[var(--color-carbon)]"
-                            >
-                              {item.product.name}
-                            </Link>
-                          ) : (
-                            <p className="mt-0.5 truncate text-sm font-semibold text-[var(--color-carbon)]">
-                              {item.product.name}
-                            </p>
-                          )}
-
-                          <p className="mt-1 text-sm font-semibold text-[var(--color-carbon)]">
-                            {formatUsd(item.product.priceUsd)}
-                          </p>
-
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            <div className="inline-flex items-center gap-4 rounded-full border border-[var(--color-gray-border)] bg-[var(--color-white)] px-3 py-1 text-sm leading-none text-[var(--color-carbon)]">
-                              <button
-                                type="button"
-                                aria-label="Reducir cantidad"
-                                onClick={() => void handleDecrease(item)}
-                              >
-                                −
-                              </button>
-                              <span>{item.quantity}</span>
-                              <button
-                                type="button"
-                                aria-label="Aumentar cantidad"
-                                onClick={() => void handleIncrease(item)}
-                              >
-                                +
-                              </button>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="text-xs font-semibold text-[var(--color-danger)]"
-                              onClick={() => void handleRemove(item)}
-                            >
-                              Eliminar
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-
-              <div className="mt-5 flex items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3">
-                <p className="text-sm font-semibold text-[var(--color-carbon)]">Subtotal</p>
-                <p className="text-sm font-bold text-[var(--color-carbon)]">
-                  {formatUsd(subtotal)}
+            {isLoading ? (
+              <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
+                <p className="text-base font-semibold text-[var(--color-carbon)]">
+                  Cargando carrito...
                 </p>
               </div>
-            </>
-          )}
-        </section>
+            ) : errorMessage ? (
+              <div className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-danger)]">
+                {errorMessage}
+              </div>
+            ) : cartItems.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
+                <p className="text-base font-semibold text-[var(--color-carbon)]">
+                  Tu carrito esta vacio.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 lg:grid-cols-1 lg:space-y-4">
+                  {cartItems.map((item) => {
+                    const hasProductRoute = Boolean(item.product.shopSlug);
+                    const productHref = hasProductRoute
+                      ? `/${item.product.shopSlug}/producto/${item.product.productId}`
+                      : null;
+
+                    return (
+                      <article key={item.id} className="rounded-2xl border border-[var(--color-gray)] p-3">
+                        <div className="flex gap-3">
+                          <div className="relative h-[84px] w-[84px] overflow-hidden rounded-2xl bg-[var(--color-gray)]">
+                            <Image
+                              src={item.product.imageUrl}
+                              alt={item.product.alt}
+                              fill
+                              className="object-cover"
+                              sizes="84px"
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-[var(--color-gray-500)]">
+                              {item.product.shopName}
+                            </p>
+
+                            {productHref ? (
+                              <Link
+                                href={productHref}
+                                className="mt-0.5 block truncate text-sm font-semibold text-[var(--color-carbon)]"
+                              >
+                                {item.product.name}
+                              </Link>
+                            ) : (
+                              <p className="mt-0.5 truncate text-sm font-semibold text-[var(--color-carbon)]">
+                                {item.product.name}
+                              </p>
+                            )}
+
+                            <p className="mt-1 text-sm font-semibold text-[var(--color-carbon)]">
+                              {formatUsd(item.product.priceUsd)}
+                            </p>
+
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <div className="inline-flex items-center gap-4 rounded-full border border-[var(--color-gray-border)] bg-[var(--color-white)] px-3 py-1 text-sm leading-none text-[var(--color-carbon)]">
+                                <button
+                                  type="button"
+                                  aria-label="Reducir cantidad"
+                                  onClick={() => void handleDecrease(item)}
+                                >
+                                  −
+                                </button>
+                                <span>{item.quantity}</span>
+                                <button
+                                  type="button"
+                                  aria-label="Aumentar cantidad"
+                                  onClick={() => void handleIncrease(item)}
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                className="text-xs font-semibold text-[var(--color-danger)]"
+                                onClick={() => void handleRemove(item)}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                {/* Subtotal — mobile only (desktop shows in aside) */}
+                <div className="mt-5 flex items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3 lg:hidden">
+                  <p className="text-sm font-semibold text-[var(--color-carbon)]">Subtotal</p>
+                  <p className="text-sm font-bold text-[var(--color-carbon)]">
+                    {formatUsd(subtotal)}
+                  </p>
+                </div>
+              </>
+            )}
+          </section>
+
+          {/* Desktop order summary */}
+          {cartItems.length > 0 ? (
+            <aside className="hidden lg:block lg:sticky lg:top-8">
+              <div className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]">
+                <h2 className="mb-4 text-lg font-bold leading-none text-[var(--color-carbon)]">
+                  Resumen del pedido
+                </h2>
+                <div className="flex items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3">
+                  <p className="text-sm font-semibold text-[var(--color-carbon)]">Subtotal</p>
+                  <p className="text-sm font-bold text-[var(--color-carbon)]">
+                    {formatUsd(subtotal)}
+                  </p>
+                </div>
+                <p className="mt-3 text-xs text-[var(--color-gray-500)]">
+                  Los impuestos y el envio se calculan al finalizar la compra.
+                </p>
+                <button
+                  type="button"
+                  className="mt-4 w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-[var(--color-white)] transition-opacity hover:opacity-80"
+                >
+                  Proceder al pago
+                </button>
+              </div>
+            </aside>
+          ) : null}
+        </div>
       </main>
 
       <BackHomeBottomNav />
