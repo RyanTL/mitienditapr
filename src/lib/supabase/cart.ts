@@ -21,6 +21,14 @@ export type CartItem = {
   };
 };
 
+export type CheckoutPolicyAcceptanceInput = {
+  shopId: string;
+  termsVersionId: string;
+  shippingVersionId: string;
+  acceptedAt: string;
+  acceptanceText: string;
+};
+
 type CartItemRow = {
   id: string;
   product_id: string;
@@ -105,6 +113,27 @@ async function cleanupOrderAfterCheckoutFailure(
   }
 
   throw new Error(`${fallbackMessage} (Rollback fallido: ${error.message})`);
+}
+
+async function createOrderPolicySnapshot(input: {
+  orderId: string;
+  policyAcceptance: CheckoutPolicyAcceptanceInput;
+}) {
+  const supabase = createSupabaseBrowserClient();
+  const { orderId, policyAcceptance } = input;
+
+  const { error } = await supabase.from("order_policy_snapshots").insert({
+    order_id: orderId,
+    shop_id: policyAcceptance.shopId,
+    terms_version_id: policyAcceptance.termsVersionId,
+    shipping_version_id: policyAcceptance.shippingVersionId,
+    accepted_at: policyAcceptance.acceptedAt,
+    acceptance_text: policyAcceptance.acceptanceText,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function fetchCartQuantityTotal() {
@@ -381,7 +410,10 @@ export async function removeCartItem(cartItemId: string) {
   return { ok: true as const, unauthorized: false as const };
 }
 
-export async function checkoutCartByShop(shopSlug: string) {
+export async function checkoutCartByShop(
+  shopSlug: string,
+  policyAcceptance: CheckoutPolicyAcceptanceInput,
+) {
   const profileId = await getCurrentProfileId();
   if (!profileId) {
     return { ok: false as const, unauthorized: true as const, empty: false as const };
@@ -460,6 +492,21 @@ export async function checkoutCartByShop(shopSlug: string) {
       profileId,
       orderRow.id,
       `No se pudo crear los items de la orden: ${createOrderItemsError.message}`,
+    );
+  }
+
+  try {
+    await createOrderPolicySnapshot({
+      orderId: orderRow.id,
+      policyAcceptance,
+    });
+  } catch (error) {
+    await cleanupOrderAfterCheckoutFailure(
+      profileId,
+      orderRow.id,
+      `No se pudo guardar el consentimiento de politicas: ${
+        error instanceof Error ? error.message : "Error desconocido"
+      }`,
     );
   }
 

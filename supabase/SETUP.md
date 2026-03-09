@@ -14,18 +14,18 @@ Required:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
+- `NEXT_PUBLIC_APP_URL`
 - `ENABLE_VENDOR_MODE=true`
 - `ENABLE_STRICT_DB_MODE=true`
 - `ENABLE_CATALOG_SEED=false`
 
-Public beta billing phase:
-- `ENABLE_VENDOR_BILLING_BYPASS=true`
+Production:
+- `ENABLE_VENDOR_BILLING_BYPASS=false`
 
-Optional Stripe (for full billing flow):
+Required Stripe (for full billing flow):
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_VENDOR_PRICE_ID`
-- `NEXT_PUBLIC_APP_URL` (example: `http://localhost:3000`)
 
 ## 3) Auth URL configuration
 In Supabase Dashboard:
@@ -46,6 +46,8 @@ Run these SQL files in Supabase SQL Editor:
 4. `supabase/migrations/20260227_shop_share_codes.sql`
 5. `supabase/migrations/20260228_account_profile_fields.sql`
 6. `supabase/migrations/20260301_shop_follows_guard.sql`
+7. `supabase/migrations/20260307_vendor_policy_system.sql`
+8. `supabase/migrations/20260308_vendor_access_codes.sql`
 
 ## 6) Verify live readiness schema
 Run:

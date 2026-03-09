@@ -22,6 +22,9 @@ import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { formatUsd } from "@/lib/formatters";
+import { POLICY_TYPE_LABELS } from "@/lib/policies/constants";
+import { fetchPublicShopPolicies } from "@/lib/policies/client";
+import type { PolicyType, PublicShopPoliciesResponse } from "@/lib/policies/types";
 import { fetchShopReviews } from "@/lib/reviews/client";
 import type { ShopReviewsResponse } from "@/lib/reviews/types";
 import type { ShopDetail } from "@/lib/mock-shop-data";
@@ -30,11 +33,11 @@ type ShopPageClientProps = {
   shop: ShopDetail;
 };
 
-const POLICY_ITEMS = [
-  "Politica de reembolso",
-  "Politica de envio",
-  "Politica de privacidad",
-  "Terminos y condiciones",
+const REPORT_REASON_OPTIONS = [
+  "Informacion enganosa",
+  "Problema con politicas",
+  "Producto sospechoso",
+  "Otro",
 ];
 
 function getContactEmail(shopSlug: string) {
@@ -63,14 +66,32 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
   );
   const [isLoadingShopReviews, setIsLoadingShopReviews] = useState(false);
   const [shopReviewsError, setShopReviewsError] = useState<string | null>(null);
+  const [shopPoliciesData, setShopPoliciesData] = useState<PublicShopPoliciesResponse | null>(
+    null,
+  );
+  const [isLoadingShopPolicies, setIsLoadingShopPolicies] = useState(false);
+  const [shopPoliciesError, setShopPoliciesError] = useState<string | null>(null);
+  const [isPoliciesExpanded, setIsPoliciesExpanded] = useState(false);
+  const [activePolicyType, setActivePolicyType] = useState<PolicyType | null>(null);
+  const [isReportMenuOpen, setIsReportMenuOpen] = useState(false);
+  const [reportReason, setReportReason] = useState(REPORT_REASON_OPTIONS[0]);
+  const [reportPolicyType, setReportPolicyType] = useState<PolicyType | "">("");
+  const [reportFeedback, setReportFeedback] = useState<string | null>(null);
   const contactEmail = getContactEmail(shop.slug);
   const instagramHandle = `@${shop.slug.replaceAll("-", "")}`;
   const whatsappNumber = "+1 (939) 555-0192";
   const supportHours = "Lunes a Viernes, 9:00 AM - 5:00 PM";
-  const closeShopMenu = useCallback(() => setIsShopMenuOpen(false), []);
+  const closeShopMenu = useCallback(() => {
+    setIsShopMenuOpen(false);
+    setIsPoliciesExpanded(false);
+  }, []);
 
-  useBodyScrollLock(isShopMenuOpen);
-  useEscapeKey(isShopMenuOpen, closeShopMenu);
+  useBodyScrollLock(Boolean(isShopMenuOpen || activePolicyType || isReportMenuOpen));
+  useEscapeKey(Boolean(isShopMenuOpen || activePolicyType || isReportMenuOpen), () => {
+    closeShopMenu();
+    setActivePolicyType(null);
+    setIsReportMenuOpen(false);
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -152,6 +173,35 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
 
     void loadShopReviews();
 
+    async function loadShopPolicies() {
+      setIsLoadingShopPolicies(true);
+      setShopPoliciesError(null);
+
+      try {
+        const response = await fetchPublicShopPolicies(shop.slug);
+        if (!isMounted) {
+          return;
+        }
+        setShopPoliciesData(response);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setShopPoliciesError(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las politicas de la tienda.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingShopPolicies(false);
+        }
+      }
+    }
+
+    void loadShopPolicies();
+
     return () => {
       isMounted = false;
     };
@@ -161,9 +211,14 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
     averageRating: shop.rating,
     reviewCount: shop.reviewCount,
   };
+  const availablePolicyTypes = (Object.keys(shopPoliciesData?.policies ?? {}) as PolicyType[])
+    .filter((policyType) => Boolean(shopPoliciesData?.policies[policyType]?.id));
+  const activePolicy = activePolicyType
+    ? shopPoliciesData?.policies[activePolicyType] ?? null
+    : null;
 
   return (
-    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-4 pb-28 text-[var(--color-carbon)] md:px-5">
+    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-4 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
       <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-5xl">
         <header className="mb-14 flex items-center justify-between">
           <button
@@ -237,7 +292,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                 <h2 className="text-lg font-bold leading-tight tracking-tight">
                   {product.name}
                 </h2>
-                <p className="mt-1 text-xl font-semibold leading-tight">
+                <p className="mt-1 text-l font-semibold leading-tight">
                   {formatUsd(product.priceUsd)}
                 </p>
               </Link>
@@ -246,7 +301,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
         </section>
       </main>
 
-      <div className="fixed right-4 bottom-6 left-4 z-20 flex items-center justify-between md:right-6 md:bottom-8 md:left-6">
+      <div className="fixed right-4 bottom-6 left-4 z-20 flex items-center justify-between md:right-6 md:bottom-8 md:left-6 lg:hidden">
         <TwoItemBottomNav
           containerClassName={BOTTOM_NAV_CONTAINER_CLASS}
           firstItem={{
@@ -353,20 +408,53 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
               </article>
 
               <article className="rounded-3xl bg-[var(--color-gray)] p-4">
-                <h3 className="text-[1.8rem] font-bold leading-none text-[var(--color-carbon)]">
-                  Politicas
-                </h3>
-                <div className="mt-3 space-y-2">
-                  {POLICY_ITEMS.map((item) => (
-                    <div
-                      key={item}
-                      className="flex items-center justify-between rounded-xl px-1 py-2.5"
-                    >
-                      <p className="text-sm text-[var(--color-carbon)]">{item}</p>
-                      <ChevronIcon className="h-4 w-4 text-[var(--color-carbon)]" />
-                    </div>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-left"
+                  onClick={() => setIsPoliciesExpanded((current) => !current)}
+                  aria-expanded={isPoliciesExpanded}
+                  aria-label="Mostrar politicas"
+                >
+                  <h3 className="text-[1.8rem] font-bold leading-none text-[var(--color-carbon)]">
+                    Politicas
+                  </h3>
+                  <ChevronIcon
+                    className={[
+                      "h-5 w-5 text-[var(--color-carbon)] transition-transform duration-200",
+                      isPoliciesExpanded ? "rotate-90" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  />
+                </button>
+
+                {isPoliciesExpanded ? (
+                  <div className="mt-3 space-y-1.5">
+                    {isLoadingShopPolicies ? (
+                      <p className="text-sm text-[var(--color-carbon)]">Cargando politicas...</p>
+                    ) : shopPoliciesError ? (
+                      <p className="text-sm text-[var(--color-danger)]">{shopPoliciesError}</p>
+                    ) : availablePolicyTypes.length === 0 ? (
+                      <p className="text-sm text-[var(--color-carbon)]">
+                        La tienda aun no ha publicado politicas.
+                      </p>
+                    ) : (
+                      availablePolicyTypes.map((policyType) => (
+                        <button
+                          key={policyType}
+                          type="button"
+                          onClick={() => setActivePolicyType(policyType)}
+                          className="flex w-full items-center justify-between rounded-xl px-1 py-2 text-left"
+                        >
+                          <p className="text-base leading-none text-[var(--color-carbon)]">
+                            {POLICY_TYPE_LABELS[policyType]}
+                          </p>
+                          <ChevronIcon className="h-4 w-4 text-[var(--color-carbon)]" />
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
               </article>
 
               <article className="rounded-3xl bg-[var(--color-gray)] p-4">
@@ -404,12 +492,128 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
               <button
                 type="button"
                 className="flex w-full items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3 text-left text-base font-semibold text-[var(--color-carbon)]"
+                onClick={() => {
+                  setIsReportMenuOpen(true);
+                  setReportFeedback(null);
+                }}
               >
                 <span>Reportar tienda</span>
                 <InfoIcon className="h-[18px] w-[18px] text-[var(--color-carbon)]" />
               </button>
             </section>
           </aside>
+        </div>
+      ) : null}
+
+      {activePolicyType ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-[var(--overlay-black-055)]"
+            onClick={() => setActivePolicyType(null)}
+            aria-label="Cerrar politica"
+          />
+          <section className="absolute inset-x-4 top-1/2 mx-auto max-w-3xl -translate-y-1/2 rounded-3xl bg-[var(--color-white)] p-5 shadow-[0_30px_80px_var(--shadow-black-035)] md:max-w-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-bold text-[var(--color-carbon)]">
+                {POLICY_TYPE_LABELS[activePolicyType]}
+              </h3>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray)] text-[var(--color-carbon)]"
+                onClick={() => setActivePolicyType(null)}
+                aria-label="Cerrar politica"
+              >
+                <CloseIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-3">
+              <p className="whitespace-pre-line text-sm leading-6 text-[var(--color-carbon)]">
+                {activePolicy?.body ?? "No disponible."}
+              </p>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isReportMenuOpen ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-[var(--overlay-black-055)]"
+            onClick={() => setIsReportMenuOpen(false)}
+            aria-label="Cerrar reporte"
+          />
+          <section className="absolute inset-x-4 top-1/2 mx-auto max-w-3xl -translate-y-1/2 rounded-3xl bg-[var(--color-white)] p-5 shadow-[0_30px_80px_var(--shadow-black-035)] md:max-w-lg">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-bold text-[var(--color-carbon)]">Reportar tienda</h3>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray)] text-[var(--color-carbon)]"
+                onClick={() => setIsReportMenuOpen(false)}
+                aria-label="Cerrar reporte"
+              >
+                <CloseIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <label className="block">
+              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
+                Categoria
+              </span>
+              <select
+                value={reportReason}
+                onChange={(event) => setReportReason(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+              >
+                {REPORT_REASON_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {reportReason === "Problema con politicas" ? (
+              <label className="mt-3 block">
+                <span className="text-xs font-semibold text-[var(--color-gray-500)]">
+                  Politica relacionada
+                </span>
+                <select
+                  value={reportPolicyType}
+                  onChange={(event) => setReportPolicyType(event.target.value as PolicyType | "")}
+                  className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+                >
+                  <option value="">Selecciona una politica</option>
+                  {availablePolicyTypes.map((policyType) => (
+                    <option key={policyType} value={policyType}>
+                      {POLICY_TYPE_LABELS[policyType]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {reportFeedback ? (
+              <p className="mt-3 rounded-xl bg-[var(--color-gray)] px-3 py-2 text-xs text-[var(--color-carbon)]">
+                {reportFeedback}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              className="mt-4 w-full rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
+              onClick={() => {
+                setReportFeedback(
+                  reportReason === "Problema con politicas" && reportPolicyType
+                    ? `Reporte enviado: ${reportReason} (${POLICY_TYPE_LABELS[reportPolicyType]}).`
+                    : `Reporte enviado: ${reportReason}.`,
+                );
+              }}
+            >
+              Enviar reporte
+            </button>
+          </section>
         </div>
       ) : null}
 

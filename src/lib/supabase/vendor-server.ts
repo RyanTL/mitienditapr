@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getCurrentShopPolicyVersions,
+  getMissingRequiredPolicyTypes,
+  getRequiredPolicyIds,
+  hasPolicyAcceptanceForCurrentRequired,
+} from "@/lib/supabase/vendor-policy-server";
 import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import {
   VENDOR_ONBOARDING_STEP_COUNT,
@@ -8,6 +14,7 @@ import {
   type VendorShopStatus,
 } from "@/lib/vendor/constants";
 import { slugifyShopName } from "@/lib/vendor/slug";
+import { POLICY_TYPE_LABELS } from "@/lib/policies/constants";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -41,6 +48,8 @@ export type VendorShopRow = {
 export type VendorSubscriptionRow = {
   id: string;
   shop_id: string;
+  provider: string;
+  provider_subscription_id: string | null;
   status: string;
   stripe_subscription_id: string | null;
   stripe_customer_id: string | null;
@@ -198,7 +207,7 @@ export async function getVendorSubscriptionByShopId(
   const { data, error } = await supabase
     .from("vendor_subscriptions")
     .select(
-      "id,shop_id,status,stripe_subscription_id,stripe_customer_id,stripe_price_id,current_period_end,last_invoice_status,cancel_at_period_end",
+      "id,shop_id,provider,provider_subscription_id,status,stripe_subscription_id,stripe_customer_id,stripe_price_id,current_period_end,last_invoice_status,cancel_at_period_end",
     )
     .eq("shop_id", shopId)
     .maybeSingle();
@@ -402,6 +411,34 @@ function isActiveSubscriptionStatus(status: string | null | undefined) {
   return status === "active" || status === "trialing";
 }
 
+function isManualCodeExpired(subscription: VendorSubscriptionRow | null) {
+  if (!subscription) {
+    return false;
+  }
+
+  if (subscription.provider !== "manual_code") {
+    return false;
+  }
+
+  if (!subscription.current_period_end) {
+    return false;
+  }
+
+  return new Date(subscription.current_period_end).getTime() <= Date.now();
+}
+
+function canUseSubscriptionForPublishing(subscription: VendorSubscriptionRow | null) {
+  if (!subscription) {
+    return false;
+  }
+
+  if (!isActiveSubscriptionStatus(subscription.status)) {
+    return false;
+  }
+
+  return !isManualCodeExpired(subscription);
+}
+
 export async function getVendorPublishChecks(
   supabase: SupabaseClient,
   profileId: string,
@@ -421,7 +458,36 @@ export async function getVendorPublishChecks(
     };
   }
 
-  const subscription = await getVendorSubscriptionByShopId(supabase, shop.id);
+  let subscription = await getVendorSubscriptionByShopId(supabase, shop.id);
+
+  if (isManualCodeExpired(subscription)) {
+    const nowIso = new Date().toISOString();
+    await supabase
+      .from("vendor_subscriptions")
+      .update({
+        status: "inactive",
+        last_invoice_status: "access_code_expired",
+      })
+      .eq("id", subscription!.id)
+      .eq("provider", "manual_code");
+
+    await supabase
+      .from("shops")
+      .update({
+        status: "unpaid",
+        is_active: false,
+        unpublished_at: nowIso,
+        unpublished_reason: "access_code_expired",
+      })
+      .eq("id", shop.id)
+      .eq("vendor_profile_id", profileId);
+
+    subscription = {
+      ...subscription!,
+      status: "inactive",
+    };
+  }
+
   const activeVariantCount = await getActiveVariantCountForShop(supabase, shop.id);
 
   if (!hasRequiredShopFields(shop)) {
@@ -433,13 +499,43 @@ export async function getVendorPublishChecks(
       blockingReasons.push("Conecta Stripe Express para recibir pagos.");
     }
 
-    if (!isActiveSubscriptionStatus(subscription?.status)) {
+    if (!canUseSubscriptionForPublishing(subscription)) {
       blockingReasons.push("Activa la suscripcion mensual de $10.");
     }
   }
 
+  if (isManualCodeExpired(subscription)) {
+    blockingReasons.push("Tu acceso gratuito expiro. Redime un nuevo codigo o activa Stripe.");
+  }
+
   if (activeVariantCount < 1) {
     blockingReasons.push("Debes tener al menos una variante activa.");
+  }
+
+  const currentPolicies = await getCurrentShopPolicyVersions(supabase, shop.id);
+  const missingRequiredPolicyTypes = getMissingRequiredPolicyTypes(currentPolicies);
+  if (missingRequiredPolicyTypes.length > 0) {
+    blockingReasons.push(
+      `Completa ${missingRequiredPolicyTypes
+        .map((policyType) => POLICY_TYPE_LABELS[policyType])
+        .join(" y ")}.`,
+    );
+  } else {
+    const requiredPolicyIds = getRequiredPolicyIds(currentPolicies);
+    if (requiredPolicyIds) {
+      const hasRequiredAcceptance = await hasPolicyAcceptanceForCurrentRequired({
+        supabase,
+        shopId: shop.id,
+        termsVersionId: requiredPolicyIds.terms,
+        shippingVersionId: requiredPolicyIds.shipping,
+      });
+
+      if (!hasRequiredAcceptance) {
+        blockingReasons.push(
+          "Debes aceptar legalmente Terminos y Politica de envio despues de publicarlas.",
+        );
+      }
+    }
   }
 
   return {
@@ -455,10 +551,8 @@ export async function getVendorStatusSnapshot(context: VendorRequestContext) {
   const { supabase, userId, profile } = context;
   const shop = await getVendorShopByProfileId(supabase, userId);
   const onboarding = await getVendorOnboardingByProfileId(supabase, userId);
-  const subscription = shop
-    ? await getVendorSubscriptionByShopId(supabase, shop.id)
-    : null;
   const checks = await getVendorPublishChecks(supabase, userId);
+  const subscription = checks.subscription;
   const policies = shop ? await getShopPoliciesByShopId(supabase, shop.id) : null;
 
   const { data: productRows } = shop

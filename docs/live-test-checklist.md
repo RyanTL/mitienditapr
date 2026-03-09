@@ -4,10 +4,14 @@
 - `ENABLE_VENDOR_MODE=true`
 - `ENABLE_STRICT_DB_MODE=true`
 - `ENABLE_CATALOG_SEED=false`
-- `ENABLE_VENDOR_BILLING_BYPASS=true` (first public beta only)
+- `ENABLE_VENDOR_BILLING_BYPASS=false`
 - `NEXT_PUBLIC_SUPABASE_URL` set
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` set
 - `SUPABASE_SECRET_KEY` set
+- `NEXT_PUBLIC_APP_URL` set
+- `STRIPE_SECRET_KEY` set
+- `STRIPE_WEBHOOK_SECRET` set
+- `STRIPE_VENDOR_PRICE_ID` set
 
 ## 2) Supabase security
 - Email confirmation required in Supabase Auth settings.
@@ -23,6 +27,8 @@
   4. `supabase/migrations/20260227_shop_share_codes.sql`
   5. `supabase/migrations/20260228_account_profile_fields.sql`
   6. `supabase/migrations/20260301_shop_follows_guard.sql`
+  7. `supabase/migrations/20260307_vendor_policy_system.sql`
+  8. `supabase/migrations/20260308_vendor_access_codes.sql`
 - Run `supabase/verify_live_readiness.sql` and verify it returns `LIVE_READINESS_OK`.
 
 ## 4) Runtime checks
