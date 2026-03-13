@@ -9,7 +9,7 @@ export async function fetchShopDetailBySlugServer(shopSlug: string) {
   const supabase = await createSupabaseServerClient();
   const { data: shopData, error: shopError } = await supabase
     .from("shops")
-    .select("id,slug,vendor_name,rating,review_count,description,is_active")
+    .select("id,slug,vendor_name,rating,review_count,description,is_active,ath_movil_phone")
     .eq("slug", shopSlug)
     .maybeSingle();
 

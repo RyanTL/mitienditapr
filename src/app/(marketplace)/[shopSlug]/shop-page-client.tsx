@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  AthMovilIcon,
   BackIcon,
   ChevronIcon,
   CloseIcon,
@@ -248,10 +249,18 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
           <p className="mx-auto mt-6 max-w-[32ch] text-lg leading-6 text-[var(--color-carbon)]">
             {shop.description}
           </p>
+          {shop.athMovilPhone ? (
+            <div className="mt-5 flex justify-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-2 text-sm font-semibold text-[var(--color-carbon)] shadow-[0_4px_12px_var(--shadow-black-008)]">
+                <AthMovilIcon className="h-4 w-4" />
+                Se acepta ATH Móvil
+              </span>
+            </div>
+          ) : null}
         </section>
 
         <section className="grid grid-cols-2 gap-x-3 gap-y-6 pb-6 md:grid-cols-3 lg:grid-cols-4">
-          {shop.products.map((product) => (
+          {shop.products.map((product, index) => (
             <article key={product.id}>
               <div className="relative mb-2">
                 <Link
@@ -265,6 +274,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                       fill
                       className="object-cover"
                       sizes="(max-width: 768px) 48vw, 240px"
+                      priority={index < 2}
                     />
                   </div>
                 </Link>
@@ -486,6 +496,14 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                     </p>
                     <p className="text-sm text-[var(--color-carbon)]">{supportHours}</p>
                   </div>
+                  {shop.athMovilPhone ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        ATH Móvil
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">{shop.athMovilPhone}</p>
+                    </div>
+                  ) : null}
                 </div>
               </article>
 

@@ -42,6 +42,7 @@ type ShopSettingsFormState = {
   logoUrl: string;
   shippingFlatFeeUsd: string;
   offersPickup: boolean;
+  athMovilPhone: string;
 };
 
 const DEFAULT_FORM_STATE: ShopSettingsFormState = {
@@ -51,6 +52,7 @@ const DEFAULT_FORM_STATE: ShopSettingsFormState = {
   logoUrl: "",
   shippingFlatFeeUsd: "0",
   offersPickup: false,
+  athMovilPhone: "",
 };
 
 const POLICY_TYPES: PolicyType[] = ["terms", "shipping", "refund", "privacy"];
@@ -71,6 +73,7 @@ function mapFormStateFromResponse(response: ShopResponse): ShopSettingsFormState
     logoUrl: response.shop?.logo_url ?? "",
     shippingFlatFeeUsd: String(response.shop?.shipping_flat_fee_usd ?? 0),
     offersPickup: response.shop?.offers_pickup ?? false,
+    athMovilPhone: response.shop?.ath_movil_phone ?? "",
   };
 }
 
@@ -251,6 +254,7 @@ export function VendorShopSettingsClient() {
         logoUrl: formState.logoUrl || null,
         shippingFlatFeeUsd: Math.max(0, toNumber(formState.shippingFlatFeeUsd, 0)),
         offersPickup: formState.offersPickup,
+        athMovilPhone: formState.athMovilPhone.trim() || null,
       });
 
       setStatusData((current) =>
@@ -554,6 +558,27 @@ export function VendorShopSettingsClient() {
                     }
                   />
                   Ofrecer recogido en persona
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
+                    Número de ATH Móvil Business
+                  </span>
+                  <input
+                    type="tel"
+                    value={formState.athMovilPhone}
+                    placeholder="787-555-0100"
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        athMovilPhone: event.target.value,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+                  />
+                  <span className="mt-0.5 block text-[11px] text-[var(--color-gray-500)]">
+                    Deja en blanco si no usas ATH Móvil.
+                  </span>
                 </label>
 
                 <div className="rounded-2xl bg-[var(--color-gray)] px-3 py-2 text-xs text-[var(--color-carbon)]">

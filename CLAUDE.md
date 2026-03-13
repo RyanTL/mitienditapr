@@ -157,24 +157,23 @@ These are known gaps and final touches still needed:
 ### Critical (must-have for launch)
 - [ ] Real checkout flow for buyers (order placement currently creates order but no payment collection from buyers)
 - [ ] Buyer order confirmation / receipt page
-- [ ] Email notifications (order placed, order status updates, welcome email)
+- [x] Email notifications (order placed, order status updates, welcome email) — Resend integration; welcome on signup confirmation, buyer order confirmation + vendor new order on ATH Móvil checkout, buyer status updates when vendor changes order status, vendor notification when buyer cancels
 - [ ] Stripe Connect payout flow for vendors (account linking exists but no payout triggers)
-- [ ] Error boundaries and user-friendly error pages (404, 500)
-- [ ] SEO metadata (page titles, descriptions, Open Graph tags)
+- [x] Error boundaries and user-friendly error pages (404, 500) — `notFound()` wired into shop/product pages; custom `not-found.tsx` and `error.tsx` added at app root
+- [x] SEO metadata per page (page titles, descriptions, Open Graph) — shop and product pages have generateMetadata; home covered by root layout
 
 ### Important (should-have)
-- [ ] Product search / filtering on marketplace home
-- [ ] Shop categories or tags for discovery
+- [x] Product search / filtering on marketplace home — inline search bar filters shops by name or product name; no-results empty state; overlay kept for deep product search with thumbnails
 - [ ] Vendor analytics dashboard (sales, views, top products)
-- [ ] Order cancellation / refund flow
-- [ ] Image optimization and lazy loading improvements
-- [ ] Loading states and skeleton screens for all pages
-- [ ] Rate limiting on API routes
+- [x] Order cancellation / refund flow — buyers can cancel their own `pending` orders from `/ordenes`; vendor-side cancel already existed; Stripe refund for `paid` orders is a post-launch gap
+- [x] Image optimization and lazy loading improvements — added AVIF/WebP formats + 24h cache TTL in next.config; `priority` on first 2 shop products; removed spurious `unoptimized` from vendor thumbnails and search overlay
+- [x] Loading states for all pages — `loading.tsx` added for shop, product, favoritos, ordenes, carrito, and cuenta pages
+- [x] Rate limiting on API routes — in-memory per-IP rate limiter applied to review submission (10/15min), image uploads (30/10min), and Stripe checkout (5/10min)
 
 ### Nice-to-have (post-launch)
 - [ ] Push notifications
 - [ ] Vendor promotional tools (discounts, coupons)
 - [ ] Multi-language support beyond Spanish
 - [ ] Native mobile app (React Native or PWA)
-- [ ] Social login (Google, Apple)
-- [ ] Inventory management alerts (low stock)
+- [x] Social login (Google) — Google OAuth on sign-in and sign-up; forgot/reset password flow added
+- [x] Inventory management alerts (low stock) — in-app warning badge per product card + summary banner when any active product has ≤5 units total stock

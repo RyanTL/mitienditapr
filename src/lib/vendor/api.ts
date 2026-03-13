@@ -21,6 +21,12 @@ export function serverErrorResponse(error: unknown, fallbackMessage: string) {
   return NextResponse.json<ErrorPayload>({ error: message }, { status: 500 });
 }
 
+export function tooManyRequestsResponse(
+  message = "Demasiadas solicitudes. Intenta de nuevo más tarde.",
+) {
+  return NextResponse.json<ErrorPayload>({ error: message }, { status: 429 });
+}
+
 export async function parseJsonBody<TPayload>(request: Request) {
   const payload = (await request.json().catch(() => null)) as TPayload | null;
   return payload;

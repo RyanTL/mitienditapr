@@ -10,6 +10,7 @@ import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { FloatingSearchButton } from "@/components/navigation/floating-search-button";
 import { formatUsd } from "@/lib/formatters";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { CancelOrderButton } from "./cancel-order-button";
 
 type InProgressOrder = {
   id: string;
@@ -17,6 +18,7 @@ type InProgressOrder = {
   imageUrl: string;
   alt: string;
   tag: string;
+  isPending: boolean;
 };
 
 type PastOrder = {
@@ -197,6 +199,7 @@ async function loadOrdersForCurrentUser() {
         imageUrl: firstProduct.image_url,
         alt: firstProduct.name,
         tag: buildStatusTag(order.status),
+        isPending: order.status === "pending",
       } satisfies InProgressOrder,
     ];
   });
@@ -278,6 +281,11 @@ export default async function OrdersPage() {
                   <span className="absolute top-3 left-3 rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-xs font-semibold text-[var(--color-white)]">
                     {item.tag}
                   </span>
+                  {item.isPending && (
+                    <div className="absolute bottom-3 left-3">
+                      <CancelOrderButton orderId={item.id} />
+                    </div>
+                  )}
                   <button type="button"
                     className="absolute right-3 bottom-3 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-carbon)] text-[var(--color-white)]"
                     aria-label={`Agregar ${item.title} al carrito`}

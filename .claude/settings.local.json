@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(lsof -i :3000)",
+      "Bash(kill 31869)",
+      "Bash(npm install @vercel/analytics @vercel/speed-insights)",
+      "Bash(/opt/homebrew/bin/npm install @vercel/analytics @vercel/speed-insights)",
+      "Bash(/usr/local/bin/npm install --prefix /Users/ryan/mitienditapr @vercel/analytics @vercel/speed-insights)",
+      "Bash(/usr/local/bin/node /usr/local/bin/npm install @vercel/analytics @vercel/speed-insights)",
+      "Bash(git -C /Users/ryan/mitienditapr worktree list)",
+      "Bash(done)",
+      "Bash(__NEW_LINE_6051f5abdcdd2e3e__ grep -r \"catalog-seed-client\" /Users/ryan/mitienditapr/src --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(__NEW_LINE_20761e4bcc042fce__ grep -r \"classnames\" /Users/ryan/mitienditapr/src --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(head -60 /Users/ryan/mitienditapr/src/app/\\\\\\(marketplace\\\\\\)/[shopSlug]/producto/[productId]/page.tsx)",
+      "Bash(for wt in beautiful-bardeen beautiful-wilbur condescending-tereshkova distracted-heyrovsky gifted-franklin wonderful-lewin)",
+      "Bash(do git worktree remove --force \".claude/worktrees/$wt\")",
+      "Bash(echo \"removed $wt\")",
+      "Bash(git -C /Users/ryan/mitienditapr branch)",
+      "Bash(git -C /Users/ryan/mitienditapr branch -d claude/beautiful-bardeen claude/beautiful-wilbur claude/condescending-tereshkova claude/distracted-heyrovsky claude/gifted-franklin claude/wonderful-lewin)",
+      "Bash(/usr/local/bin/node node_modules/.bin/next build)",
+      "Bash(lsof -i :3001 -t)",
+      "Bash(/Users/ryan/mitiendita-mobile/tsconfig.json:*)"
+    ]
+  }
+}

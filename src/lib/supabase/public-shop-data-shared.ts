@@ -11,6 +11,7 @@ export type ShopRow = {
   review_count: number;
   description: string;
   is_active: boolean;
+  ath_movil_phone: string | null;
 };
 
 export type ProductRow = {
@@ -54,6 +55,7 @@ export function buildShopDetail(shop: ShopRow, products: ProductRow[]): ShopDeta
     reviewCount: Number(shop.review_count ?? 0),
     description: shop.description ?? "",
     products: shopProducts,
+    athMovilPhone: shop.ath_movil_phone ?? null,
   };
 }
 

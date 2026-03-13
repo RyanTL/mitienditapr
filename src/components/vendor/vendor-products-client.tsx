@@ -71,7 +71,7 @@ export function VendorProductsClient() {
   const [newProductName, setNewProductName] = useState("");
   const [newProductDescription, setNewProductDescription] = useState("");
   const [newProductPriceUsd, setNewProductPriceUsd] = useState("10");
-  const [newProductStockQty, setNewProductStockQty] = useState("1");
+  const [newProductStockQty, setNewProductStockQty] = useState("");
   const [newProductImageUrl, setNewProductImageUrl] = useState("");
 
   const [variantDrafts, setVariantDrafts] = useState<Record<string, VariantDraft>>({});
@@ -110,6 +110,16 @@ export function VendorProductsClient() {
     () => products.filter((product) => !product.isActive),
     [products],
   );
+  const lowStockProducts = useMemo(
+    () =>
+      activeProducts.filter((product) => {
+        const trackingVariants = product.variants.filter((v) => v.isActive && v.stockQty !== null);
+        if (trackingVariants.length === 0) return false;
+        const totalStock = trackingVariants.reduce((sum, v) => sum + (v.stockQty ?? 0), 0);
+        return totalStock <= 5;
+      }),
+    [activeProducts],
+  );
 
   const handleCreateProduct = useCallback(async () => {
     const name = newProductName.trim();
@@ -130,7 +140,7 @@ export function VendorProductsClient() {
         variant: {
           title: "Default",
           priceUsd: Math.max(0, toNumber(newProductPriceUsd, 0)),
-          stockQty: Math.max(0, Math.trunc(toNumber(newProductStockQty, 0))),
+          stockQty: newProductStockQty.trim() === "" ? null : Math.max(0, Math.trunc(toNumber(newProductStockQty, 0))),
         },
       });
 
@@ -372,6 +382,12 @@ export function VendorProductsClient() {
     const previewImage =
       product.images[0]?.imageUrl || product.imageUrl || FALLBACK_PRODUCT_IMAGE;
 
+    const activeVariants = product.variants.filter((v) => v.isActive);
+    const trackingVariants = activeVariants.filter((v) => v.stockQty !== null);
+    const totalStock = trackingVariants.reduce((sum, v) => sum + (v.stockQty ?? 0), 0);
+    const isOutOfStock = product.isActive && trackingVariants.length > 0 && totalStock === 0;
+    const isLowStock = product.isActive && trackingVariants.length > 0 && totalStock > 0 && totalStock <= 5;
+
     return (
       <li
         key={product.id}
@@ -383,7 +399,6 @@ export function VendorProductsClient() {
               src={previewImage}
               alt={product.name}
               fill
-              unoptimized
               sizes="78px"
               className="object-cover"
             />
@@ -418,6 +433,15 @@ export function VendorProductsClient() {
             <p className="text-[11px] text-[var(--color-gray-500)]">
               {product.variants.length} variante(s)
             </p>
+            {isOutOfStock ? (
+              <p className="mt-1 text-[11px] font-semibold text-[var(--color-danger)]">
+                ⚠ Sin inventario
+              </p>
+            ) : isLowStock ? (
+              <p className="mt-1 text-[11px] font-semibold text-[#b45309]">
+                ⚠ Stock bajo ({totalStock} unidades)
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -440,7 +464,6 @@ export function VendorProductsClient() {
                     src={image.imageUrl}
                     alt={image.alt ?? product.name}
                     fill
-                    unoptimized
                     sizes="56px"
                     className="object-cover"
                   />
@@ -644,6 +667,16 @@ export function VendorProductsClient() {
           {errorMessage}
         </article>
       ) : null}
+      {!isLoading && lowStockProducts.length > 0 ? (
+        <article className="rounded-2xl border border-[#b45309] bg-[#fffbeb] px-4 py-3 text-sm text-[#92400e]">
+          <span className="font-semibold">
+            {lowStockProducts.length === 1
+              ? "1 producto con stock bajo."
+              : `${lowStockProducts.length} productos con stock bajo.`}
+          </span>{" "}
+          Actualiza el inventario para no perder ventas.
+        </article>
+      ) : null}
 
       <div className="space-y-3 md:grid md:grid-cols-[minmax(0,340px)_minmax(0,1fr)] md:items-start md:gap-4 md:space-y-0">
       <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
@@ -706,15 +739,17 @@ export function VendorProductsClient() {
               onChange={(event) => setNewProductPriceUsd(event.target.value)}
               className="w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
             />
-            <input
-              type="number"
-              min={0}
-              step={1}
-              placeholder="Stock inicial"
-              value={newProductStockQty}
-              onChange={(event) => setNewProductStockQty(event.target.value)}
-              className="w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-            />
+            <div>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                placeholder="Stock (opcional)"
+                value={newProductStockQty}
+                onChange={(event) => setNewProductStockQty(event.target.value)}
+                className="w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+              />
+            </div>
           </div>
         </div>
         <button

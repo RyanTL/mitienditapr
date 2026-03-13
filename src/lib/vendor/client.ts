@@ -105,6 +105,7 @@ export function updateVendorShopSettings(payload: {
   logoUrl?: string | null;
   shippingFlatFeeUsd?: number;
   offersPickup?: boolean;
+  athMovilPhone?: string | null;
   status?: VendorShopStatus;
   policies?: {
     refundPolicy?: string;
@@ -126,7 +127,7 @@ export type VendorVariantInput = {
   title: string;
   sku?: string;
   priceUsd: number;
-  stockQty: number;
+  stockQty: number | null;
   isActive?: boolean;
   attributes?: Record<string, string>;
 };

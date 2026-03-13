@@ -40,6 +40,7 @@ export type VendorShopRow = {
   shipping_flat_fee_usd: number;
   offers_pickup: boolean;
   stripe_connect_account_id: string | null;
+  ath_movil_phone: string | null;
   published_at: string | null;
   unpublished_at: string | null;
   unpublished_reason: string | null;
@@ -163,7 +164,7 @@ export async function getVendorShopByProfileId(
   const { data, error } = await supabase
     .from("shops")
     .select(
-      "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,published_at,unpublished_at,unpublished_reason",
+      "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,published_at,unpublished_at,unpublished_reason",
     )
     .eq("vendor_profile_id", profileId)
     .order("created_at", { ascending: true })
@@ -284,7 +285,7 @@ export async function ensureVendorShopForProfile(
         is_active: false,
       })
       .select(
-        "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,published_at,unpublished_at,unpublished_reason",
+        "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,published_at,unpublished_at,unpublished_reason",
       )
       .maybeSingle();
 
@@ -547,6 +548,39 @@ export async function getVendorPublishChecks(
   };
 }
 
+export async function getNewOrderCountForShop(
+  supabase: SupabaseClient,
+  shopId: string,
+): Promise<number> {
+  const { data: allProductRows } = await supabase
+    .from("products")
+    .select("id")
+    .eq("shop_id", shopId);
+
+  if (!Array.isArray(allProductRows) || allProductRows.length === 0) {
+    return 0;
+  }
+
+  const productIds = allProductRows.map((row) => row.id);
+  const { data: orderItemRows } = await supabase
+    .from("order_items")
+    .select("order_id")
+    .in("product_id", productIds);
+
+  if (!Array.isArray(orderItemRows) || orderItemRows.length === 0) {
+    return 0;
+  }
+
+  const orderIds = Array.from(new Set(orderItemRows.map((row) => row.order_id)));
+  const { data: orderRows } = await supabase
+    .from("orders")
+    .select("id")
+    .in("id", orderIds)
+    .eq("vendor_status", "new");
+
+  return Array.isArray(orderRows) ? orderRows.length : 0;
+}
+
 export async function getVendorStatusSnapshot(context: VendorRequestContext) {
   const { supabase, userId, profile } = context;
   const shop = await getVendorShopByProfileId(supabase, userId);
@@ -570,6 +604,7 @@ export async function getVendorStatusSnapshot(context: VendorRequestContext) {
     : { data: [] as { id: string }[] };
 
   let orderCount = 0;
+  let newOrderCount = 0;
   if (shop && Array.isArray(allProductRows) && allProductRows.length > 0) {
     const productIds = allProductRows.map((row) => row.id);
     const { data: orderItemRows } = await supabase
@@ -578,7 +613,16 @@ export async function getVendorStatusSnapshot(context: VendorRequestContext) {
       .in("product_id", productIds);
 
     if (Array.isArray(orderItemRows)) {
-      orderCount = new Set(orderItemRows.map((row) => row.order_id)).size;
+      const orderIds = Array.from(new Set(orderItemRows.map((row) => row.order_id)));
+      orderCount = orderIds.length;
+
+      const { data: newOrderRows } = await supabase
+        .from("orders")
+        .select("id")
+        .in("id", orderIds)
+        .eq("vendor_status", "new");
+
+      newOrderCount = Array.isArray(newOrderRows) ? newOrderRows.length : 0;
     }
   }
 
@@ -601,6 +645,7 @@ export async function getVendorStatusSnapshot(context: VendorRequestContext) {
     metrics: {
       productCount,
       orderCount,
+      newOrderCount,
     },
   };
 }

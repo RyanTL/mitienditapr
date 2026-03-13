@@ -89,6 +89,7 @@ export function mapSearchShopsToCards(searchShops: MarketplaceSearchShop[]) {
         review_count: shop.reviewCount,
         description: "",
         is_active: true,
+        ath_movil_phone: null,
       },
       shop.products.map((product) => ({
         id: product.id,

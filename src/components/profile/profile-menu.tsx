@@ -5,7 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ChevronDownIcon, SettingsIcon } from "@/components/icons";
+import { useAuthUser, getUserInitial } from "@/hooks/use-auth-user";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
+import { cn } from "@/lib/utils";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchFollowedShops,
@@ -16,6 +18,7 @@ import {
 type ProfileMenuProps = {
   isOpen: boolean;
   onClose: () => void;
+  desktopPosition?: "sidebar";
 };
 
 type VendorMenuEntry = {
@@ -23,46 +26,63 @@ type VendorMenuEntry = {
   label: string;
 };
 
-export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
-  const [userEmail, setUserEmail] = useState("Cargando...");
+// ─── Guest view ────────────────────────────────────────────────────────────
+
+function GuestMenuContent({ onClose }: { onClose: () => void }) {
+  return (
+    <>
+      <header className="mb-4 px-1 pt-1 pb-3 border-b border-[var(--color-gray)]">
+        <p className="text-lg font-bold leading-none text-[var(--color-carbon)]">Bienvenido</p>
+        <p className="mt-1 text-sm text-[var(--color-gray-500)]">
+          Inicia sesión para acceder a tu cuenta.
+        </p>
+      </header>
+
+      <div className="space-y-2">
+        <Link
+          href="/sign-in"
+          onClick={onClose}
+          className="block w-full rounded-2xl bg-[var(--color-brand)] px-4 py-3 text-center text-base font-semibold text-[var(--color-white)]"
+        >
+          Iniciar sesión
+        </Link>
+        <Link
+          href="/sign-up"
+          onClick={onClose}
+          className="block w-full rounded-2xl border border-[var(--color-gray-border)] bg-[var(--color-white)] px-4 py-3 text-center text-base font-semibold text-[var(--color-carbon)]"
+        >
+          Crear cuenta
+        </Link>
+      </div>
+    </>
+  );
+}
+
+// ─── Authenticated view ─────────────────────────────────────────────────────
+
+function AuthMenuContent({
+  userEmail,
+  onClose,
+}: {
+  userEmail: string;
+  onClose: () => void;
+}) {
   const [isFollowingListOpen, setIsFollowingListOpen] = useState(false);
   const [followedShops, setFollowedShops] = useState<FollowedShopSummary[]>([]);
   const [isLoadingFollowedShops, setIsLoadingFollowedShops] = useState(false);
   const [followedShopsError, setFollowedShopsError] = useState<string | null>(null);
   const [vendorMenuEntry, setVendorMenuEntry] = useState<VendorMenuEntry | null>(null);
 
-  useBodyScrollLock(isOpen);
-  useEscapeKey(isOpen, onClose);
-
-  const refreshUserEmail = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-
-    if (error || !user?.email) {
-      setUserEmail("No has iniciado sesion");
-      return;
-    }
-
-    setUserEmail(user.email);
-  }, []);
-
   const refreshFollowedShops = useCallback(async () => {
     setIsLoadingFollowedShops(true);
     setFollowedShopsError(null);
-
     try {
       const shops = await fetchFollowedShops();
       setFollowedShops(shops);
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No se pudieron cargar tus seguidos.";
-
-      setFollowedShopsError(message);
+      setFollowedShopsError(
+        error instanceof Error ? error.message : "No se pudieron cargar tus seguidos.",
+      );
     } finally {
       setIsLoadingFollowedShops(false);
     }
@@ -70,246 +90,207 @@ export function ProfileMenu({ isOpen, onClose }: ProfileMenuProps) {
 
   const refreshVendorMenuEntry = useCallback(async () => {
     try {
-      const response = await fetch("/api/vendor/status", {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        setVendorMenuEntry(null);
-        return;
-      }
-
-      const body = (await response.json().catch(() => null)) as
-        | {
-            isVendor?: boolean;
-            hasShop?: boolean;
-          }
-        | null;
-
-      if (!body) {
-        setVendorMenuEntry(null);
-        return;
-      }
-
-      if (body.isVendor && body.hasShop) {
-        setVendorMenuEntry({
-          href: "/vendedor/panel",
-          label: "Panel de vendedor",
-        });
-        return;
-      }
-
-      setVendorMenuEntry({
-        href: "/vendedor/onboarding",
-        label: "Conviertete en vendedor",
-      });
+      const response = await fetch("/api/vendor/status", { method: "GET", cache: "no-store" });
+      if (!response.ok) { setVendorMenuEntry(null); return; }
+      const body = (await response.json().catch(() => null)) as {
+        isVendor?: boolean;
+        hasShop?: boolean;
+      } | null;
+      if (!body) { setVendorMenuEntry(null); return; }
+      setVendorMenuEntry(
+        body.isVendor && body.hasShop
+          ? { href: "/vendedor/panel", label: "Panel de vendedor" }
+          : { href: "/vendedor/onboarding", label: "Conviértete en vendedor" },
+      );
     } catch {
       setVendorMenuEntry(null);
     }
   }, []);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void refreshUserEmail();
-      void refreshVendorMenuEntry();
-      if (isOpen) {
-        void refreshFollowedShops();
-      }
-    }, 0);
-
-    const supabase = createSupabaseBrowserClient();
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      void refreshUserEmail();
-      void refreshVendorMenuEntry();
-      if (isOpen) {
-        void refreshFollowedShops();
-      }
-    });
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      subscription.unsubscribe();
-    };
-  }, [
-    isOpen,
-    refreshFollowedShops,
-    refreshUserEmail,
-    refreshVendorMenuEntry,
-  ]);
+    void refreshVendorMenuEntry();
+    void refreshFollowedShops();
+  }, [refreshVendorMenuEntry, refreshFollowedShops]);
 
   useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handleFollowsChanged = () => {
-      void refreshFollowedShops();
-    };
-
+    const handleFollowsChanged = () => { void refreshFollowedShops(); };
     window.addEventListener(SHOP_FOLLOWS_CHANGED_EVENT, handleFollowsChanged);
+    return () => { window.removeEventListener(SHOP_FOLLOWS_CHANGED_EVENT, handleFollowsChanged); };
+  }, [refreshFollowedShops]);
 
-    return () => {
-      window.removeEventListener(
-        SHOP_FOLLOWS_CHANGED_EVENT,
-        handleFollowsChanged,
-      );
-    };
-  }, [isOpen, refreshFollowedShops]);
+  return (
+    <>
+      <header className="mb-2 px-1 pt-1 pb-3">
+        <p className="text-lg font-bold leading-none">Mi cuenta</p>
+        <p className="mt-1 text-sm text-[var(--color-carbon)]">{userEmail}</p>
+      </header>
 
+      <nav>
+        <ul className="space-y-0.5">
+          <li>
+            <Link
+              href="/cuenta"
+              onClick={onClose}
+              className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
+            >
+              Cuenta
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/favoritos"
+              onClick={onClose}
+              className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
+            >
+              Guardados/favoritos
+            </Link>
+          </li>
+          <li>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
+              onClick={() => {
+                const next = !isFollowingListOpen;
+                setIsFollowingListOpen(next);
+                if (next) void refreshFollowedShops();
+              }}
+            >
+              <span>Seguidos</span>
+              <ChevronDownIcon
+                className={cn(
+                  "h-4 w-4 transition-transform duration-200",
+                  isFollowingListOpen ? "rotate-180" : "rotate-0",
+                )}
+              />
+            </button>
+
+            {isFollowingListOpen ? (
+              <div className="mt-2 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-2">
+                {isLoadingFollowedShops ? (
+                  <p className="px-2 py-2 text-xs text-[var(--color-carbon)]">Cargando...</p>
+                ) : followedShopsError ? (
+                  <p className="px-2 py-2 text-xs text-[var(--color-danger)]">{followedShopsError}</p>
+                ) : followedShops.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-[var(--color-carbon)]">
+                    Aún no sigues tiendas.
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {followedShops.map((shop) => (
+                      <li key={shop.shopId}>
+                        <Link
+                          href={`/${shop.slug}`}
+                          onClick={onClose}
+                          className="block rounded-xl bg-[var(--color-white)] px-3 py-2"
+                        >
+                          <p className="truncate text-sm font-semibold text-[var(--color-carbon)]">
+                            {shop.vendorName}
+                          </p>
+                          <p className="mt-0.5 text-xs text-[var(--color-carbon)]">
+                            {shop.rating} ★ ({shop.reviewCount})
+                          </p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+          </li>
+          <li>
+            <Link
+              href="/ordenes"
+              onClick={onClose}
+              className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
+            >
+              Historial de órdenes
+            </Link>
+          </li>
+          {vendorMenuEntry ? (
+            <li>
+              <Link
+                href={vendorMenuEntry.href}
+                onClick={onClose}
+                className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
+              >
+                {vendorMenuEntry.label}
+              </Link>
+            </li>
+          ) : null}
+
+          <li className="my-2 border-t border-[var(--color-gray)]" />
+
+          <li>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
+            >
+              <SettingsIcon />
+              Ajustes
+            </button>
+          </li>
+
+          <li className="my-2 border-t border-[var(--color-gray)]" />
+
+          <li>
+            <SignOutButton
+              onSignedOut={onClose}
+              className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium text-[var(--color-danger)] hover:bg-[var(--color-gray)]"
+            />
+          </li>
+        </ul>
+      </nav>
+    </>
+  );
+}
+
+// ─── Main ProfileMenu ───────────────────────────────────────────────────────
+
+export function ProfileMenu({ isOpen, onClose, desktopPosition }: ProfileMenuProps) {
+  const { user, isLoading } = useAuthUser();
+
+  useBodyScrollLock(isOpen);
+  useEscapeKey(isOpen, onClose);
+
+  // Keep email up to date when auth changes (Google OAuth gives display name too)
+  const [userEmail, setUserEmail] = useState("");
   useEffect(() => {
-    if (!isOpen) {
-      setIsFollowingListOpen(false);
-    }
-  }, [isOpen]);
+    if (!user) { setUserEmail(""); return; }
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? "");
+    });
+  }, [user]);
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-40">
-      <button type="button"
+      <button
+        type="button"
         className="absolute inset-0 bg-[var(--overlay-black-015)]"
-        aria-label="Cerrar menu de perfil"
+        aria-label="Cerrar menú de perfil"
         onClick={onClose}
       />
 
-      <section className="absolute top-4 left-4 w-[min(86vw,320px)] rounded-[1.6rem] border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-4 text-[var(--color-carbon)] shadow-[0_22px_54px_var(--shadow-black-018)] md:top-6 md:left-6 md:w-[min(46vw,360px)]">
-        <header className="mb-2 px-1 pt-1 pb-3">
-          <p className="text-lg font-bold leading-none">Mi cuenta</p>
-          <p className="mt-1 text-sm text-[var(--color-carbon)]">{userEmail}</p>
-        </header>
-
-        <nav>
-          <ul className="space-y-0.5">
-            <li>
-              <Link
-                href="/cuenta"
-                onClick={onClose}
-                className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
-              >
-                Cuenta
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/favoritos"
-                onClick={onClose}
-                className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
-              >
-                Guardados/favoritos
-              </Link>
-            </li>
-            <li>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
-                onClick={() => {
-                  const nextOpenState = !isFollowingListOpen;
-                  setIsFollowingListOpen(nextOpenState);
-                  if (nextOpenState) {
-                    void refreshFollowedShops();
-                  }
-                }}
-              >
-                <span>Seguidos</span>
-                <ChevronDownIcon
-                  className={[
-                    "h-4 w-4 transition-transform duration-200",
-                    isFollowingListOpen ? "rotate-180" : "rotate-0",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                />
-              </button>
-
-              {isFollowingListOpen ? (
-                <div className="mt-2 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-2">
-                  {isLoadingFollowedShops ? (
-                    <p className="px-2 py-2 text-xs text-[var(--color-carbon)]">Cargando...</p>
-                  ) : followedShopsError ? (
-                    <p className="px-2 py-2 text-xs text-[var(--color-danger)]">{followedShopsError}</p>
-                  ) : followedShops.length === 0 ? (
-                    <p className="px-2 py-2 text-xs text-[var(--color-carbon)]">
-                      Aun no sigues tiendas.
-                    </p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {followedShops.map((shop) => (
-                        <li key={shop.shopId}>
-                          <Link
-                            href={`/${shop.slug}`}
-                            onClick={onClose}
-                            className="block rounded-xl bg-[var(--color-white)] px-3 py-2"
-                          >
-                            <p className="truncate text-sm font-semibold text-[var(--color-carbon)]">
-                              {shop.vendorName}
-                            </p>
-                            <p className="mt-0.5 text-xs text-[var(--color-carbon)]">
-                              {shop.rating} ★ ({shop.reviewCount})
-                            </p>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ) : null}
-            </li>
-            <li>
-              <Link
-                href="/ordenes"
-                onClick={onClose}
-                className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
-              >
-                Historial de ordenes
-              </Link>
-            </li>
-            {vendorMenuEntry ? (
-              <li>
-                <Link
-                  href={vendorMenuEntry.href}
-                  onClick={onClose}
-                  className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
-                >
-                  {vendorMenuEntry.label}
-                </Link>
-              </li>
-            ) : null}
-            <li>
-              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]">
-                Notificaciones
-              </button>
-            </li>
-            <li>
-              <button type="button" className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]">
-                Blog
-              </button>
-            </li>
-
-            <li className="my-2 border-t border-[var(--color-gray)]" />
-
-            <li>
-              <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]">
-                <SettingsIcon />
-                Ajustes
-              </button>
-            </li>
-
-            <li className="my-2 border-t border-[var(--color-gray)]" />
-
-            <li>
-              <SignOutButton
-                onSignedOut={onClose}
-                className="w-full rounded-xl px-3 py-2.5 text-left text-base font-medium text-[var(--color-danger)] hover:bg-[var(--color-gray)]"
-              />
-            </li>
-          </ul>
-        </nav>
+      <section
+        className={cn(
+          "absolute w-[min(86vw,320px)] rounded-[1.6rem] border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-4 text-[var(--color-carbon)] shadow-[0_22px_54px_var(--shadow-black-018)]",
+          desktopPosition === "sidebar"
+            ? "top-4 left-4 md:top-6 md:left-6 lg:top-auto lg:bottom-4 lg:left-[256px] lg:w-[320px]"
+            : "top-4 left-4 md:top-6 md:left-6 md:w-[min(46vw,360px)]",
+        )}
+      >
+        {isLoading ? (
+          <div className="py-4 text-center text-sm text-[var(--color-gray-500)]">Cargando...</div>
+        ) : user ? (
+          <AuthMenuContent userEmail={userEmail || user.email || ""} onClose={onClose} />
+        ) : (
+          <GuestMenuContent onClose={onClose} />
+        )}
       </section>
     </div>
   );
 }
+
+export { getUserInitial };
