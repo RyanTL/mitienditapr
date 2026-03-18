@@ -581,6 +581,149 @@ export async function getNewOrderCountForShop(
   return Array.isArray(orderRows) ? orderRows.length : 0;
 }
 
+type OrderItemRow = {
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price_usd: number;
+};
+
+type OrderRow = {
+  id: string;
+  vendor_status: string;
+  created_at: string;
+};
+
+type ProductNameRow = {
+  id: string;
+  name: string;
+};
+
+export type VendorAnalytics = {
+  totalRevenueUsd: number;
+  orderCount: number;
+  avgOrderValueUsd: number;
+  revenueLastThirtyDaysUsd: number;
+  topProducts: Array<{
+    id: string;
+    name: string;
+    unitsSold: number;
+    revenueUsd: number;
+  }>;
+  ordersByStatus: Record<string, number>;
+};
+
+export async function getVendorAnalytics(
+  supabase: SupabaseClient,
+  shopId: string,
+): Promise<VendorAnalytics> {
+  const empty: VendorAnalytics = {
+    totalRevenueUsd: 0,
+    orderCount: 0,
+    avgOrderValueUsd: 0,
+    revenueLastThirtyDaysUsd: 0,
+    topProducts: [],
+    ordersByStatus: {},
+  };
+
+  const { data: productRows } = await supabase
+    .from("products")
+    .select("id,name")
+    .eq("shop_id", shopId);
+
+  if (!Array.isArray(productRows) || productRows.length === 0) {
+    return empty;
+  }
+
+  const products = productRows as ProductNameRow[];
+  const productIds = products.map((p) => p.id);
+  const productNameById = new Map(products.map((p) => [p.id, p.name]));
+
+  const { data: itemRows } = await supabase
+    .from("order_items")
+    .select("order_id,product_id,quantity,unit_price_usd")
+    .in("product_id", productIds);
+
+  if (!Array.isArray(itemRows) || itemRows.length === 0) {
+    return empty;
+  }
+
+  const items = itemRows as OrderItemRow[];
+  const orderIds = Array.from(new Set(items.map((i) => i.order_id)));
+
+  const { data: orderRows } = await supabase
+    .from("orders")
+    .select("id,vendor_status,created_at")
+    .in("id", orderIds);
+
+  if (!Array.isArray(orderRows) || orderRows.length === 0) {
+    return empty;
+  }
+
+  const orders = orderRows as OrderRow[];
+  const orderById = new Map(orders.map((o) => [o.id, o]));
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Status counts (all orders)
+  const ordersByStatus: Record<string, number> = {};
+  for (const order of orders) {
+    ordersByStatus[order.vendor_status] = (ordersByStatus[order.vendor_status] ?? 0) + 1;
+  }
+
+  // Revenue aggregations (exclude canceled)
+  const nonCanceledOrderIds = new Set(
+    orders.filter((o) => o.vendor_status !== "canceled").map((o) => o.id),
+  );
+
+  let totalRevenueUsd = 0;
+  let revenueLastThirtyDaysUsd = 0;
+
+  // Product-level aggregation
+  const productStats = new Map<string, { unitsSold: number; revenueUsd: number }>();
+
+  for (const item of items) {
+    const order = orderById.get(item.order_id);
+    if (!order || order.vendor_status === "canceled") {
+      continue;
+    }
+
+    const lineTotal = item.quantity * item.unit_price_usd;
+    totalRevenueUsd += lineTotal;
+
+    if (new Date(order.created_at) >= thirtyDaysAgo) {
+      revenueLastThirtyDaysUsd += lineTotal;
+    }
+
+    const prev = productStats.get(item.product_id) ?? { unitsSold: 0, revenueUsd: 0 };
+    productStats.set(item.product_id, {
+      unitsSold: prev.unitsSold + item.quantity,
+      revenueUsd: prev.revenueUsd + lineTotal,
+    });
+  }
+
+  const orderCount = nonCanceledOrderIds.size;
+  const avgOrderValueUsd = orderCount > 0 ? totalRevenueUsd / orderCount : 0;
+
+  const topProducts = Array.from(productStats.entries())
+    .map(([id, stats]) => ({
+      id,
+      name: productNameById.get(id) ?? id,
+      ...stats,
+    }))
+    .sort((a, b) => b.revenueUsd - a.revenueUsd)
+    .slice(0, 5);
+
+  return {
+    totalRevenueUsd,
+    orderCount,
+    avgOrderValueUsd,
+    revenueLastThirtyDaysUsd,
+    topProducts,
+    ordersByStatus,
+  };
+}
+
 export async function getVendorStatusSnapshot(context: VendorRequestContext) {
   const { supabase, userId, profile } = context;
   const shop = await getVendorShopByProfileId(supabase, userId);
