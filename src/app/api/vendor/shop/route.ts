@@ -32,6 +32,7 @@ type ShopPatchPayload = {
   logoUrl?: string | null;
   shippingFlatFeeUsd?: number;
   offersPickup?: boolean;
+  athMovilPhone?: string | null;
   status?: VendorShopStatus;
   policies?: {
     refundPolicy?: string;
@@ -181,6 +182,12 @@ export async function PATCH(request: Request) {
     const offersPickup = getBoolean(body, "offersPickup");
     if (offersPickup !== null) {
       updates.offers_pickup = offersPickup;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "athMovilPhone")) {
+      const raw = body.athMovilPhone;
+      updates.ath_movil_phone =
+        typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
     }
 
     if (typeof body.status === "string") {

@@ -16,6 +16,7 @@ export type ShopDetail = {
   reviewCount: number;
   description: string;
   products: Product[];
+  athMovilPhone: string | null;
 };
 
 export type MarketplaceShopCard = {
@@ -108,6 +109,7 @@ export const mockShopDetails: ShopDetail[] = [
         description: "Billetera compacta de cuero sintetico.",
       },
     ],
+    athMovilPhone: null,
   },
   {
     slug: "estilo-boutique",
@@ -190,6 +192,7 @@ export const mockShopDetails: ShopDetail[] = [
         description: "Reloj dorado con presencia premium.",
       },
     ],
+    athMovilPhone: null,
   },
   {
     slug: "hecho-a-mano-pr",
@@ -231,7 +234,7 @@ export const mockShopDetails: ShopDetail[] = [
         name: "Botella termica",
         priceUsd: 19,
         imageUrl:
-          "https://images.unsplash.com/photo-1523365280197-f1783dbf7c70?auto=format&fit=crop&w=640&q=80",
+          "https://images.unsplash.com/photo-1560762484-813fc97650a0?auto=format&fit=crop&w=640&q=80",
         alt: "Botella termica",
         description: "Botella termica de acero inoxidable.",
       },
@@ -249,7 +252,7 @@ export const mockShopDetails: ShopDetail[] = [
         name: "Vela aromatic",
         priceUsd: 14,
         imageUrl:
-          "https://images.unsplash.com/photo-1603006905393-c1e0d8e9f2f7?auto=format&fit=crop&w=640&q=80",
+          "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=640&q=80",
         alt: "Vela aromatica",
         description: "Vela aromatic para ambientar espacios.",
       },
@@ -272,6 +275,7 @@ export const mockShopDetails: ShopDetail[] = [
         description: "Pulsera sencilla para combinar con tu look.",
       },
     ],
+    athMovilPhone: null,
   },
 ];
 

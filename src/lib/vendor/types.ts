@@ -23,6 +23,7 @@ export type VendorStatusResponse = {
     shipping_flat_fee_usd: number;
     offers_pickup: boolean;
     stripe_connect_account_id: string | null;
+    ath_movil_phone: string | null;
     published_at: string | null;
     unpublished_at: string | null;
     unpublished_reason: string | null;
@@ -55,5 +56,6 @@ export type VendorStatusResponse = {
   metrics: {
     productCount: number;
     orderCount: number;
+    newOrderCount: number;
   };
 };

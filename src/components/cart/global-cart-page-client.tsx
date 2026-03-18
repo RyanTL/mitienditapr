@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
+import { AthMovilCheckoutSheet } from "@/components/cart/ath-movil-checkout-sheet";
 import { formatUsd } from "@/lib/formatters";
 import {
   fetchCartItems,
@@ -19,6 +20,7 @@ export function GlobalCartPageClient() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isCheckoutSheetOpen, setIsCheckoutSheetOpen] = useState(false);
 
   const loadCartItems = useCallback(async () => {
     setIsLoading(true);
@@ -48,6 +50,21 @@ export function GlobalCartPageClient() {
       ),
     [cartItems],
   );
+
+  // Determine the primary shop from the cart (first shop group)
+  const primaryShop = useMemo(() => {
+    if (cartItems.length === 0) return null;
+    const first = cartItems[0].product;
+    const shopSubtotal = cartItems
+      .filter((item) => item.product.shopSlug === first.shopSlug)
+      .reduce((total, item) => total + item.quantity * item.product.priceUsd, 0);
+    return {
+      slug: first.shopSlug,
+      name: first.shopName,
+      athMovilPhone: first.shopAthMovilPhone,
+      subtotal: shopSubtotal,
+    };
+  }, [cartItems]);
 
   const handleIncrease = useCallback(
     async (item: CartItem) => {
@@ -115,6 +132,45 @@ export function GlobalCartPageClient() {
       }
     },
     [cartItems, router],
+  );
+
+  const CheckoutButton = useCallback(
+    ({ className }: { className?: string }) => {
+      if (!primaryShop) return null;
+
+      if (!primaryShop.athMovilPhone) {
+        return (
+          <div className={className}>
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-full bg-[var(--color-gray)] py-3 text-sm font-semibold text-[var(--color-gray-500)] cursor-not-allowed"
+            >
+              Proceder al pago
+            </button>
+            <p className="mt-2 text-center text-[11px] text-[var(--color-gray-500)]">
+              Esta tienda aún no acepta pagos en línea.
+            </p>
+          </div>
+        );
+      }
+
+      return (
+        <button
+          type="button"
+          onClick={() => setIsCheckoutSheetOpen(true)}
+          className={[
+            "w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-[var(--color-white)] transition-opacity hover:opacity-80",
+            className,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          Pagar con ATH Móvil
+        </button>
+      );
+    },
+    [primaryShop],
   );
 
   return (
@@ -223,12 +279,17 @@ export function GlobalCartPageClient() {
                   })}
                 </div>
 
-                {/* Subtotal — mobile only (desktop shows in aside) */}
-                <div className="mt-5 flex items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3 lg:hidden">
-                  <p className="text-sm font-semibold text-[var(--color-carbon)]">Subtotal</p>
-                  <p className="text-sm font-bold text-[var(--color-carbon)]">
-                    {formatUsd(subtotal)}
-                  </p>
+                {/* Subtotal + checkout — mobile only (desktop shows in aside) */}
+                <div className="mt-5 lg:hidden">
+                  <div className="flex items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3">
+                    <p className="text-sm font-semibold text-[var(--color-carbon)]">Subtotal</p>
+                    <p className="text-sm font-bold text-[var(--color-carbon)]">
+                      {formatUsd(subtotal)}
+                    </p>
+                  </div>
+                  <div className="mt-3">
+                    <CheckoutButton />
+                  </div>
                 </div>
               </>
             )}
@@ -250,12 +311,9 @@ export function GlobalCartPageClient() {
                 <p className="mt-3 text-xs text-[var(--color-gray-500)]">
                   Los impuestos y el envio se calculan al finalizar la compra.
                 </p>
-                <button
-                  type="button"
-                  className="mt-4 w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-[var(--color-white)] transition-opacity hover:opacity-80"
-                >
-                  Proceder al pago
-                </button>
+                <div className="mt-4">
+                  <CheckoutButton />
+                </div>
               </div>
             </aside>
           ) : null}
@@ -263,6 +321,17 @@ export function GlobalCartPageClient() {
       </main>
 
       <BackHomeBottomNav />
+
+      {primaryShop?.athMovilPhone ? (
+        <AthMovilCheckoutSheet
+          shopSlug={primaryShop.slug}
+          shopName={primaryShop.name}
+          athMovilPhone={primaryShop.athMovilPhone}
+          totalUsd={primaryShop.subtotal}
+          isOpen={isCheckoutSheetOpen}
+          onClose={() => setIsCheckoutSheetOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

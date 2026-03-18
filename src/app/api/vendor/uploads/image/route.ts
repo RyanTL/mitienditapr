@@ -3,9 +3,11 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { checkRateLimit } from "@/lib/rate-limit";
 import {
   badRequestResponse,
   serverErrorResponse,
+  tooManyRequestsResponse,
   unauthorizedResponse,
 } from "@/lib/vendor/api";
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
@@ -48,6 +50,9 @@ async function ensurePublicBucket(
 }
 
 export async function POST(request: Request) {
+  const { allowed } = checkRateLimit(request, "uploads:image", { maxRequests: 30, windowMs: 10 * 60 * 1000 });
+  if (!allowed) return tooManyRequestsResponse();
+
   if (!isVendorModeEnabled) {
     return badRequestResponse("Vendor mode is disabled.");
   }

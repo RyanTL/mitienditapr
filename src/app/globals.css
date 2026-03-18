@@ -6,6 +6,7 @@
   --color-black: #000000;
   --color-carbon: #1a1a1a;
   --color-gray-100: #f2f2f2;
+  --color-warm-page: #ffffff;
   --color-gray-200: #e3e3e3;
   --color-gray-300: #cdcdcd;
   --color-gray-500: #6d6d6d;
@@ -40,12 +41,12 @@
 
   --border-default: var(--color-gray-border);
 
-  --elevation-low: 0 1px 0 var(--shadow-black-003), 0 8px 20px var(--shadow-black-002);
-  --elevation-mid: 0 14px 30px var(--shadow-black-012);
-  --elevation-high: 0 22px 54px var(--shadow-black-018);
+  --elevation-low: 0 1px 3px var(--shadow-black-008), 0 8px 24px var(--shadow-black-008);
+  --elevation-mid: 0 14px 30px var(--shadow-black-018);
+  --elevation-high: 0 22px 54px var(--shadow-black-035);
 
   color-scheme: light;
-  --background: var(--color-gray);
+  --background: var(--color-white);
   --foreground: var(--color-carbon);
 }
 

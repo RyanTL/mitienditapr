@@ -86,7 +86,14 @@ export default async function VendorPanelPage() {
           </div>
           <div className="rounded-2xl border border-[var(--color-gray)] p-3">
             <p className="text-xs text-[var(--color-gray-500)]">Ordenes</p>
-            <p className="mt-1 text-sm font-semibold">{snapshot.metrics.orderCount}</p>
+            <p className="mt-1 flex items-center gap-2 text-sm font-semibold">
+              {snapshot.metrics.orderCount}
+              {snapshot.metrics.newOrderCount > 0 ? (
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--color-danger)] px-1 text-[10px] font-bold text-white">
+                  {snapshot.metrics.newOrderCount}
+                </span>
+              ) : null}
+            </p>
           </div>
         </div>
       </article>
@@ -102,9 +109,14 @@ export default async function VendorPanelPage() {
           </Link>
           <Link
             href="/vendedor/pedidos"
-            className="rounded-2xl border border-[var(--color-gray)] px-3 py-2 text-sm font-semibold"
+            className="relative rounded-2xl border border-[var(--color-gray)] px-3 py-2 text-sm font-semibold"
           >
             Revisar pedidos
+            {snapshot.metrics.newOrderCount > 0 ? (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--color-danger)] px-1 text-[10px] font-bold text-white">
+                {snapshot.metrics.newOrderCount}
+              </span>
+            ) : null}
           </Link>
           <Link
             href="/vendedor/tienda"

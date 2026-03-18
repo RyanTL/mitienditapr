@@ -209,7 +209,6 @@ export function HomeSearchOverlay({
                           src={product.imageUrl}
                           alt={product.alt}
                           fill
-                          unoptimized
                           sizes="48px"
                           className="object-cover"
                         />

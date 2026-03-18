@@ -27,7 +27,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && (pathname === "/sign-in" || pathname === "/sign-up")) {
+  if (
+    user &&
+    (pathname === "/sign-in" ||
+      pathname === "/sign-up" ||
+      pathname === "/forgot-password")
+  ) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/";
     redirectUrl.search = "";

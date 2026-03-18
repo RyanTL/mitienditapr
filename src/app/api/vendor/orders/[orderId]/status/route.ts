@@ -13,6 +13,7 @@ import {
   type VendorOrderStatus,
 } from "@/lib/vendor/constants";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { sendBuyerOrderStatusEmail } from "@/lib/email/resend";
 import {
   ensureVendorRole,
   ensureVendorShopForProfile,
@@ -31,6 +32,13 @@ type OrderRow = {
   id: string;
   status: string;
   vendor_status: VendorOrderStatus | null;
+  profile_id: string;
+};
+
+type ProfileRow = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
 };
 
 function isVendorOrderStatus(value: string): value is VendorOrderStatus {
@@ -104,7 +112,7 @@ export async function PATCH(
 
     const { data: orderData, error: orderError } = await dataClient
       .from("orders")
-      .select("id,status,vendor_status")
+      .select("id,status,vendor_status,profile_id")
       .eq("id", orderId)
       .maybeSingle();
 
@@ -144,6 +152,31 @@ export async function PATCH(
 
     if (updateError) {
       throw new Error(updateError.message);
+    }
+
+    // Notify buyer of status changes that are meaningful to them
+    const buyerNotifiableStatuses = ["processing", "shipped", "delivered", "canceled"] as const;
+    type BuyerNotifiableStatus = (typeof buyerNotifiableStatuses)[number];
+    const isBuyerNotifiable = (s: string): s is BuyerNotifiableStatus =>
+      (buyerNotifiableStatuses as readonly string[]).includes(s);
+
+    if (isBuyerNotifiable(nextStatus) && order.profile_id) {
+      const { data: buyerData } = await dataClient
+        .from("profiles")
+        .select("id,email,full_name")
+        .eq("id", order.profile_id)
+        .maybeSingle();
+
+      const buyer = buyerData as ProfileRow | null;
+      if (buyer?.email) {
+        void sendBuyerOrderStatusEmail({
+          to: buyer.email,
+          buyerName: buyer.full_name ?? null,
+          orderId: order.id,
+          shopName: shop.vendor_name,
+          newStatus: nextStatus,
+        });
+      }
     }
 
     return NextResponse.json({

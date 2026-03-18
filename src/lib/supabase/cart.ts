@@ -13,6 +13,7 @@ export type CartItem = {
     shopId: string;
     shopSlug: string;
     shopName: string;
+    shopAthMovilPhone: string | null;
     productId: string;
     name: string;
     priceUsd: number;
@@ -47,6 +48,7 @@ type ShopRow = {
   id: string;
   slug: string;
   vendor_name: string;
+  ath_movil_phone: string | null;
 };
 
 type ProductVariantRow = {
@@ -197,7 +199,7 @@ export async function fetchCartItems() {
 
   const { data: shopRows, error: shopsError } = await supabase
     .from("shops")
-    .select("id,slug,vendor_name")
+    .select("id,slug,vendor_name,ath_movil_phone")
     .in("id", shopIds);
 
   if (shopsError || !shopRows) {
@@ -229,6 +231,7 @@ export async function fetchCartItems() {
           shopId: product.shop_id,
           shopSlug: shop.slug,
           shopName: shop.vendor_name,
+          shopAthMovilPhone: shop.ath_movil_phone ?? null,
           productId: product.id,
           name: product.name,
           priceUsd: Number(product.price_usd),

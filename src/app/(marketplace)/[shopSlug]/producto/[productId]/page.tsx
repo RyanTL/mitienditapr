@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,6 +23,28 @@ type ProductPageProps = {
   params: Promise<{ shopSlug: string; productId: string }>;
 };
 
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  const { shopSlug, productId } = await params;
+  const shop = await fetchShopDetailBySlugServer(shopSlug);
+
+  if (!shop) {
+    return { title: "Producto no encontrado — Mitiendita PR" };
+  }
+
+  const product = shop.products.find((p) => p.id === productId);
+  if (!product) {
+    return { title: "Producto no encontrado — Mitiendita PR" };
+  }
+
+  return {
+    title: `${product.name} — ${shop.vendorName} | Mitiendita PR`,
+    description: product.description || `${product.name} disponible en ${shop.vendorName}.`,
+    openGraph: {
+      images: product.imageUrl ? [{ url: product.imageUrl }] : [],
+    },
+  };
+}
+
 export default async function ProductPage({ params }: ProductPageProps) {
   const { shopSlug, productId } = await params;
   const shop = await fetchShopDetailBySlugServer(shopSlug);
@@ -42,7 +65,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
   return (
     <div className="min-h-screen bg-[var(--color-white)] px-4 py-5 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
       <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
-        <header className="mb-4 flex items-center gap-2">
+        {/* Mobile-only shop header */}
+        <header className="mb-4 flex items-center gap-2 lg:hidden">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-lg font-bold text-[var(--color-white)]">
             N
           </div>
@@ -74,7 +98,20 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           {/* Info column */}
           <section>
-            <div className="mt-3 flex items-start justify-between md:mt-4 lg:mt-0">
+            {/* Desktop-only shop header inside info column */}
+            <header className="mb-3 hidden items-center gap-2 lg:flex">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-bold text-[var(--color-white)]">
+                N
+              </div>
+              <Link
+                href={`/${shop.slug}`}
+                className="text-base font-semibold text-[var(--color-carbon)] hover:opacity-80"
+              >
+                {shop.vendorName}
+              </Link>
+            </header>
+
+            <div className="mt-3 flex items-start justify-between lg:mt-0">
               <div>
                 <h1 className="text-[1.75rem] font-medium leading-none">{product.name}</h1>
                 <ShopRating
@@ -112,22 +149,23 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
 
             <ProductPurchasePanel shopSlug={shop.slug} productId={product.id} />
-
-            <section className="mt-8">
-              <h2 className="text-3xl font-bold text-[var(--color-carbon)]">Descripcion</h2>
-              <p className="mt-2 text-sm text-[var(--color-carbon)]">{product.description}</p>
-
-              <ProductReviewsSection
-                shopSlug={shop.slug}
-                productId={product.id}
-                initialSummary={{
-                  averageRating: product.rating ?? shop.rating,
-                  reviewCount: product.reviewCount ?? shop.reviewCount,
-                }}
-              />
-            </section>
           </section>
         </div>
+
+        {/* Description + Reviews — full width below the image/info grid */}
+        <section className="mt-8">
+          <h2 className="text-2xl font-bold text-[var(--color-carbon)]">Descripcion</h2>
+          <p className="mt-2 text-sm text-[var(--color-carbon)]">{product.description}</p>
+
+          <ProductReviewsSection
+            shopSlug={shop.slug}
+            productId={product.id}
+            initialSummary={{
+              averageRating: product.rating ?? shop.rating,
+              reviewCount: product.reviewCount ?? shop.reviewCount,
+            }}
+          />
+        </section>
 
         <section className="mt-10 pb-4">
           <div className="mb-4 flex items-center gap-2">

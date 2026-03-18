@@ -18,7 +18,7 @@ type VariantPayload = {
   title?: string;
   sku?: string;
   priceUsd?: number;
-  stockQty?: number;
+  stockQty?: number | null | "";
   isActive?: boolean;
   attributes?: Record<string, string>;
 };
@@ -50,7 +50,7 @@ type VariantRow = {
   sku: string | null;
   attributes_json: Record<string, unknown>;
   price_usd: number;
-  stock_qty: number;
+  stock_qty: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -231,7 +231,11 @@ export async function POST(request: Request) {
   const variantTitle = readText(rawVariant.title) || "Default";
   const variantSku = readText(rawVariant.sku);
   const variantPrice = Math.max(0, readNumeric(rawVariant.priceUsd, 0));
-  const variantStock = Math.max(0, Math.trunc(readNumeric(rawVariant.stockQty, 0)));
+  const rawStock = rawVariant.stockQty;
+  const variantStock =
+    rawStock === null || rawStock === undefined || rawStock === ""
+      ? null
+      : Math.max(0, Math.trunc(readNumeric(rawStock, 0)));
   const variantIsActive = rawVariant.isActive ?? true;
   const variantAttributes = isRecord(rawVariant.attributes)
     ? rawVariant.attributes
