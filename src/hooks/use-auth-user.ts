@@ -17,9 +17,9 @@ export function useAuthUser(): AuthUserState {
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
 
-    // Get initial session
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user ?? null);
+    // Get initial session from local memory (already validated by middleware)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
       setIsLoading(false);
     });
 

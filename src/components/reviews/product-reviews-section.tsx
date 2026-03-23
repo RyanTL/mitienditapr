@@ -52,21 +52,29 @@ export function ProductReviewsSection({
   const [ratingDraft, setRatingDraft] = useState(5);
   const [commentDraft, setCommentDraft] = useState("");
 
-  const loadReviews = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
+  const loadReviews = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setIsLoading(true);
+      setErrorMessage(null);
+    }
 
     try {
       const response = await fetchProductReviews(shopSlug, productId);
       setReviewsData(response);
-      setRatingDraft(response.myReview?.rating ?? 5);
-      setCommentDraft(response.myReview?.comment ?? "");
+      if (!silent) {
+        setRatingDraft(response.myReview?.rating ?? 5);
+        setCommentDraft(response.myReview?.comment ?? "");
+      }
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "No se pudieron cargar las reviews.",
-      );
+      if (!silent) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "No se pudieron cargar las reviews.",
+        );
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [productId, shopSlug]);
 
@@ -115,7 +123,7 @@ export function ProductReviewsSection({
           : current,
       );
 
-      await loadReviews();
+      void loadReviews({ silent: true });
     } catch (error) {
       if (error instanceof ReviewsRequestError && error.status === 401) {
         handleUnauthorized();
@@ -159,7 +167,7 @@ export function ProductReviewsSection({
       setRatingDraft(5);
       setCommentDraft("");
 
-      await loadReviews();
+      void loadReviews({ silent: true });
     } catch (error) {
       if (error instanceof ReviewsRequestError && error.status === 401) {
         handleUnauthorized();

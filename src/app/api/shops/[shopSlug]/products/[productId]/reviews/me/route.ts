@@ -39,18 +39,9 @@ async function requireAuthenticatedUser() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-    error,
   } = await supabase.auth.getUser();
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  if (!user) {
-    return { supabase, user: null };
-  }
-
-  return { supabase, user };
+  return { supabase, user: user ?? null };
 }
 
 export async function PUT(

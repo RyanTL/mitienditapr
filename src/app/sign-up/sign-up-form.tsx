@@ -28,6 +28,7 @@ function toSpanishError(message: string): string {
 
 export function SignUpForm({ nextPath }: SignUpFormProps) {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -72,7 +73,10 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: callbackUrl },
+        options: {
+          data: { full_name: name.trim() },
+          emailRedirectTo: callbackUrl,
+        },
       });
 
       if (error) {
@@ -110,6 +114,22 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-[var(--color-carbon)]" htmlFor="name">
+            Nombre completo
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="w-full rounded-xl border border-[var(--color-gray-border)] bg-[var(--color-white)] px-3 py-2 text-[var(--color-carbon)] outline-none focus:border-[var(--color-brand)]"
+            placeholder="Tu nombre"
+          />
+        </div>
+
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-[var(--color-carbon)]" htmlFor="email">
             Email

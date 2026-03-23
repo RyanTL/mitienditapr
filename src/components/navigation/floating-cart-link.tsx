@@ -7,6 +7,7 @@ import { CartIcon } from "@/components/icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   CART_CHANGED_EVENT,
+  type CartChangedEventDetail,
   fetchPrimaryCartShopSlug,
   fetchCartQuantityTotal,
 } from "@/lib/supabase/cart";
@@ -36,7 +37,7 @@ export function FloatingCartLink({
       return;
     }
 
-    const syncCartState = async () => {
+    const fetchFullState = async () => {
       try {
         const [nextCount, primaryShopSlug] = await Promise.all([
           typeof count === "number" ? Promise.resolve(count) : fetchCartQuantityTotal(),
@@ -56,22 +57,36 @@ export function FloatingCartLink({
     };
 
     const timeoutId = window.setTimeout(() => {
-      void syncCartState();
+      void fetchFullState();
     }, 0);
 
     const supabase = createSupabaseBrowserClient();
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      void syncCartState();
+      void fetchFullState();
     });
 
-    window.addEventListener(CART_CHANGED_EVENT, syncCartState);
+    const handleCartChanged = (event: Event) => {
+      const detail = (event as CustomEvent<CartChangedEventDetail>).detail;
+
+      if ("delta" in detail) {
+        // Apply delta locally — no network call needed
+        if (typeof count !== "number") {
+          setDynamicCount((prev) => Math.max(0, prev + detail.delta));
+        }
+      } else {
+        // Full refresh needed (removal, checkout, rollback, etc.)
+        void fetchFullState();
+      }
+    };
+
+    window.addEventListener(CART_CHANGED_EVENT, handleCartChanged);
 
     return () => {
       window.clearTimeout(timeoutId);
       subscription.unsubscribe();
-      window.removeEventListener(CART_CHANGED_EVENT, syncCartState);
+      window.removeEventListener(CART_CHANGED_EVENT, handleCartChanged);
     };
   }, [count, href, resolveFromCart]);
 

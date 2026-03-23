@@ -169,15 +169,19 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         <section className="mt-10 pb-4">
           <div className="mb-4 flex items-center gap-2">
-            <h3 className="text-[1.55rem] font-bold leading-none text-[var(--color-carbon)]">
+            <Link
+              href={`/${shop.slug}`}
+              className="text-[1.55rem] font-bold leading-none text-[var(--color-carbon)] hover:opacity-75"
+            >
               Ver mas de {shop.vendorName}
-            </h3>
-            <button type="button"
+            </Link>
+            <Link
+              href={`/${shop.slug}`}
               className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-gray)]"
               aria-label="Ver mas productos"
             >
               <ChevronIcon />
-            </button>
+            </Link>
           </div>
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
