@@ -21,10 +21,10 @@ function createFavoriteProduct(input: FavoriteProductInput): FavoriteProduct {
   };
 }
 
-export function useFavoriteProducts() {
+export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: FavoriteProduct[] } = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const [favorites, setFavorites] = useState<FavoriteProduct[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteProduct[]>(initialFavorites ?? []);
 
   const refreshFavorites = useCallback(async () => {
     try {
@@ -65,6 +65,14 @@ export function useFavoriteProducts() {
 
   const addFavorite = useCallback(
     async (input: FavoriteProductInput) => {
+      // Check auth instantly (local memory) — redirect before any UI change
+      const supabase = createSupabaseBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        redirectToSignIn();
+        return false;
+      }
+
       const favorite = createFavoriteProduct(input);
       const previousFavorites = favorites;
 
@@ -122,6 +130,14 @@ export function useFavoriteProducts() {
 
   const toggleFavorite = useCallback(
     async (input: FavoriteProductInput) => {
+      // Check auth instantly (local memory) — redirect before any UI change
+      const supabase = createSupabaseBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        redirectToSignIn();
+        return false;
+      }
+
       const favorite = createFavoriteProduct(input);
       const favoriteId = favorite.id;
       const previousFavorites = favorites;

@@ -26,7 +26,7 @@ type ShopRow = {
   is_active: boolean;
 };
 
-type ShopFollowsChangedDetail = {
+export type ShopFollowsChangedDetail = {
   shopId?: string;
   shopSlug?: string;
   isFollowing?: boolean;
@@ -93,12 +93,15 @@ export async function fetchShopFollowState(shopSlug: string) {
 }
 
 export async function followShop(shopSlug: string) {
-  const profileId = await getCurrentProfileId();
+  const [profileId, shop] = await Promise.all([
+    getCurrentProfileId(),
+    getShopBySlug(shopSlug),
+  ]);
+
   if (!profileId) {
     return { ok: false as const, unauthorized: true as const };
   }
 
-  const shop = await getShopBySlug(shopSlug);
   if (!shop?.is_active) {
     return { ok: false as const, unauthorized: false as const };
   }
@@ -128,12 +131,15 @@ export async function followShop(shopSlug: string) {
 }
 
 export async function unfollowShop(shopSlug: string) {
-  const profileId = await getCurrentProfileId();
+  const [profileId, shop] = await Promise.all([
+    getCurrentProfileId(),
+    getShopBySlug(shopSlug),
+  ]);
+
   if (!profileId) {
     return { ok: false as const, unauthorized: true as const };
   }
 
-  const shop = await getShopBySlug(shopSlug);
   if (!shop) {
     return { ok: false as const, unauthorized: false as const };
   }

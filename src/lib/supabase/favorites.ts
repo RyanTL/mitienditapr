@@ -34,15 +34,10 @@ type ShopRow = {
 export async function getCurrentProfileId() {
   const supabase = createSupabaseBrowserClient();
   const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (error || !user) {
-    return null;
-  }
-
-  return user.id;
+  return session?.user.id ?? null;
 }
 
 export async function fetchFavoriteProducts() {

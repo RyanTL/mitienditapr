@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ChevronDownIcon, SettingsIcon } from "@/components/icons";
@@ -14,6 +14,35 @@ import {
   SHOP_FOLLOWS_CHANGED_EVENT,
   type FollowedShopSummary,
 } from "@/lib/supabase/follows";
+
+async function fetchVendorMenuEntry(): Promise<VendorMenuEntry | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  if (!profile) return null;
+
+  const isVendor = profile.role === "vendor" || profile.role === "admin";
+  if (!isVendor) {
+    return { href: "/vendedor/onboarding", label: "Conviértete en vendedor" };
+  }
+
+  const { data: shop } = await supabase
+    .from("shops")
+    .select("id")
+    .eq("vendor_profile_id", session.user.id)
+    .maybeSingle();
+
+  return shop
+    ? { href: "/vendedor/panel", label: "Panel de vendedor" }
+    : { href: "/vendedor/onboarding", label: "Conviértete en vendedor" };
+}
 
 type ProfileMenuProps = {
   isOpen: boolean;
@@ -62,16 +91,17 @@ function GuestMenuContent({ onClose }: { onClose: () => void }) {
 
 function AuthMenuContent({
   userEmail,
+  vendorMenuEntry,
   onClose,
 }: {
   userEmail: string;
+  vendorMenuEntry: VendorMenuEntry | null;
   onClose: () => void;
 }) {
   const [isFollowingListOpen, setIsFollowingListOpen] = useState(false);
   const [followedShops, setFollowedShops] = useState<FollowedShopSummary[]>([]);
   const [isLoadingFollowedShops, setIsLoadingFollowedShops] = useState(false);
   const [followedShopsError, setFollowedShopsError] = useState<string | null>(null);
-  const [vendorMenuEntry, setVendorMenuEntry] = useState<VendorMenuEntry | null>(null);
 
   const refreshFollowedShops = useCallback(async () => {
     setIsLoadingFollowedShops(true);
@@ -87,30 +117,6 @@ function AuthMenuContent({
       setIsLoadingFollowedShops(false);
     }
   }, []);
-
-  const refreshVendorMenuEntry = useCallback(async () => {
-    try {
-      const response = await fetch("/api/vendor/status", { method: "GET", cache: "no-store" });
-      if (!response.ok) { setVendorMenuEntry(null); return; }
-      const body = (await response.json().catch(() => null)) as {
-        isVendor?: boolean;
-        hasShop?: boolean;
-      } | null;
-      if (!body) { setVendorMenuEntry(null); return; }
-      setVendorMenuEntry(
-        body.isVendor && body.hasShop
-          ? { href: "/vendedor/panel", label: "Panel de vendedor" }
-          : { href: "/vendedor/onboarding", label: "Conviértete en vendedor" },
-      );
-    } catch {
-      setVendorMenuEntry(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshVendorMenuEntry();
-    void refreshFollowedShops();
-  }, [refreshVendorMenuEntry, refreshFollowedShops]);
 
   useEffect(() => {
     const handleFollowsChanged = () => { void refreshFollowedShops(); };
@@ -142,7 +148,7 @@ function AuthMenuContent({
               onClick={onClose}
               className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
             >
-              Guardados/favoritos
+              Favoritos
             </Link>
           </li>
           <li>
@@ -252,14 +258,22 @@ export function ProfileMenu({ isOpen, onClose, desktopPosition }: ProfileMenuPro
   useBodyScrollLock(isOpen);
   useEscapeKey(isOpen, onClose);
 
-  // Keep email up to date when auth changes (Google OAuth gives display name too)
-  const [userEmail, setUserEmail] = useState("");
+  // Prefetch vendor status as soon as the user is known — before the menu ever opens.
+  // The ref prevents re-fetching on every re-render; it resets when the user changes.
+  const [vendorMenuEntry, setVendorMenuEntry] = useState<VendorMenuEntry | null>(null);
+  const vendorFetchedForUserRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!user) { setUserEmail(""); return; }
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? "");
-    });
+    if (!user) {
+      // Sign-out: clear the cached entry on the next tick to avoid direct setState in effect
+      const id = window.setTimeout(() => {
+        vendorFetchedForUserRef.current = null;
+        setVendorMenuEntry(null);
+      }, 0);
+      return () => window.clearTimeout(id);
+    }
+    if (vendorFetchedForUserRef.current === user.id) return;
+    vendorFetchedForUserRef.current = user.id;
+    void fetchVendorMenuEntry().then(setVendorMenuEntry);
   }, [user]);
 
   if (!isOpen) return null;
@@ -284,7 +298,11 @@ export function ProfileMenu({ isOpen, onClose, desktopPosition }: ProfileMenuPro
         {isLoading ? (
           <div className="py-4 text-center text-sm text-[var(--color-gray-500)]">Cargando...</div>
         ) : user ? (
-          <AuthMenuContent userEmail={userEmail || user.email || ""} onClose={onClose} />
+          <AuthMenuContent
+            userEmail={user.email ?? ""}
+            vendorMenuEntry={vendorMenuEntry}
+            onClose={onClose}
+          />
         ) : (
           <GuestMenuContent onClose={onClose} />
         )}

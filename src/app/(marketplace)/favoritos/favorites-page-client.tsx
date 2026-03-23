@@ -8,9 +8,14 @@ import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/n
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { useFavoriteProducts } from "@/hooks/use-favorite-products";
 import { formatUsd } from "@/lib/formatters";
+import type { FavoriteProduct } from "@/lib/supabase/favorites";
 
-export function FavoritesPageClient() {
-  const { favorites, removeFavoriteById } = useFavoriteProducts();
+type FavoritesPageClientProps = {
+  initialFavorites: FavoriteProduct[];
+};
+
+export function FavoritesPageClient({ initialFavorites }: FavoritesPageClientProps) {
+  const { favorites, removeFavoriteById } = useFavoriteProducts({ initialFavorites });
 
   return (
     <div className="min-h-screen bg-[var(--color-gray)] px-4 py-5 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">

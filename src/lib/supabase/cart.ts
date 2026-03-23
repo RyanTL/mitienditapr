@@ -5,6 +5,8 @@ import { getCurrentProfileId } from "@/lib/supabase/favorites";
 
 export const CART_CHANGED_EVENT = "mitienditapr:cart-changed";
 
+export type CartChangedEventDetail = { delta: number } | { fullRefresh: true };
+
 export type CartItem = {
   id: string;
   quantity: number;
@@ -70,12 +72,12 @@ function isUuidLike(value: string) {
   return UUID_PATTERN.test(value);
 }
 
-function notifyCartChanged() {
+function notifyCartChanged(detail: CartChangedEventDetail = { fullRefresh: true }) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.dispatchEvent(new Event(CART_CHANGED_EVENT));
+  window.dispatchEvent(new CustomEvent<CartChangedEventDetail>(CART_CHANGED_EVENT, { detail }));
 }
 
 function isMissingProductVariantsTableError(error: SupabaseErrorLike) {
@@ -346,8 +348,6 @@ export async function addProductToCart(
       throw new Error(insertError.message);
     }
   }
-
-  notifyCartChanged();
 
   return { ok: true as const, unauthorized: false as const };
 }

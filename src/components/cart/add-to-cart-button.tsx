@@ -3,7 +3,8 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { addProductToCart } from "@/lib/supabase/cart";
+import { CART_CHANGED_EVENT, type CartChangedEventDetail, addProductToCart } from "@/lib/supabase/cart";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AddToCartButtonProps = {
   shopSlug: string;
@@ -43,24 +44,46 @@ export function AddToCartButton({
       return;
     }
 
+    // Check auth instantly (local memory) — redirect before any UI change
+    const supabase = createSupabaseBrowserClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      const nextPath = pathname ?? "/";
+      router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
+      return;
+    }
+
+    // Optimistic: update UI immediately before server responds
     setIsSubmitting(true);
+    setIsAdded(true);
+    window.dispatchEvent(
+      new CustomEvent<CartChangedEventDetail>(CART_CHANGED_EVENT, { detail: { delta: quantity } }),
+    );
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = window.setTimeout(() => {
+      setIsAdded(false);
+    }, 1700);
+
+    const rollbackOptimisticCart = () => {
+      setIsAdded(false);
+      window.dispatchEvent(
+        new CustomEvent<CartChangedEventDetail>(CART_CHANGED_EVENT, { detail: { fullRefresh: true } }),
+      );
+    };
 
     try {
       const result = await addProductToCart(shopSlug, productId, quantity);
       if (result.unauthorized) {
+        rollbackOptimisticCart();
         const nextPath = pathname ?? "/";
         router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
         return;
       }
-
-      setIsAdded(true);
-      if (timeoutRef.current !== null) {
-        window.clearTimeout(timeoutRef.current);
-      }
-      timeoutRef.current = window.setTimeout(() => {
-        setIsAdded(false);
-      }, 1700);
     } catch (error) {
+      rollbackOptimisticCart();
       console.error("No se pudo agregar al carrito:", error);
       setErrorMessage(
         error instanceof Error
@@ -80,7 +103,7 @@ export function AddToCartButton({
         className={className}
         onClick={() => void handleClick()}
       >
-        {isSubmitting ? "Agregando..." : isAdded ? "Anadido" : "Anadir al carrito"}
+        {isAdded ? "Anadido" : "Anadir al carrito"}
       </button>
       {errorMessage ? (
         <p className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-3 py-2 text-xs text-[var(--color-danger)]">

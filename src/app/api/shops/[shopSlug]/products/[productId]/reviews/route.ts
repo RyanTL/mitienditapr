@@ -53,12 +53,7 @@ export async function GET(
 
     const {
       data: { user },
-      error: userError,
     } = await supabase.auth.getUser();
-
-    if (userError) {
-      throw new Error(userError.message);
-    }
 
     let myReview: MyReviewRow | null = null;
     if (user) {

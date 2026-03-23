@@ -9,6 +9,7 @@ import {
   fetchShopFollowState,
   followShop,
   SHOP_FOLLOWS_CHANGED_EVENT,
+  type ShopFollowsChangedDetail,
   unfollowShop,
 } from "@/lib/supabase/follows";
 
@@ -57,8 +58,13 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
       void refreshFollowState();
     });
 
-    const handleShopFollowsChanged = () => {
-      void refreshFollowState();
+    const handleShopFollowsChanged = (event: Event) => {
+      const detail = (event as CustomEvent<ShopFollowsChangedDetail>).detail;
+      if (detail?.shopSlug === shopSlug && typeof detail.isFollowing === "boolean") {
+        setIsFollowing(detail.isFollowing);
+      } else {
+        void refreshFollowState();
+      }
     };
 
     window.addEventListener(SHOP_FOLLOWS_CHANGED_EVENT, handleShopFollowsChanged);
@@ -71,10 +77,19 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
         handleShopFollowsChanged,
       );
     };
-  }, [refreshFollowState]);
+  }, [refreshFollowState, shopSlug]);
 
   const handleToggleFollow = async () => {
     if (isSubmitting) {
+      return;
+    }
+
+    // Check auth instantly (local memory) — redirect before any UI change
+    const supabase = createSupabaseBrowserClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      const nextPath = pathname ?? `/${shopSlug}`;
+      router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
       return;
     }
 
@@ -90,13 +105,6 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
         ? await followShop(shopSlug)
         : await unfollowShop(shopSlug);
 
-      if (result.unauthorized) {
-        setIsFollowing(previousState);
-        const nextPath = pathname ?? `/${shopSlug}`;
-        router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
-        return;
-      }
-
       if (!result.ok) {
         setIsFollowing(previousState);
       }
@@ -106,7 +114,6 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
     } finally {
       setIsSubmitting(false);
       isSubmittingRef.current = false;
-      void refreshFollowState();
     }
   };
 
@@ -114,7 +121,6 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
     <button
       type="button"
       onClick={() => void handleToggleFollow()}
-      disabled={isSubmitting}
       className={[
         "inline-flex items-center rounded-full border px-3 py-2 text-sm font-semibold",
         isFollowing
@@ -127,8 +133,8 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
       aria-label={isFollowing ? "Dejar de seguir vendedor" : "Seguir vendedor"}
     >
       <span className="inline-flex items-center gap-1.5">
-        {isFollowing && !isSubmitting ? <CheckIcon className="h-4 w-4" /> : null}
-        {isSubmitting ? "Guardando..." : isFollowing ? "Seguido" : "Seguir"}
+        {isFollowing ? <CheckIcon className="h-4 w-4" /> : null}
+        {isFollowing ? "Seguido" : "Seguir"}
       </span>
     </button>
   );
