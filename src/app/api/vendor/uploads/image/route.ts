@@ -109,7 +109,7 @@ export async function POST(request: Request) {
       .getPublicUrl(objectPath);
 
     if (!publicUrlData.publicUrl) {
-      throw new Error("No se pudo generar URL publica.");
+      throw new Error("No se pudo generar URL pública.");
     }
 
     return NextResponse.json({

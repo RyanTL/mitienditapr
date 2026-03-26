@@ -235,7 +235,7 @@ export async function publishShopPolicyVersion(input: {
     .maybeSingle();
 
   if (insertError || !insertedRow) {
-    throw new Error(insertError?.message ?? "No se pudo publicar la politica.");
+    throw new Error(insertError?.message ?? "No se pudo publicar la política.");
   }
 
   const version = mapPolicyVersionRow(insertedRow as PolicyVersionRow);
@@ -319,7 +319,7 @@ export async function createVendorPolicyAcceptance(input: {
     .maybeSingle();
 
   if (error || !data) {
-    throw new Error(error?.message ?? "No se pudo guardar la aceptacion legal.");
+    throw new Error(error?.message ?? "No se pudo guardar la aceptación legal.");
   }
 
   return mapAcceptanceRow(data as VendorPolicyAcceptanceRow)!;

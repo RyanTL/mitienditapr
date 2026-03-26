@@ -162,7 +162,7 @@ export function HomeSearchOverlay({
                 No encontramos resultados.
               </p>
               <p className="mt-1 text-xs text-[var(--color-gray-500)]">
-                Intenta con otro termino.
+                Intenta con otro término.
               </p>
             </div>
           ) : (

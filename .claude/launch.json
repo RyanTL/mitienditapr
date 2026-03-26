@@ -5,8 +5,14 @@
       "name": "next-dev",
       "runtimeExecutable": "/bin/bash",
       "runtimeArgs": [".claude/run-dev.sh"],
-      "port": 3001,
-      "autoPort": true
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "next-dev-3001",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:$PATH && cd /Users/ryan/mitienditapr && npm run dev -- --port 3001"],
+      "port": 3001
     },
     {
       "name": "next-start",

@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -21,7 +22,15 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const type = requestUrl.searchParams.get("type");
-  const nextPath = normalizeNextPath(requestUrl.searchParams.get("next"));
+
+  // OAuth flows pass next via a short-lived cookie (no query params in redirectTo).
+  // Email flows pass next via the URL query param.
+  const cookieStore = await cookies();
+  const nextFromCookie = cookieStore.get("oauth_next")?.value;
+  const nextPath = normalizeNextPath(
+    requestUrl.searchParams.get("next") ??
+      (nextFromCookie ? decodeURIComponent(nextFromCookie) : null),
+  );
 
   if (code) {
     const supabase = await createSupabaseServerClient();
@@ -42,5 +51,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/reset-password", requestUrl.origin));
   }
 
-  return NextResponse.redirect(new URL(nextPath, requestUrl.origin));
+  const response = NextResponse.redirect(new URL(nextPath, requestUrl.origin));
+  if (nextFromCookie) {
+    response.cookies.delete("oauth_next");
+  }
+  return response;
 }

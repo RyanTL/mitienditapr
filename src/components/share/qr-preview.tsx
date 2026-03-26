@@ -46,7 +46,7 @@ export function QrPreview({ shareUrl, shopName, onReady }: QrPreviewProps) {
           return;
         }
 
-        setErrorMessage("No se pudo generar el codigo QR.");
+        setErrorMessage("No se pudo generar el código QR.");
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -75,7 +75,7 @@ export function QrPreview({ shareUrl, shopName, onReady }: QrPreviewProps) {
         <div className="mx-auto w-full max-w-[280px]">
           <Image
             src={qrDataUrl}
-            alt={`Codigo QR para ${shopName}`}
+            alt={`Código QR para ${shopName}`}
             width={280}
             height={280}
             unoptimized

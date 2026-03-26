@@ -61,7 +61,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const { codeId } = await params;
   if (!codeId || codeId.trim().length === 0) {
-    return badRequestResponse("Codigo invalido.");
+    return badRequestResponse("Código inválido.");
   }
 
   const body = await parseJsonBody<UpdateVendorAccessCodePayload>(request);
@@ -112,7 +112,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       throw new Error(error.message);
     }
     if (!data) {
-      return badRequestResponse("Codigo no encontrado.");
+      return badRequestResponse("Código no encontrado.");
     }
 
     return NextResponse.json({
@@ -130,6 +130,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       },
     });
   } catch (error) {
-    return serverErrorResponse(error, "No se pudo actualizar el codigo.");
+    return serverErrorResponse(error, "No se pudo actualizar el código.");
   }
 }

@@ -97,13 +97,13 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
       : null;
   const activePolicyModalTitle =
     activePolicyModalType === "terms"
-      ? "Terminos y condiciones"
+      ? "Términos y condiciones"
       : activePolicyModalType === "shipping"
-        ? "Politica de envio"
+        ? "Política de envío"
         : activePolicyModalType === "refund"
-          ? "Politica de reembolso"
+          ? "Política de reembolso"
           : activePolicyModalType === "privacy"
-            ? "Politica de privacidad"
+            ? "Política de privacidad"
             : "";
 
   useBodyScrollLock(Boolean(menuItemId || activePolicyModalType));
@@ -127,7 +127,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
       setPoliciesData(response);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "No se pudieron cargar las politicas.";
+        error instanceof Error ? error.message : "No se pudieron cargar las políticas.";
       setPoliciesError(message);
       setPoliciesData(null);
     } finally {
@@ -246,13 +246,13 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   const handleCheckout = useCallback(async () => {
     if (!policiesData?.requiredPolicyVersionIds) {
       setCheckoutError(
-        "La tienda no tiene Terminos y Politica de envio publicados. No se puede continuar.",
+        "La tienda no tiene Términos y Política de envío publicados. No se puede continuar.",
       );
       return;
     }
 
     if (!hasAcceptedRequiredPolicies) {
-      setCheckoutError("Debes aceptar Terminos y Politica de envio para continuar.");
+      setCheckoutError("Debes aceptar Términos y Política de envío para continuar.");
       return;
     }
 
@@ -265,7 +265,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
         termsVersionId: policiesData.requiredPolicyVersionIds.terms,
         shippingVersionId: policiesData.requiredPolicyVersionIds.shipping,
         acceptedAt: new Date().toISOString(),
-        acceptanceText: "Acepto Terminos y Politica de envio de esta tienda.",
+        acceptanceText: "Acepto Términos y Política de envío de esta tienda.",
       });
 
       if (result.unauthorized) {
@@ -398,10 +398,10 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
 
               <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3">
                 <p className="text-xs font-semibold text-[var(--color-gray-500)]">
-                  Politicas requeridas
+                  Políticas requeridas
                 </p>
                 {isLoadingPolicies ? (
-                  <p className="mt-1 text-xs text-[var(--color-carbon)]">Cargando politicas...</p>
+                  <p className="mt-1 text-xs text-[var(--color-carbon)]">Cargando políticas...</p>
                 ) : policiesError ? (
                   <p className="mt-1 text-xs text-[var(--color-danger)]">{policiesError}</p>
                 ) : policiesData?.requiredPolicyVersionIds ? (
@@ -412,14 +412,14 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                         className="rounded-full border border-[var(--color-gray)] px-3 py-1 text-xs font-semibold"
                         onClick={() => setActivePolicyModalType("terms")}
                       >
-                        Ver Terminos
+                        Ver Términos
                       </button>
                       <button
                         type="button"
                         className="rounded-full border border-[var(--color-gray)] px-3 py-1 text-xs font-semibold"
                         onClick={() => setActivePolicyModalType("shipping")}
                       >
-                        Ver Politica de envio
+                        Ver Política de envío
                       </button>
                     </div>
                     <label className="mt-3 flex items-start gap-2 text-xs text-[var(--color-carbon)]">
@@ -431,12 +431,12 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                         }
                         className="mt-0.5"
                       />
-                      <span>Acepto Terminos y Politica de envio de esta tienda.</span>
+                      <span>Acepto Términos y Política de envío de esta tienda.</span>
                     </label>
                   </>
                 ) : (
                   <p className="mt-1 text-xs text-[var(--color-danger)]">
-                    Esta tienda aun no tiene politicas requeridas publicadas.
+                    Esta tienda aún no tiene políticas requeridas publicadas.
                   </p>
                 )}
               </div>
@@ -479,7 +479,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
           <button
             type="button"
             className="absolute inset-0 bg-[var(--overlay-black-055)]"
-            aria-label="Cerrar politica"
+            aria-label="Cerrar política"
             onClick={() => setActivePolicyModalType(null)}
           />
           <section className="absolute inset-x-4 top-1/2 mx-auto max-w-3xl -translate-y-1/2 rounded-3xl bg-[var(--color-white)] p-5 shadow-[0_30px_80px_var(--shadow-black-035)] md:max-w-2xl">
@@ -520,11 +520,11 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                 Administrar producto
               </h3>
               <button type="button"
-                className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-gray-icon)] text-[var(--color-carbon)]"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-gray-100)] text-[var(--color-carbon)] transition-colors hover:bg-[var(--color-gray-200)]"
                 aria-label="Cerrar menu"
                 onClick={() => setMenuItemId(null)}
               >
-                <CloseIcon />
+                <CloseIcon className="h-5 w-5" />
               </button>
             </div>
 

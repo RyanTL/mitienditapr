@@ -20,16 +20,8 @@ import {
   ensureVendorShopForProfile,
   getVendorPublishChecks,
   getVendorRequestContext,
-  getShopPoliciesByShopId,
   upsertVendorOnboardingStep,
 } from "@/lib/supabase/vendor-server";
-import {
-  createVendorPolicyAcceptance,
-  getCurrentShopPolicyVersions,
-  getRequiredPolicyIds,
-  publishShopPolicyVersion,
-} from "@/lib/supabase/vendor-policy-server";
-import { DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT } from "@/lib/policies/constants";
 
 type StepPayload = {
   step: number;
@@ -49,29 +41,6 @@ function readString(
   return typeof value === "string" ? value : fallback;
 }
 
-function readNumber(input: Record<string, unknown>, key: string, fallback: number) {
-  const value = input[key];
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return fallback;
-}
-
-function readBoolean(
-  input: Record<string, unknown>,
-  key: string,
-  fallback = false,
-) {
-  const value = input[key];
-  return typeof value === "boolean" ? value : fallback;
-}
-
 function mapNextStep(currentStep: number, incomingStep: number) {
   return Math.max(currentStep, Math.min(incomingStep + 1, VENDOR_ONBOARDING_STEP_COUNT));
 }
@@ -85,201 +54,49 @@ async function applyStepSideEffects(input: {
 }) {
   const { supabase, profileId, shopId, step, payload } = input;
 
-  if (step === 2) {
-    const businessName = readString(payload, "businessName").trim();
-    const phone = readString(payload, "phone").trim();
-
-    if (businessName) {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ full_name: businessName })
-        .eq("id", profileId);
-      if (profileError) {
-        throw new Error(profileError.message);
-      }
-
-      const { error: shopError } = await supabase
-        .from("shops")
-        .update({ vendor_name: businessName })
-        .eq("id", shopId);
-      if (shopError) {
-        throw new Error(shopError.message);
-      }
-    }
-
-    if (phone) {
-      // Phone is persisted in onboarding payload for MVP.
-    }
-    return;
-  }
-
-  if (step === 3) {
-    const shopName = readString(payload, "shopName").trim();
+  if (step === 1) {
+    const vendorName = readString(payload, "vendorName").trim();
     const requestedSlug = readString(payload, "slug").trim();
     const description = readString(payload, "description").trim();
     const logoUrl = readString(payload, "logoUrl").trim();
 
-    const slugSource = requestedSlug || shopName;
+    if (vendorName) {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ full_name: vendorName })
+        .eq("id", profileId);
+      if (profileError) {
+        throw new Error(profileError.message);
+      }
+    }
+
+    const slugSource = requestedSlug || vendorName;
     const slug = slugifyShopName(slugSource);
     if (!slug) {
-      throw new Error("Debes indicar un nombre valido para generar el slug.");
+      throw new Error("Debes indicar un nombre válido para generar el slug.");
     }
 
     const { error } = await supabase
       .from("shops")
       .update({
-        vendor_name: shopName || undefined,
+        vendor_name: vendorName || undefined,
         slug,
-        description,
+        description: description || null,
         logo_url: logoUrl || null,
       })
       .eq("id", shopId);
 
     if (error) {
       if (error.code === "23505") {
-        throw new Error("Ese slug ya existe. Intenta con otro nombre.");
+        throw new Error("Ese URL ya está en uso. Intenta con otro nombre.");
       }
       throw new Error(error.message);
     }
     return;
   }
 
-  if (step === 4) {
-    const shippingFlatFeeUsd = Math.max(0, readNumber(payload, "shippingFlatFeeUsd", 0));
-    const offersPickup = readBoolean(payload, "offersPickup", false);
-
-    const { error: shopError } = await supabase
-      .from("shops")
-      .update({
-        shipping_flat_fee_usd: shippingFlatFeeUsd,
-        offers_pickup: offersPickup,
-      })
-      .eq("id", shopId);
-
-    if (shopError) {
-      throw new Error(shopError.message);
-    }
-
-    const currentPolicySnapshot = await getShopPoliciesByShopId(supabase, shopId);
-    const refundPolicy = readString(
-      payload,
-      "refundPolicy",
-      currentPolicySnapshot?.refund_policy ?? "",
-    );
-    const shippingPolicy = readString(
-      payload,
-      "shippingPolicy",
-      currentPolicySnapshot?.shipping_policy ?? "",
-    );
-    const privacyPolicy = readString(
-      payload,
-      "privacyPolicy",
-      currentPolicySnapshot?.privacy_policy ?? "",
-    );
-    const terms = readString(payload, "terms", currentPolicySnapshot?.terms ?? "");
-
-    const { error: policiesError } = await supabase.from("shop_policies").upsert(
-      {
-        shop_id: shopId,
-        refund_policy: refundPolicy,
-        shipping_policy: shippingPolicy,
-        privacy_policy: privacyPolicy,
-        terms,
-      },
-      { onConflict: "shop_id" },
-    );
-
-    if (policiesError) {
-      throw new Error(policiesError.message);
-    }
-
-    const publishedTerms = terms.trim().length > 0;
-    const publishedShipping = shippingPolicy.trim().length > 0;
-    const publishedRefund = refundPolicy.trim().length > 0;
-    const publishedPrivacy = privacyPolicy.trim().length > 0;
-
-    if (publishedTerms) {
-      await publishShopPolicyVersion({
-        supabase,
-        shopId,
-        policyType: "terms",
-        title: "Terminos y condiciones",
-        body: terms.trim(),
-        sourceTemplateId: null,
-        publishedBy: profileId,
-      });
-    }
-
-    if (publishedShipping) {
-      await publishShopPolicyVersion({
-        supabase,
-        shopId,
-        policyType: "shipping",
-        title: "Politica de envio",
-        body: shippingPolicy.trim(),
-        sourceTemplateId: null,
-        publishedBy: profileId,
-      });
-    }
-
-    if (publishedRefund) {
-      await publishShopPolicyVersion({
-        supabase,
-        shopId,
-        policyType: "refund",
-        title: "Politica de reembolso",
-        body: refundPolicy.trim(),
-        sourceTemplateId: null,
-        publishedBy: profileId,
-      });
-    }
-
-    if (publishedPrivacy) {
-      await publishShopPolicyVersion({
-        supabase,
-        shopId,
-        policyType: "privacy",
-        title: "Politica de privacidad",
-        body: privacyPolicy.trim(),
-        sourceTemplateId: null,
-        publishedBy: profileId,
-      });
-    }
-
-    const currentPolicyVersions = await getCurrentShopPolicyVersions(supabase, shopId);
-    const requiredIds = getRequiredPolicyIds(currentPolicyVersions);
-    if (requiredIds) {
-      await createVendorPolicyAcceptance({
-        supabase,
-        shopId,
-        acceptedByProfileId: profileId,
-        acceptanceScope: "update",
-        termsVersionId: requiredIds.terms,
-        shippingVersionId: requiredIds.shipping,
-        refundVersionId: currentPolicyVersions.refund?.id ?? null,
-        privacyVersionId: currentPolicyVersions.privacy?.id ?? null,
-        acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
-      });
-    }
-
-    return;
-  }
-
-  if (step === 5) {
-    const stripeConnectAccountId = readString(payload, "stripeConnectAccountId").trim();
-    if (!stripeConnectAccountId) {
-      return;
-    }
-
-    const { error } = await supabase
-      .from("shops")
-      .update({ stripe_connect_account_id: stripeConnectAccountId })
-      .eq("id", shopId);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-  }
+  // Step 2: subscription — handled by dedicated checkout/redeem/webhook routes.
+  // No side effects needed here.
 }
 
 export async function PATCH(request: Request) {
@@ -299,7 +116,7 @@ export async function PATCH(request: Request) {
 
   const step = Math.trunc(body.step);
   if (step < 1 || step > VENDOR_ONBOARDING_STEP_COUNT) {
-    return badRequestResponse("Paso invalido.");
+    return badRequestResponse("Paso inválido.");
   }
 
   const payload = isRecord(body.payload) ? body.payload : {};
@@ -330,8 +147,10 @@ export async function PATCH(request: Request) {
     };
 
     const nextStep = mapNextStep(onboarding.current_step, step);
+    // Only mark completed when nextStep strictly exceeds total steps.
+    // Completion is triggered by subscription routes (checkout/redeem/webhook).
     const status: VendorOnboardingStatus =
-      nextStep >= VENDOR_ONBOARDING_STEP_COUNT ? "completed" : "in_progress";
+      nextStep > VENDOR_ONBOARDING_STEP_COUNT ? "completed" : "in_progress";
 
     const nextOnboarding = await upsertVendorOnboardingStep(
       dataClient,

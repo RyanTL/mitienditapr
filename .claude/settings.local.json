@@ -20,7 +20,9 @@
       "Bash(git -C /Users/ryan/mitienditapr branch -d claude/beautiful-bardeen claude/beautiful-wilbur claude/condescending-tereshkova claude/distracted-heyrovsky claude/gifted-franklin claude/wonderful-lewin)",
       "Bash(/usr/local/bin/node node_modules/.bin/next build)",
       "Bash(lsof -i :3001 -t)",
-      "Bash(/Users/ryan/mitiendita-mobile/tsconfig.json:*)"
+      "Bash(/Users/ryan/mitiendita-mobile/tsconfig.json:*)",
+      "Bash(grep -n \"CREATE TABLE\\\\|ALTER TABLE\" /Users/ryan/mitienditapr/supabase/migrations/*.sql)",
+      "Bash(grep -n \"view\\\\|VIEW\\\\|COUNT\\\\|SUM\\\\|AVG\" /Users/ryan/mitienditapr/supabase/migrations/*.sql)"
     ]
   }
 }

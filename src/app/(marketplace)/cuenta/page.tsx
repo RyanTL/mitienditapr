@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = {
+  title: "Ajustes | Mitiendita PR",
+};
 
 import { AccountPageClient } from "@/app/(marketplace)/cuenta/account-page-client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";

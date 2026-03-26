@@ -28,10 +28,10 @@ async function ensureVendorPoliciesAndSubscription(
   if (!existingPolicies) {
     const { error: policyInsertError } = await supabase.from("shop_policies").insert({
       shop_id: shopId,
-      refund_policy: "No se aceptan devoluciones despues de 7 dias.",
-      shipping_policy: "Envios de 1 a 3 dias laborables.",
-      privacy_policy: "Tus datos se usan solo para procesar ordenes.",
-      terms: "Al comprar aceptas los terminos de la tienda.",
+      refund_policy: "No se aceptan devoluciones después de 7 días.",
+      shipping_policy: "Envíos de 1 a 3 días laborables.",
+      privacy_policy: "Tus datos se usan solo para procesar órdenes.",
+      terms: "Al comprar aceptas los términos de la tienda.",
     });
 
     if (policyInsertError) {

@@ -221,7 +221,7 @@ export async function DELETE(
       return NextResponse.json(
         {
           error:
-            "No puedes eliminar este producto porque tiene ordenes asociadas. Puedes desactivarlo.",
+            "No puedes eliminar este producto porque tiene órdenes asociadas. Puedes desactivarlo.",
         },
         { status: 400 },
       );

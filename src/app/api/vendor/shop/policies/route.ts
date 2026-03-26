@@ -53,6 +53,6 @@ export async function GET() {
       latestAcceptance,
     });
   } catch (error) {
-    return serverErrorResponse(error, "No se pudieron cargar las politicas.");
+    return serverErrorResponse(error, "No se pudieron cargar las políticas.");
   }
 }
