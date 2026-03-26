@@ -62,10 +62,110 @@ export function CartIcon({ className = "h-7 w-7", ...props }: IconProps) {
 export function SettingsIcon({ className = "h-5 w-5", ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="8" cy="7" r="2" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="16" cy="12" r="2" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="10" cy="17" r="2" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+export function PackageIcon({ className = "h-6 w-6", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
       <path
-        d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm7 3.5a7.9 7.9 0 0 0-.1-1.3l1.4-1.1-1.6-2.7-1.8.7c-.7-.5-1.4-.9-2.2-1.2L14.5 4h-3l-.3 2.3c-.8.3-1.6.7-2.2 1.2l-1.8-.7-1.6 2.7 1.4 1.1a8.8 8.8 0 0 0 0 2.6l-1.4 1.1 1.6 2.7 1.8-.7c.7.5 1.4.9 2.2 1.2l.3 2.3h3l.3-2.3c.8-.3 1.6-.7 2.2-1.2l1.8.7 1.6-2.7-1.4-1.1c.1-.4.1-.9.1-1.3Z"
+        d="M20 7.5 12 3 4 7.5v9L12 21l8-4.5v-9ZM12 3v18M4 7.5l8 4.5 8-4.5"
         stroke="currentColor"
-        strokeWidth="1.4"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function DocumentIcon({ className = "h-6 w-6", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M8 3.5h6l4 4V20a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M14 3.5V8h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path
+        d="M9.5 12h5M9.5 15.5h5M9.5 19H13"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function TruckIcon({ className = "h-6 w-6", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M3 7h11v9H3V7ZM14 10h3.4l2.6 3V16h-6v-6Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M3 16h2.5M20 16h1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="7.5" cy="17.5" r="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="17.5" cy="17.5" r="1.5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+export function ImageIcon({ className = "h-6 w-6", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <rect
+        x="3"
+        y="4"
+        width="18"
+        height="16"
+        rx="2.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <circle cx="8.5" cy="9" r="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="m6 17 4.5-4.5 3 3 4.5-5.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function AlertIcon({ className = "h-6 w-6", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M12 4.5 20 19H4L12 4.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M12 9v4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="16.4" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function StoreIcon({ className = "h-6 w-6", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M3 9.5 5 4h14l2 5.5M3 9.5h18M3 9.5V20h18V9.5M9 13.5h6M12 9.5v10"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -225,18 +325,62 @@ export function UserIcon({ className = "h-5 w-5", ...props }: IconProps) {
 export function AthMovilIcon({ className = "h-5 w-5", ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M2 10h20" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M6 15h4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function EyeIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.75" />
+    </svg>
+  );
+}
+
+export function EyeOffIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function BarChartIcon({ className = "h-6 w-6", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
       <path
-        d="M17 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M12 7v5M10 9h4"
+        d="M4 20h16M8 16V10M12 16V4M16 16V8"
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="round"
       />
-      <circle cx="12" cy="18" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function PlusIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function ExternalLinkIcon({ className = "h-4 w-4", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

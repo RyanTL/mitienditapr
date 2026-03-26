@@ -23,10 +23,16 @@ type VariantPayload = {
   attributes?: Record<string, string>;
 };
 
+type ProductImagePayload = {
+  imageUrl?: string;
+  alt?: string | null;
+};
+
 type ProductPayload = {
   name?: string;
   description?: string;
   imageUrl?: string | null;
+  images?: ProductImagePayload[];
   isActive?: boolean;
   variant?: VariantPayload;
 };
@@ -37,7 +43,7 @@ type ProductRow = {
   name: string;
   description: string;
   price_usd: number;
-  image_url: string;
+  image_url: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -107,7 +113,7 @@ function mapProductResponse(
     shopId: product.shop_id,
     name: product.name,
     description: product.description,
-    imageUrl: product.image_url,
+    imageUrl: product.image_url || null,
     priceUsd: Number(product.price_usd),
     isActive: product.is_active,
     createdAt: product.created_at,
@@ -225,6 +231,30 @@ export async function POST(request: Request) {
 
   const description = readText(body.description);
   const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
+  const images =
+    Array.isArray(body.images)
+      ? body.images.flatMap((image) => {
+          if (!isRecord(image)) {
+            return [];
+          }
+
+          const nextImageUrl =
+            typeof image.imageUrl === "string" ? image.imageUrl.trim() : "";
+
+          if (!nextImageUrl) {
+            return [];
+          }
+
+          const nextAlt = typeof image.alt === "string" ? image.alt.trim() : "";
+
+          return [
+            {
+              imageUrl: nextImageUrl,
+              alt: nextAlt || null,
+            },
+          ];
+        })
+      : [];
   const isActive = body.isActive ?? true;
   const rawVariant = isRecord(body.variant) ? body.variant : {};
 
@@ -240,6 +270,13 @@ export async function POST(request: Request) {
   const variantAttributes = isRecord(rawVariant.attributes)
     ? rawVariant.attributes
     : {};
+  const imagesToInsert =
+    images.length > 0
+      ? images
+      : imageUrl
+        ? [{ imageUrl, alt: name }]
+        : [];
+  const primaryImageUrl = imagesToInsert[0]?.imageUrl ?? null;
 
   let dataClient = context.supabase;
   try {
@@ -259,7 +296,7 @@ export async function POST(request: Request) {
         name,
         description,
         price_usd: variantPrice,
-        image_url: imageUrl || null,
+        image_url: primaryImageUrl,
         is_active: isActive,
       })
       .select(
@@ -285,13 +322,15 @@ export async function POST(request: Request) {
       throw new Error(variantError.message);
     }
 
-    if (imageUrl) {
-      const { error: imageError } = await dataClient.from("product_images").insert({
-        product_id: productRow.id,
-        image_url: imageUrl,
-        alt: name,
-        sort_order: 0,
-      });
+    if (imagesToInsert.length > 0) {
+      const { error: imageError } = await dataClient.from("product_images").insert(
+        imagesToInsert.map((image, index) => ({
+          product_id: productRow.id,
+          image_url: image.imageUrl,
+          alt: image.alt ?? name,
+          sort_order: index,
+        })),
+      );
 
       if (imageError) {
         throw new Error(imageError.message);

@@ -1,8 +1,19 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  AlertIcon,
+  AthMovilIcon,
+  CheckIcon,
+  DocumentIcon,
+  ImageIcon,
+  SettingsIcon,
+  StoreIcon,
+  TruckIcon,
+} from "@/components/icons";
 import { VendorPageShell } from "@/components/vendor/vendor-page-shell";
 import {
   DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
@@ -21,6 +32,7 @@ import type {
 } from "@/lib/policies/types";
 import {
   fetchVendorShopSettings,
+  publishVendorShop,
   uploadVendorImage,
   updateVendorShopSettings,
 } from "@/lib/vendor/client";
@@ -57,12 +69,25 @@ const DEFAULT_FORM_STATE: ShopSettingsFormState = {
 
 const POLICY_TYPES: PolicyType[] = ["terms", "shipping", "refund", "privacy"];
 
+const STATUS_BADGE_STYLE: Record<string, string> = {
+  active: "bg-green-100 text-green-700",
+  trialing: "bg-green-100 text-green-700",
+  draft: "bg-yellow-100 text-yellow-700",
+  paused: "bg-gray-100 text-gray-600",
+  unpaid: "bg-red-100 text-red-600",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  active: "Activa",
+  trialing: "Activa",
+  draft: "Borrador",
+  paused: "Pausada",
+  unpaid: "Impaga",
+};
+
 function toNumber(value: string, fallback = 0) {
   const parsed = Number(value);
-  if (Number.isFinite(parsed)) {
-    return parsed;
-  }
-  return fallback;
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function mapFormStateFromResponse(response: ShopResponse): ShopSettingsFormState {
@@ -77,21 +102,6 @@ function mapFormStateFromResponse(response: ShopResponse): ShopSettingsFormState
   };
 }
 
-function getStatusLabel(status: VendorShopStatus | null | undefined) {
-  if (!status) {
-    return "No configurado";
-  }
-
-  const labels: Record<VendorShopStatus, string> = {
-    draft: "Borrador",
-    active: "Activa",
-    paused: "Pausada",
-    unpaid: "Impaga",
-  };
-
-  return labels[status];
-}
-
 function createDefaultPolicyDraft() {
   return {
     title: "",
@@ -103,23 +113,12 @@ function createDefaultPolicyDraft() {
 
 function mapCompletionBadge(status: VendorPolicyCompletion[PolicyType]) {
   if (status === "completed") {
-    return {
-      label: "Completada",
-      className: "bg-[var(--color-brand)] text-[var(--color-white)]",
-    };
+    return { label: "Completa", className: "bg-green-100 text-green-700" };
   }
-
   if (status === "recommended") {
-    return {
-      label: "Recomendada",
-      className: "bg-[var(--color-gray)] text-[var(--color-carbon)]",
-    };
+    return { label: "Recomendada", className: "bg-gray-100 text-gray-600" };
   }
-
-  return {
-    label: "Falta para publicar",
-    className: "bg-[var(--color-danger)] text-[var(--color-white)]",
-  };
+  return { label: "Requerida", className: "bg-red-100 text-red-600" };
 }
 
 function getDraftFromPolicy(input: {
@@ -137,19 +136,50 @@ function getDraftFromPolicy(input: {
       accepted: false,
     } satisfies PolicyDraftState;
   }
-
   const firstTemplate = templatesByType.get(policyType)?.[0];
-  if (!firstTemplate) {
-    return createDefaultPolicyDraft();
-  }
-
+  if (!firstTemplate) return createDefaultPolicyDraft();
   return {
     title: firstTemplate.title,
-    body: firstTemplate.bodyTemplate,
+    body: firstTemplate.bodyTemplate.replace(/\\n/g, "\n"),
     templateId: firstTemplate.id,
     accepted: false,
   } satisfies PolicyDraftState;
 }
+
+// ─── Section wrapper ────────────────────────────────────────────────────────
+
+type SectionIconComponent = (props: ComponentPropsWithoutRef<"svg">) => ReactNode;
+
+function Section({
+  label,
+  description,
+  Icon,
+  children,
+}: {
+  label: string;
+  description: string;
+  Icon: SectionIconComponent;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-[28px] border border-[var(--color-gray)] bg-white p-5 shadow-[0_8px_24px_var(--shadow-black-003)]">
+      <div className="mb-5 flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-carbon)] text-white">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-[var(--color-carbon)]">{label}</h2>
+          <p className="mt-1 max-w-[52ch] text-sm leading-5 text-[var(--color-gray-500)]">
+            {description}
+          </p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
 
 export function VendorShopSettingsClient() {
   const [statusData, setStatusData] = useState<ShopResponse | null>(null);
@@ -165,10 +195,13 @@ export function VendorShopSettingsClient() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [isPublishingPolicy, setIsPublishingPolicy] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const templatesByType = useMemo(() => {
     return policyTemplates.reduce((map, template) => {
@@ -187,7 +220,6 @@ export function VendorShopSettingsClient() {
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage(null);
-
     try {
       const [shopResponse, templatesResponse, policiesResponse] = await Promise.all([
         fetchVendorShopSettings(),
@@ -207,45 +239,24 @@ export function VendorShopSettingsClient() {
       }, new Map<PolicyType, PolicyTemplate[]>());
 
       setPolicyDrafts({
-        terms: getDraftFromPolicy({
-          policyType: "terms",
-          policies: policiesResponse,
-          templatesByType: templateMap,
-        }),
-        shipping: getDraftFromPolicy({
-          policyType: "shipping",
-          policies: policiesResponse,
-          templatesByType: templateMap,
-        }),
-        refund: getDraftFromPolicy({
-          policyType: "refund",
-          policies: policiesResponse,
-          templatesByType: templateMap,
-        }),
-        privacy: getDraftFromPolicy({
-          policyType: "privacy",
-          policies: policiesResponse,
-          templatesByType: templateMap,
-        }),
+        terms: getDraftFromPolicy({ policyType: "terms", policies: policiesResponse, templatesByType: templateMap }),
+        shipping: getDraftFromPolicy({ policyType: "shipping", policies: policiesResponse, templatesByType: templateMap }),
+        refund: getDraftFromPolicy({ policyType: "refund", policies: policiesResponse, templatesByType: templateMap }),
+        privacy: getDraftFromPolicy({ policyType: "privacy", policies: policiesResponse, templatesByType: templateMap }),
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo cargar configuracion.";
-      setErrorMessage(message);
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo cargar configuración.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    void loadSettings();
-  }, [loadSettings]);
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
-
     try {
       const response = await updateVendorShopSettings({
         vendorName: formState.vendorName,
@@ -256,21 +267,12 @@ export function VendorShopSettingsClient() {
         offersPickup: formState.offersPickup,
         athMovilPhone: formState.athMovilPhone.trim() || null,
       });
-
       setStatusData((current) =>
-        current
-          ? {
-              ...current,
-              shop: response.shop,
-              checks: response.checks,
-            }
-          : current,
+        current ? { ...current, shop: response.shop, checks: response.checks } : current,
       );
-      setFeedbackMessage("Configuracion guardada.");
+      setFeedbackMessage("Cambios guardados.");
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo guardar la tienda.";
-      setErrorMessage(message);
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo guardar la tienda.");
     } finally {
       setIsSaving(false);
     }
@@ -280,44 +282,47 @@ export function VendorShopSettingsClient() {
     setIsSaving(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
-
     try {
       const response = await updateVendorShopSettings({ status: nextStatus });
       setStatusData((current) =>
-        current
-          ? {
-              ...current,
-              shop: response.shop,
-              checks: response.checks,
-            }
-          : current,
+        current ? { ...current, shop: response.shop, checks: response.checks } : current,
       );
-      setFeedbackMessage("Estado de tienda actualizado.");
+      setFeedbackMessage("Estado actualizado.");
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo actualizar estado.";
-      setErrorMessage(message);
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo actualizar estado.");
     } finally {
       setIsSaving(false);
     }
   }, []);
 
+  const handlePublishShop = useCallback(async () => {
+    setIsPublishing(true);
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+    try {
+      const result = await publishVendorShop();
+      if (result.published) {
+        await loadSettings();
+        setFeedbackMessage("¡Tienda publicada!");
+      } else {
+        setErrorMessage("No se puede publicar: " + result.blockingReasons.join(", "));
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo publicar la tienda.");
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [loadSettings]);
+
   const handleUploadLogo = useCallback(async (file: File) => {
     setIsUploadingLogo(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
-
     try {
       const result = await uploadVendorImage(file);
-      setFormState((current) => ({
-        ...current,
-        logoUrl: result.url,
-      }));
-      setFeedbackMessage("Logo subido correctamente.");
+      setFormState((current) => ({ ...current, logoUrl: result.url }));
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo subir el logo.";
-      setErrorMessage(message);
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo subir el logo.");
     } finally {
       setIsUploadingLogo(false);
     }
@@ -325,21 +330,15 @@ export function VendorShopSettingsClient() {
 
   const handleApplyTemplate = useCallback(() => {
     const draft = policyDrafts[selectedPolicyType];
-    if (!draft.templateId) {
-      return;
-    }
-
+    if (!draft.templateId) return;
     const template = activeTemplates.find((item) => item.id === draft.templateId);
-    if (!template) {
-      return;
-    }
-
+    if (!template) return;
     setPolicyDrafts((current) => ({
       ...current,
       [selectedPolicyType]: {
         ...current[selectedPolicyType],
         title: template.title,
-        body: template.bodyTemplate,
+        body: template.bodyTemplate.replace(/\\n/g, "\n"),
         accepted: false,
       },
     }));
@@ -347,11 +346,9 @@ export function VendorShopSettingsClient() {
 
   const handlePublishPolicy = useCallback(async () => {
     const draft = policyDrafts[selectedPolicyType];
-
     setIsPublishingPolicy(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
-
     try {
       const response = await publishVendorShopPolicy(selectedPolicyType, {
         title: draft.title,
@@ -361,278 +358,291 @@ export function VendorShopSettingsClient() {
         acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
         accepted: draft.accepted,
       });
-
       setPolicyData(response);
       setPolicyDrafts((current) => ({
         ...current,
-        [selectedPolicyType]: {
-          ...current[selectedPolicyType],
-          accepted: false,
-        },
+        [selectedPolicyType]: { ...current[selectedPolicyType], accepted: false },
       }));
-
       setFeedbackMessage(
         response.acceptancePending
-          ? "Politica publicada. Completa Terminos y Politica de envio para finalizar la aceptacion legal."
-          : "Politica publicada y aceptacion legal registrada.",
+          ? "Política guardada. Completa Términos y Política de envío para finalizar la aceptación."
+          : "Política publicada.",
       );
       await loadSettings();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo publicar la politica.";
-      setErrorMessage(message);
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo publicar la política.");
     } finally {
       setIsPublishingPolicy(false);
     }
   }, [loadSettings, policyDrafts, selectedPolicyType]);
 
+  const shopStatus = statusData?.shop?.status;
+  const isActive = shopStatus === "active";
+  const blockingReasons = statusData?.checks.blockingReasons ?? [];
+
   return (
     <VendorPageShell
-      title="Ajustes de tienda"
-      subtitle="Branding, envio, politicas y estado de publicacion."
+      title="Configuración de tienda"
+      subtitle="Organiza la información pública de tu negocio, tus métodos de pago y los requisitos para publicar."
     >
-      {feedbackMessage ? (
-        <article className="rounded-2xl border border-[var(--color-brand)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-brand)]">
+      {/* Feedback / error banners */}
+      {feedbackMessage && (
+        <p className="rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
           {feedbackMessage}
-        </article>
-      ) : null}
-      {errorMessage ? (
-        <article className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-danger)]">
-          {errorMessage}
-        </article>
-      ) : null}
+        </p>
+      )}
+      {errorMessage && (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{errorMessage}</p>
+      )}
 
       {isLoading ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <p className="text-sm text-[var(--color-gray-500)]">Cargando configuracion...</p>
-        </article>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-32 animate-pulse rounded-2xl bg-white" />
+          ))}
+        </div>
       ) : (
         <>
-          <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-[var(--color-gray-500)]">Estado actual</p>
-                <p className="text-sm font-semibold">
-                  {getStatusLabel(statusData?.shop?.status)}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="rounded-full border border-[var(--color-gray)] px-3 py-1 text-xs font-semibold"
-                  disabled={isSaving}
-                  onClick={() => void handleStatusUpdate("active")}
-                >
-                  Activar
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-[var(--color-gray)] px-3 py-1 text-xs font-semibold"
-                  disabled={isSaving}
-                  onClick={() => void handleStatusUpdate("paused")}
-                >
-                  Pausar
-                </button>
-              </div>
-            </div>
-            {statusData?.checks.blockingReasons.length ? (
-              <ul className="mt-3 space-y-1 text-xs text-[var(--color-danger)]">
-                {statusData.checks.blockingReasons.map((reason) => (
-                  <li key={reason}>• {reason}</li>
-                ))}
-              </ul>
-            ) : null}
-          </article>
-
-          <div className="grid gap-3 md:grid-cols-2 md:items-start">
-            <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Nombre de tienda
-                  </span>
-                  <input
-                    type="text"
-                    value={formState.vendorName}
-                    onChange={(event) =>
-                      setFormState((current) => ({
-                        ...current,
-                        vendorName: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">Slug</span>
-                  <input
-                    type="text"
-                    value={formState.slug}
-                    onChange={(event) =>
-                      setFormState((current) => ({
-                        ...current,
-                        slug: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Descripcion
-                  </span>
-                  <textarea
-                    value={formState.description}
-                    onChange={(event) =>
-                      setFormState((current) => ({
-                        ...current,
-                        description: event.target.value,
-                      }))
-                    }
-                    className="mt-1 min-h-24 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Logo de tienda
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={isUploadingLogo}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.currentTarget.value = "";
-                      if (file) {
-                        void handleUploadLogo(file);
-                      }
-                    }}
-                    className="mt-1 block w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-                  />
-                  {isUploadingLogo ? (
-                    <p className="mt-1 text-xs text-[var(--color-gray-500)]">Subiendo logo...</p>
-                  ) : null}
-                  {formState.logoUrl ? (
-                    <Image
-                      src={formState.logoUrl}
-                      alt="Vista previa del logo"
-                      width={64}
-                      height={64}
-                      unoptimized
-                      className="mt-2 h-16 w-16 rounded-full border border-[var(--color-gray)] object-cover"
-                    />
-                  ) : null}
-                </label>
-              </div>
-            </article>
-
-            <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Tarifa fija de envio (USD)
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={formState.shippingFlatFeeUsd}
-                    onChange={(event) =>
-                      setFormState((current) => ({
-                        ...current,
-                        shippingFlatFeeUsd: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={formState.offersPickup}
-                    onChange={(event) =>
-                      setFormState((current) => ({
-                        ...current,
-                        offersPickup: event.target.checked,
-                      }))
-                    }
-                  />
-                  Ofrecer recogido en persona
-                </label>
-
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Número de ATH Móvil Business
-                  </span>
-                  <input
-                    type="tel"
-                    value={formState.athMovilPhone}
-                    placeholder="787-555-0100"
-                    onChange={(event) =>
-                      setFormState((current) => ({
-                        ...current,
-                        athMovilPhone: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-                  />
-                  <span className="mt-0.5 block text-[11px] text-[var(--color-gray-500)]">
-                    Deja en blanco si no usas ATH Móvil.
-                  </span>
-                </label>
-
-                <div className="rounded-2xl bg-[var(--color-gray)] px-3 py-2 text-xs text-[var(--color-carbon)]">
-                  <p className="font-semibold">Educacion rapida</p>
-                  <p className="mt-1">
-                    Evita texto ambiguo: define tiempos de envio, condiciones de devolucion y
-                    responsabilidades del vendedor claramente.
-                  </p>
-                </div>
-              </div>
+          {/* ── Información de tienda ── */}
+          <div className="rounded-[28px] border border-[var(--color-gray)] bg-white p-5 shadow-[0_8px_24px_var(--shadow-black-003)]">
+            {/* Logo upload — square tap-to-replace thumbnail */}
+            <div className="mb-4 flex items-center gap-4">
               <button
                 type="button"
-                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-                disabled={isSaving}
-                onClick={() => void handleSave()}
+                disabled={isUploadingLogo}
+                onClick={() => logoInputRef.current?.click()}
+                className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--color-gray-100)] text-[var(--color-gray-500)] transition hover:opacity-80"
               >
-                {isSaving ? "Guardando..." : "Guardar cambios"}
+                {formState.logoUrl ? (
+                  <Image
+                    src={formState.logoUrl}
+                    alt="Logo"
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                ) : (
+                  <ImageIcon className="h-7 w-7" />
+                )}
+                {isUploadingLogo && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  </div>
+                )}
               </button>
-            </article>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.currentTarget.value = "";
+                  if (file) void handleUploadLogo(file);
+                }}
+              />
+              <div>
+                <p className="text-sm font-semibold text-[var(--color-carbon)]">Logo de tienda</p>
+                <p className="mt-0.5 text-sm leading-5 text-[var(--color-gray-500)]">
+                  Toca para {formState.logoUrl ? "cambiar" : "subir"} una imagen cuadrada con buena resolución.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                  Nombre de tienda
+                </span>
+                <input
+                  type="text"
+                  value={formState.vendorName}
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, vendorName: e.target.value }))
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
+                  Este nombre aparece como el título principal de tu tienda.
+                </p>
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">URL</span>
+                <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">mitiendita.pr/</p>
+                <input
+                  type="text"
+                  value={formState.slug}
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, slug: e.target.value }))
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
+                  Usa un nombre corto y fácil de recordar para compartir tu enlace.
+                </p>
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                  Descripción
+                </span>
+                <textarea
+                  value={formState.description}
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, description: e.target.value }))
+                  }
+                  rows={3}
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
+                  Escribe una descripción breve, clara y fácil de leer desde el celular.
+                </p>
+              </label>
+            </div>
           </div>
 
-          <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-            <h2 className="text-base font-bold">Wizard de politicas y terminos</h2>
-            <p className="mt-1 text-xs text-[var(--color-gray-500)]">
-              Completa Terminos + Politica de envio para publicar. Reembolso y privacidad son
-              recomendadas.
+          {/* ── Envíos y recogida ── */}
+          <Section
+            label="Envíos y recogida"
+            description="Configura el costo base de envío y si ofreces recogido en persona."
+            Icon={TruckIcon}
+          >
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                  Tarifa fija de envío (USD)
+                </span>
+                <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">$</p>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={formState.shippingFlatFeeUsd}
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, shippingFlatFeeUsd: e.target.value }))
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
+                  Este monto se muestra en el checkout como costo base de envío.
+                </p>
+              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={formState.offersPickup}
+                onClick={() =>
+                  setFormState((s) => ({ ...s, offersPickup: !s.offersPickup }))
+                }
+                className="flex w-full items-start justify-between gap-4 rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-4 py-4 text-left"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[var(--color-carbon)]">
+                    Ofrecer recogido en persona
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-[var(--color-gray-500)]">
+                    Actívalo si permites coordinar entrega o pickup directamente con el cliente.
+                  </span>
+                </span>
+                <span
+                  className={[
+                    "mt-0.5 flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors",
+                    formState.offersPickup
+                      ? "bg-[var(--color-brand)]"
+                      : "bg-[var(--color-gray-200,#e5e7eb)]",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "h-5 w-5 rounded-full bg-white shadow transition-transform",
+                      formState.offersPickup ? "translate-x-5" : "translate-x-0",
+                    ].join(" ")}
+                  />
+                </span>
+              </button>
+            </div>
+          </Section>
+
+          {/* ── Métodos de pago ── */}
+          <Section
+            label="Métodos de pago"
+            description="Añade la información de cobro que quieres mostrar dentro de tu tienda."
+            Icon={AthMovilIcon}
+          >
+            <label className="block">
+              <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                Número ATH Móvil
+              </span>
+              <input
+                type="tel"
+                value={formState.athMovilPhone}
+                placeholder="787-555-0100"
+                onChange={(e) =>
+                  setFormState((s) => ({ ...s, athMovilPhone: e.target.value }))
+                }
+                className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+              />
+              <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
+                Déjalo en blanco si no usas ATH Móvil. Cuando lo añadas, tus clientes lo verán en la tienda.
+              </p>
+            </label>
+
+            {/* Save button for settings sections */}
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => void handleSave()}
+              className="mt-4 w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
+            >
+              {isSaving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </Section>
+
+          {/* ── Políticas ── */}
+          <Section
+            label="Políticas"
+            description="Publica textos claros para tu tienda. Términos y Política de envío son obligatorios para publicar."
+            Icon={DocumentIcon}
+          >
+            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] p-3">
+              <DocumentIcon className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-carbon)]" />
+              <div>
+                <p className="text-sm font-semibold text-[var(--color-carbon)]">
+                  Mejora la lectura del texto legal
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--color-gray-500)]">
+                  Usa párrafos cortos y saltos de línea entre secciones para que el contenido se lea bien en móvil.
+                </p>
+              </div>
+            </div>
+
+            <p className="mb-3 text-sm leading-5 text-[var(--color-gray-500)]">
+              Reembolso y privacidad siguen siendo recomendadas para dar más confianza a tus clientes.
             </p>
 
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {/* Policy type selector pills */}
+            <div className="mb-4 flex flex-wrap gap-1.5">
               {POLICY_TYPES.map((policyType) => {
                 const completion = policyData?.completion[policyType] ?? "recommended";
                 const badge = mapCompletionBadge(completion);
+                const isSelected = selectedPolicyType === policyType;
                 return (
                   <button
                     key={policyType}
                     type="button"
                     onClick={() => setSelectedPolicyType(policyType)}
                     className={[
-                      "flex items-center justify-between rounded-2xl border px-3 py-2 text-left text-sm",
-                      selectedPolicyType === policyType
-                        ? "border-[var(--color-brand)]"
-                        : "border-[var(--color-gray)]",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
+                      "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                      isSelected
+                        ? "bg-[var(--color-carbon)] text-white"
+                        : "bg-[var(--color-gray-100,#f3f4f6)] text-[var(--color-carbon)]",
+                    ].join(" ")}
                   >
-                    <span>{POLICY_TYPE_LABELS[policyType]}</span>
+                    {POLICY_TYPE_LABELS[policyType]}
                     <span
                       className={[
-                        "rounded-full px-2 py-1 text-[10px] font-semibold",
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
                         badge.className,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
+                      ].join(" ")}
                     >
                       {badge.label}
                     </span>
@@ -641,146 +651,203 @@ export function VendorShopSettingsClient() {
               })}
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Paso A: Plantilla
-                  </span>
-                  <select
-                    value={activePolicyDraft.templateId ?? ""}
-                    onChange={(event) =>
-                      setPolicyDrafts((current) => ({
-                        ...current,
-                        [selectedPolicyType]: {
-                          ...current[selectedPolicyType],
-                          templateId: event.target.value || null,
-                          accepted: false,
-                        },
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+            <div className="space-y-3">
+              {/* Template selector */}
+              {activeTemplates.length > 0 && (
+                <div className="flex items-end gap-2">
+                  <label className="block flex-1">
+                    <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                      Plantilla
+                    </span>
+                    <select
+                      value={activePolicyDraft.templateId ?? ""}
+                      onChange={(e) =>
+                        setPolicyDrafts((current) => ({
+                          ...current,
+                          [selectedPolicyType]: {
+                            ...current[selectedPolicyType],
+                            templateId: e.target.value || null,
+                            accepted: false,
+                          },
+                        }))
+                      }
+                      className="mt-1.5 w-full appearance-none rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236d6d6d%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[position:right_16px_center] bg-no-repeat px-4 py-3 pr-10 text-sm outline-none"
+                    >
+                      <option value="">Seleccionar plantilla</option>
+                      {activeTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.title} (v{template.version})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleApplyTemplate}
+                    className="mb-0.5 shrink-0 rounded-full border border-[var(--color-gray-200,#e5e7eb)] px-3 py-3 text-xs font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)]"
                   >
-                    <option value="">Selecciona una plantilla</option>
-                    {activeTemplates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.title} (v{template.version})
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    Aplicar
+                  </button>
+                </div>
+              )}
 
-                <button
-                  type="button"
-                  className="rounded-full border border-[var(--color-gray)] px-3 py-1 text-xs font-semibold"
-                  onClick={handleApplyTemplate}
-                >
-                  Aplicar plantilla
-                </button>
+              {/* Title */}
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">Título</span>
+                <input
+                  type="text"
+                  value={activePolicyDraft.title}
+                  onChange={(e) =>
+                    setPolicyDrafts((current) => ({
+                      ...current,
+                      [selectedPolicyType]: {
+                        ...current[selectedPolicyType],
+                        title: e.target.value,
+                        accepted: false,
+                      },
+                    }))
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+              </label>
 
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Paso B: Titulo
-                  </span>
-                  <input
-                    type="text"
-                    value={activePolicyDraft.title}
-                    onChange={(event) =>
-                      setPolicyDrafts((current) => ({
-                        ...current,
-                        [selectedPolicyType]: {
-                          ...current[selectedPolicyType],
-                          title: event.target.value,
-                          accepted: false,
-                        },
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-                  />
-                </label>
+              {/* Body */}
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                  Texto legal
+                </span>
+                <textarea
+                  value={activePolicyDraft.body}
+                  onChange={(e) =>
+                    setPolicyDrafts((current) => ({
+                      ...current,
+                      [selectedPolicyType]: {
+                        ...current[selectedPolicyType],
+                        body: e.target.value,
+                        accepted: false,
+                      },
+                    }))
+                  }
+                  rows={9}
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
+                  Mantén títulos, párrafos y condiciones en bloques separados para mejorar la lectura.
+                </p>
+              </label>
 
-                <label className="block">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Paso B: Texto legal editable
-                  </span>
-                  <textarea
-                    value={activePolicyDraft.body}
-                    onChange={(event) =>
-                      setPolicyDrafts((current) => ({
-                        ...current,
-                        [selectedPolicyType]: {
-                          ...current[selectedPolicyType],
-                          body: event.target.value,
-                          accepted: false,
-                        },
-                      }))
-                    }
-                    className="mt-1 min-h-[210px] w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-                  />
-                </label>
+              {/* Legal acceptance checkbox */}
+              <label className="flex items-start gap-2.5 rounded-2xl bg-[var(--color-gray-100,#f3f4f6)] p-3 text-sm text-[var(--color-carbon)]">
+                <input
+                  type="checkbox"
+                  checked={activePolicyDraft.accepted}
+                  onChange={(e) =>
+                    setPolicyDrafts((current) => ({
+                      ...current,
+                      [selectedPolicyType]: {
+                        ...current[selectedPolicyType],
+                        accepted: e.target.checked,
+                      },
+                    }))
+                  }
+                  className="mt-0.5 shrink-0"
+                />
+                <span className="leading-5">
+                  Confirmo que esta política es precisa y cumple con las leyes aplicables a mi negocio.
+                </span>
+              </label>
 
-                <label className="flex items-start gap-2 rounded-2xl bg-[var(--color-gray)] px-3 py-3 text-xs text-[var(--color-carbon)]">
-                  <input
-                    type="checkbox"
-                    checked={activePolicyDraft.accepted}
-                    onChange={(event) =>
-                      setPolicyDrafts((current) => ({
-                        ...current,
-                        [selectedPolicyType]: {
-                          ...current[selectedPolicyType],
-                          accepted: event.target.checked,
-                        },
-                      }))
-                    }
-                    className="mt-0.5"
-                  />
-                  <span>
-                    Paso D: Confirmo que esta politica es precisa y cumple con las leyes
-                    aplicables a mi negocio.
-                  </span>
-                </label>
+              <button
+                type="button"
+                disabled={isPublishingPolicy}
+                onClick={() => void handlePublishPolicy()}
+                className="w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
+              >
+                {isPublishingPolicy ? "Guardando..." : `Publicar ${POLICY_TYPE_LABELS[selectedPolicyType]}`}
+              </button>
 
-                <button
-                  type="button"
-                  disabled={isPublishingPolicy}
-                  onClick={() => void handlePublishPolicy()}
-                  className="w-full rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)] disabled:opacity-70"
-                >
-                  {isPublishingPolicy ? "Publicando..." : "Publicar version de politica"}
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3">
-                  <p className="text-xs font-semibold text-[var(--color-gray-500)]">
-                    Paso C: Vista previa para compradores
-                  </p>
-                  <h3 className="mt-2 text-sm font-bold text-[var(--color-carbon)]">
-                    {activePolicyDraft.title || POLICY_TYPE_LABELS[selectedPolicyType]}
-                  </h3>
-                  <p className="mt-2 whitespace-pre-line text-xs leading-5 text-[var(--color-carbon)]">
-                    {activePolicyDraft.body || "Sin contenido."}
+              {/* Latest acceptance record */}
+              {policyData?.latestAcceptance && (
+                <div className="flex items-center gap-2 text-xs text-[var(--color-gray-500)]">
+                  <CheckIcon className="h-4 w-4 text-[var(--color-carbon)]" />
+                  <p>
+                    Última aceptación:{" "}
+                    {new Date(policyData.latestAcceptance.acceptedAt).toLocaleString("es-PR")}
                   </p>
                 </div>
-
-                {policyData?.latestAcceptance ? (
-                  <div className="rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3 text-xs text-[var(--color-carbon)]">
-                    <p className="font-semibold">Ultima aceptacion legal</p>
-                    <p className="mt-1">
-                      {new Date(policyData.latestAcceptance.acceptedAt).toLocaleString("es-PR")}
-                    </p>
-                    <p className="mt-1">
-                      Alcance: {policyData.latestAcceptance.acceptanceScope}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3 text-xs text-[var(--color-carbon)]">
-                    Aun no hay aceptacion legal registrada para esta tienda.
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-          </article>
+          </Section>
+
+          {/* ── Estado de tienda ── */}
+          <Section
+            label="Estado de tienda"
+            description="Revisa si tu tienda está lista para publicarse o si necesitas completar algún requisito."
+            Icon={SettingsIcon}
+          >
+            {/* Current status badge */}
+            <div className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[var(--color-carbon)]">
+                  <StoreIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--color-carbon)]">Estado actual</p>
+                  <p className="text-xs leading-5 text-[var(--color-gray-500)]">
+                    Controla cuándo tu tienda está visible para compradores.
+                  </p>
+                </div>
+              </div>
+              <span
+                className={[
+                  "rounded-full px-3 py-1 text-sm font-semibold",
+                  STATUS_BADGE_STYLE[shopStatus ?? ""] ?? "bg-gray-100 text-gray-600",
+                ].join(" ")}
+              >
+                {STATUS_LABELS[shopStatus ?? ""] ?? shopStatus ?? "—"}
+              </span>
+            </div>
+
+            {/* Blocking reasons checklist */}
+            {blockingReasons.length > 0 && (
+              <div className="mb-4 rounded-2xl bg-red-50 p-4">
+                <p className="mb-2 text-sm font-semibold text-red-700">
+                  Requerido para publicar:
+                </p>
+                <ul className="space-y-2">
+                  {blockingReasons.map((reason) => (
+                    <li key={reason} className="flex items-start gap-2 text-sm leading-5 text-red-600">
+                      <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {!isActive ? (
+                <button
+                  type="button"
+                  disabled={isPublishing || isSaving || blockingReasons.length > 0}
+                  onClick={() => void handlePublishShop()}
+                  className="flex-1 rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
+                >
+                  {isPublishing ? "Publicando..." : "Publicar tienda"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => void handleStatusUpdate("paused")}
+                  className="flex-1 rounded-full border border-[var(--color-gray-200,#e5e7eb)] py-3 text-sm font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)] disabled:opacity-60"
+                >
+                  Pausar tienda
+                </button>
+              )}
+            </div>
+          </Section>
         </>
       )}
     </VendorPageShell>

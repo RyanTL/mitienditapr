@@ -8,6 +8,10 @@ import {
   verifyStripeWebhookSignature,
 } from "@/lib/vendor/stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import {
+  ensureVendorOnboardingRecord,
+  upsertVendorOnboardingStep,
+} from "@/lib/supabase/vendor-server";
 
 type VendorSubscriptionRow = {
   id: string;
@@ -276,6 +280,7 @@ async function handleCheckoutSessionCompleted(
   const subscriptionId =
     typeof session.subscription === "string" ? session.subscription : null;
   const shopId = session.metadata?.shop_id;
+  const vendorProfileId = session.metadata?.vendor_profile_id;
 
   const admin = createSupabaseAdminClient();
   if (shopId) {
@@ -294,6 +299,18 @@ async function handleCheckoutSessionCompleted(
 
     if (error) {
       throw new Error(error.message);
+    }
+
+    // Mark onboarding as completed so the vendor can access the dashboard.
+    if (vendorProfileId) {
+      const onboarding = await ensureVendorOnboardingRecord(admin, vendorProfileId);
+      await upsertVendorOnboardingStep(
+        admin,
+        vendorProfileId,
+        "completed",
+        Math.max(onboarding.current_step, 2),
+        onboarding.data_json,
+      );
     }
   }
 }

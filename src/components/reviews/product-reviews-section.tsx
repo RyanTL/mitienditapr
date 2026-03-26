@@ -268,7 +268,7 @@ export function ProductReviewsSection({
           <p className="text-sm text-[var(--color-gray-500)]">Cargando reviews...</p>
         ) : reviewsData && reviewsData.reviews.length === 0 ? (
           <p className="text-sm text-[var(--color-gray-500)]">
-            Aun no hay reviews para este producto.
+            Aún no hay reviews para este producto.
           </p>
         ) : (
           <div className="space-y-3">

@@ -154,7 +154,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         {/* Description + Reviews — full width below the image/info grid */}
         <section className="mt-8">
-          <h2 className="text-2xl font-bold text-[var(--color-carbon)]">Descripcion</h2>
+          <h2 className="text-2xl font-bold text-[var(--color-carbon)]">Descripción</h2>
           <p className="mt-2 text-sm text-[var(--color-carbon)]">{product.description}</p>
 
           <ProductReviewsSection

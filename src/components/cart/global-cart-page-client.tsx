@@ -309,7 +309,7 @@ export function GlobalCartPageClient() {
                   </p>
                 </div>
                 <p className="mt-3 text-xs text-[var(--color-gray-500)]">
-                  Los impuestos y el envio se calculan al finalizar la compra.
+                  Los impuestos y el envío se calculan al finalizar la compra.
                 </p>
                 <div className="mt-4">
                   <CheckoutButton />

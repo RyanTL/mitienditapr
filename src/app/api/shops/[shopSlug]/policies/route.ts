@@ -35,7 +35,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "No se pudieron cargar las politicas.";
+      error instanceof Error ? error.message : "No se pudieron cargar las políticas.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

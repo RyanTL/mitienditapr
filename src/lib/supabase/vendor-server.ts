@@ -298,7 +298,7 @@ export async function ensureVendorShopForProfile(
     }
   }
 
-  throw new Error("No se pudo generar un slug unico para la tienda.");
+  throw new Error("No se pudo generar un slug único para la tienda.");
 }
 
 export async function ensureVendorOnboardingRecord(
@@ -492,21 +492,17 @@ export async function getVendorPublishChecks(
   const activeVariantCount = await getActiveVariantCountForShop(supabase, shop.id);
 
   if (!hasRequiredShopFields(shop)) {
-    blockingReasons.push("Completa nombre, slug y descripcion de la tienda.");
+    blockingReasons.push("Completa nombre, slug y descripción de la tienda.");
   }
 
   if (!isVendorBillingBypassEnabled) {
-    if (!shop.stripe_connect_account_id) {
-      blockingReasons.push("Conecta Stripe Express para recibir pagos.");
-    }
-
     if (!canUseSubscriptionForPublishing(subscription)) {
-      blockingReasons.push("Activa la suscripcion mensual de $10.");
+      blockingReasons.push("Activa la suscripción mensual de $10.");
     }
   }
 
   if (isManualCodeExpired(subscription)) {
-    blockingReasons.push("Tu acceso gratuito expiro. Redime un nuevo codigo o activa Stripe.");
+    blockingReasons.push("Tu acceso gratuito expiró. Redime un nuevo código o activa Stripe.");
   }
 
   if (activeVariantCount < 1) {
@@ -533,7 +529,7 @@ export async function getVendorPublishChecks(
 
       if (!hasRequiredAcceptance) {
         blockingReasons.push(
-          "Debes aceptar legalmente Terminos y Politica de envio despues de publicarlas.",
+          "Debes aceptar legalmente Términos y Política de envío después de publicarlas.",
         );
       }
     }

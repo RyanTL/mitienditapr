@@ -191,7 +191,7 @@ export default function HomePage() {
               No encontramos resultados para &ldquo;{filterQuery}&rdquo;.
             </p>
             <p className="mt-1 text-xs text-[var(--color-gray-500)]">
-              Intenta con otro termino.
+              Intenta con otro término.
             </p>
           </section>
         ) : null}
@@ -267,7 +267,7 @@ export default function HomePage() {
 
                 <div className="flex items-center justify-between">
                   <p className="text-[1.75rem] leading-none font-extrabold text-[var(--color-carbon)] md:text-[2rem]">
-                    Ver mas
+                    Ver más
                   </p>
                   <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray-200)] bg-[var(--color-gray-100)] text-[var(--color-carbon)]">
                     <ChevronIcon className="h-5 w-5" />
@@ -294,7 +294,7 @@ export default function HomePage() {
         }
       />
 
-      <FloatingSearchButton onClick={() => setIsSearchOpen(true)} />
+      <FloatingSearchButton onClick={() => setIsSearchOpen(true)} hasCart={!!user} />
       {user ? <FloatingCartLink href="/carrito" resolveFromCart /> : null}
 
       <ProfileMenu

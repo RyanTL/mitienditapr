@@ -242,8 +242,8 @@ export default async function OrdersPage() {
       <main className="mx-auto w-full max-w-md px-4 pt-6 md:max-w-3xl md:px-5 lg:max-w-4xl">
         <header className="mb-8 flex items-center justify-between">
           <div className="w-8" />
-          <h1 className="text-4xl font-semibold tracking-tight text-[var(--color-black)]">Ordenes</h1>
-          <button type="button" className="text-[var(--color-black)]" aria-label="Mas opciones">
+          <h1 className="text-4xl font-semibold tracking-tight text-[var(--color-black)]">Órdenes</h1>
+          <button type="button" className="text-[var(--color-black)]" aria-label="Más opciones">
             <DotsIcon />
           </button>
         </header>
@@ -310,7 +310,7 @@ export default async function OrdersPage() {
 
           {pastOrders.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[var(--color-gray-border)] bg-[var(--color-white)] px-4 py-7 text-sm text-[var(--color-carbon)]">
-              Aun no tienes compras pasadas.
+              Aún no tienes compras pasadas.
             </div>
           ) : (
             <div className="space-y-4">

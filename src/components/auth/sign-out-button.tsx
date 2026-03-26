@@ -24,11 +24,11 @@ export function SignOutButton({ className, onSignedOut }: SignOutButtonProps) {
           router.push("/sign-in");
           router.refresh();
         } catch (error) {
-          console.error("No se pudo cerrar sesion:", error);
+          console.error("No se pudo cerrar sesión:", error);
         }
       }}
     >
-      Cerrar sesion
+      Cerrar sesión
     </button>
   );
 }

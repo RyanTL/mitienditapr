@@ -507,7 +507,7 @@ export async function checkoutCartByShop(
     await cleanupOrderAfterCheckoutFailure(
       profileId,
       orderRow.id,
-      `No se pudo guardar el consentimiento de politicas: ${
+      `No se pudo guardar el consentimiento de políticas: ${
         error instanceof Error ? error.message : "Error desconocido"
       }`,
     );

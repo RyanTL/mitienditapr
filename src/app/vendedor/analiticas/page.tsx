@@ -10,12 +10,12 @@ import {
 } from "@/lib/supabase/vendor-server";
 import { formatUsd } from "@/lib/formatters";
 
-const STATUS_LABELS: Record<string, string> = {
-  new: "Nueva",
-  processing: "Procesando",
-  shipped: "Enviada",
-  delivered: "Entregada",
-  canceled: "Cancelada",
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  new: { label: "Nueva", color: "var(--vendor-status-new)" },
+  processing: { label: "Procesando", color: "var(--vendor-status-processing)" },
+  shipped: { label: "Enviada", color: "var(--vendor-status-shipped)" },
+  delivered: { label: "Entregada", color: "var(--vendor-status-delivered)" },
+  canceled: { label: "Cancelada", color: "var(--vendor-status-canceled)" },
 };
 
 const STATUS_ORDER = ["new", "processing", "shipped", "delivered", "canceled"];
@@ -47,86 +47,102 @@ export default async function VendorAnaliticasPage() {
 
   return (
     <VendorPageShell
-      title="Analiticas"
-      subtitle="Resumen de ventas y productos de tu tienda."
+      title="Analíticas"
+      subtitle="Rendimiento de tu tienda"
     >
-      <div className="grid gap-3 md:grid-cols-2 md:items-start">
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <h2 className="text-base font-bold">Resumen de ventas</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-[var(--color-gray)] p-3">
-              <p className="text-xs text-[var(--color-gray-500)]">Ingresos totales</p>
-              <p className="mt-1 text-sm font-semibold">
-                {formatUsd(analytics.totalRevenueUsd)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[var(--color-gray)] p-3">
-              <p className="text-xs text-[var(--color-gray-500)]">Ordenes completadas</p>
-              <p className="mt-1 text-sm font-semibold">{analytics.orderCount}</p>
-            </div>
-            <div className="rounded-2xl border border-[var(--color-gray)] p-3">
-              <p className="text-xs text-[var(--color-gray-500)]">Promedio por orden</p>
-              <p className="mt-1 text-sm font-semibold">
-                {formatUsd(analytics.avgOrderValueUsd)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[var(--color-gray)] p-3">
-              <p className="text-xs text-[var(--color-gray-500)]">Ultimos 30 dias</p>
-              <p className="mt-1 text-sm font-semibold">
-                {formatUsd(analytics.revenueLastThirtyDaysUsd)}
-              </p>
-            </div>
+      {/* Revenue hero */}
+      <div className="rounded-2xl border border-[var(--vendor-card-border)] bg-white p-5 shadow-[var(--vendor-card-shadow)]">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--vendor-nav-text)]">
+          Ingresos totales
+        </p>
+        <p className="mt-2 font-[family-name:var(--font-mono)] text-4xl font-bold tabular-nums tracking-tight text-[var(--color-carbon)]">
+          {formatUsd(analytics.totalRevenueUsd)}
+        </p>
+        <div className="mt-4 grid grid-cols-3 divide-x divide-[var(--vendor-card-border)] border-t border-[var(--vendor-card-border)] pt-4">
+          <div className="pr-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--vendor-nav-text)]">
+              Órdenes
+            </p>
+            <p className="mt-1 font-[family-name:var(--font-mono)] text-lg font-semibold tabular-nums">
+              {analytics.orderCount}
+            </p>
           </div>
-        </article>
+          <div className="px-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--vendor-nav-text)]">
+              Promedio
+            </p>
+            <p className="mt-1 font-[family-name:var(--font-mono)] text-lg font-semibold tabular-nums">
+              {formatUsd(analytics.avgOrderValueUsd)}
+            </p>
+          </div>
+          <div className="pl-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--vendor-nav-text)]">
+              30 días
+            </p>
+            <p className="mt-1 font-[family-name:var(--font-mono)] text-lg font-semibold tabular-nums">
+              {formatUsd(analytics.revenueLastThirtyDaysUsd)}
+            </p>
+          </div>
+        </div>
+      </div>
 
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <h2 className="text-base font-bold">Ordenes por estado</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+      <div className="grid gap-5 md:grid-cols-2">
+        {/* Orders by status */}
+        <div className="rounded-2xl border border-[var(--vendor-card-border)] bg-white p-5 shadow-[var(--vendor-card-shadow)]">
+          <h2 className="text-sm font-semibold text-[var(--color-carbon)]">Órdenes por estado</h2>
+          <div className="mt-4 space-y-3">
             {STATUS_ORDER.map((status) => {
               const count = analytics.ordersByStatus[status] ?? 0;
+              const config = STATUS_CONFIG[status];
               return (
-                <div key={status} className="rounded-2xl border border-[var(--color-gray)] p-3">
-                  <p className="text-xs text-[var(--color-gray-500)]">
-                    {STATUS_LABELS[status] ?? status}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold">{count}</p>
+                <div key={status} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: config?.color }}
+                    />
+                    <span className="text-sm text-[var(--color-carbon)]">
+                      {config?.label ?? status}
+                    </span>
+                  </div>
+                  <span className="font-[family-name:var(--font-mono)] text-sm font-semibold tabular-nums text-[var(--color-carbon)]">
+                    {count}
+                  </span>
                 </div>
               );
             })}
           </div>
-        </article>
-      </div>
+        </div>
 
-      <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-        <h2 className="text-base font-bold">Top productos</h2>
-        {analytics.topProducts.length === 0 ? (
-          <p className="mt-3 text-sm text-[var(--color-gray-500)]">
-            Aun no hay ventas registradas.
-          </p>
-        ) : (
-          <ol className="mt-3 space-y-2">
-            {analytics.topProducts.map((product, index) => (
-              <li
-                key={product.id}
-                className="flex items-center gap-3 rounded-2xl border border-[var(--color-gray)] p-3"
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-gray)] text-xs font-bold text-[var(--color-gray-500)]">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{product.name}</p>
-                  <p className="text-xs text-[var(--color-gray-500)]">
-                    {product.unitsSold} {product.unitsSold === 1 ? "unidad" : "unidades"} vendidas
-                  </p>
+        {/* Top products */}
+        <div className="rounded-2xl border border-[var(--vendor-card-border)] bg-white p-5 shadow-[var(--vendor-card-shadow)]">
+          <h2 className="text-sm font-semibold text-[var(--color-carbon)]">Top productos</h2>
+          {analytics.topProducts.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--vendor-nav-text)]">
+              Aún no hay ventas registradas.
+            </p>
+          ) : (
+            <div className="mt-4 divide-y divide-[var(--vendor-card-border)]">
+              {analytics.topProducts.map((product, index) => (
+                <div key={product.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--vendor-page-bg)] font-[family-name:var(--font-mono)] text-xs font-semibold text-[var(--vendor-nav-text)]">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-[var(--color-carbon)]">{product.name}</p>
+                    <p className="text-xs text-[var(--vendor-nav-text)]">
+                      {product.unitsSold} {product.unitsSold === 1 ? "unidad" : "unidades"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-[family-name:var(--font-mono)] text-sm font-semibold tabular-nums">
+                    {formatUsd(product.revenueUsd)}
+                  </span>
                 </div>
-                <span className="shrink-0 text-sm font-semibold">
-                  {formatUsd(product.revenueUsd)}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </VendorPageShell>
   );
 }

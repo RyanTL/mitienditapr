@@ -1,39 +1,51 @@
 "use client";
 
-import { useCallback } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-import { BackIcon, HomeIcon } from "@/components/icons";
-import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
-import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
+import { HomeIcon, OrdersIcon, PackageIcon, StoreIcon } from "@/components/icons";
+
+const NAV_TABS = [
+  { href: "/vendedor/panel", label: "Inicio", Icon: HomeIcon },
+  { href: "/vendedor/pedidos", label: "Pedidos", Icon: OrdersIcon },
+  { href: "/vendedor/productos", label: "Productos", Icon: PackageIcon },
+  { href: "/vendedor/tienda", label: "Tienda", Icon: StoreIcon },
+] as const;
+
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function VendorBottomNav() {
-  const router = useRouter();
   const pathname = usePathname();
 
-  const handleGoBack = useCallback(() => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push("/");
-  }, [router]);
-
   return (
-    <TwoItemBottomNav
-      containerClassName={FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS}
-      firstItem={{
-        ariaLabel: "Volver",
-        icon: <BackIcon />,
-        onClick: handleGoBack,
-      }}
-      secondItem={{
-        ariaLabel: "Ir a inicio",
-        icon: <HomeIcon />,
-        href: "/",
-        isActive: pathname === "/",
-      }}
-    />
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--vendor-nav-bg)] backdrop-blur-md md:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div className="absolute inset-x-0 top-0 h-px bg-[var(--vendor-nav-border)]" />
+      <ul className="flex h-[4.25rem] items-stretch">
+        {NAV_TABS.map(({ href, label, Icon }) => {
+          const isActive = isActivePath(pathname, href);
+          return (
+            <li key={href} className="flex flex-1">
+              <Link
+                href={href}
+                className={[
+                  "flex flex-1 flex-col items-center justify-center gap-1 transition-colors",
+                  isActive
+                    ? "text-[var(--vendor-nav-text-active)]"
+                    : "text-[var(--vendor-nav-text)] active:text-[var(--vendor-nav-text-active)]",
+                ].join(" ")}
+              >
+                <Icon className="h-[22px] w-[22px]" />
+                <span className="text-[11px] font-semibold leading-none">{label}</span>
+                {isActive && (
+                  <span className="mt-0.5 h-[3px] w-[3px] rounded-full bg-[var(--vendor-nav-accent)]" />
+                )}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

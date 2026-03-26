@@ -84,7 +84,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    return serverErrorResponse(error, "No se pudieron cargar los codigos.");
+    return serverErrorResponse(error, "No se pudieron cargar los códigos.");
   }
 }
 
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
 
   const label = typeof body.label === "string" ? body.label.trim() : "";
   if (!label) {
-    return badRequestResponse("El label del codigo es requerido.");
+    return badRequestResponse("El label del código es requerido.");
   }
 
   const benefitType: VendorAccessBenefitType =
@@ -159,12 +159,12 @@ export async function POST(request: Request) {
       }
 
       if (error?.code !== "23505") {
-        throw new Error(error?.message ?? "No se pudo crear el codigo.");
+        throw new Error(error?.message ?? "No se pudo crear el código.");
       }
     }
 
-    throw new Error("No se pudo generar un codigo unico. Intenta nuevamente.");
+    throw new Error("No se pudo generar un código único. Intenta nuevamente.");
   } catch (error) {
-    return serverErrorResponse(error, "No se pudo crear el codigo.");
+    return serverErrorResponse(error, "No se pudo crear el código.");
   }
 }

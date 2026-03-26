@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as RedeemCodePayload | null;
   const normalizedCode = normalizeCode(body?.code);
   if (!normalizedCode) {
-    return badRequestResponse("Debes escribir un codigo valido.");
+    return badRequestResponse("Debes escribir un código válido.");
   }
 
   let dataClient = context.supabase;
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       currentSubscription.provider === "stripe" &&
       isActiveSubscriptionStatus(currentSubscription.status)
     ) {
-      return badRequestResponse("Tu tienda ya tiene una suscripcion activa.");
+      return badRequestResponse("Tu tienda ya tiene una suscripción activa.");
     }
 
     const codeHash = hashAccessCode(normalizedCode);
@@ -93,22 +93,22 @@ export async function POST(request: Request) {
 
     const accessCode = (rawCode as VendorAccessCodeRow | null) ?? null;
     if (!accessCode) {
-      return badRequestResponse("Codigo invalido.");
+      return badRequestResponse("Código inválido.");
     }
 
     if (!accessCode.is_active) {
-      return badRequestResponse("Este codigo no esta activo.");
+      return badRequestResponse("Este código no está activo.");
     }
 
     if (isAccessCodeExpired(accessCode.expires_at)) {
-      return badRequestResponse("Este codigo expiro.");
+      return badRequestResponse("Este código expiró.");
     }
 
     if (
       accessCode.max_redemptions !== null &&
       accessCode.redeemed_count >= accessCode.max_redemptions
     ) {
-      return badRequestResponse("Este codigo ya alcanzo su limite de usos.");
+      return badRequestResponse("Este código ya alcanzó su límite de usos.");
     }
 
     const { data: existingRedemption, error: redemptionLookupError } = await dataClient
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
     }
 
     if (!incrementedCode) {
-      return badRequestResponse("Este codigo ya no tiene redenciones disponibles.");
+      return badRequestResponse("Este código ya no tiene redenciones disponibles.");
     }
 
     const periodEnd = calculateManualCodePeriodEnd({
@@ -202,11 +202,11 @@ export async function POST(request: Request) {
     await upsertVendorOnboardingStep(
       dataClient,
       profile.id,
-      onboarding.status,
-      Math.max(onboarding.current_step, 7),
+      "completed",
+      Math.max(onboarding.current_step, 2),
       {
         ...onboarding.data_json,
-        step_6: {
+        step_2: {
           accessCodeRedeemed: true,
           accessCodeLabel: accessCode.label,
           benefitType: accessCode.benefit_type,
@@ -233,6 +233,6 @@ export async function POST(request: Request) {
       snapshot,
     });
   } catch (error) {
-    return serverErrorResponse(error, "No se pudo redimir el codigo.");
+    return serverErrorResponse(error, "No se pudo redimir el código.");
   }
 }

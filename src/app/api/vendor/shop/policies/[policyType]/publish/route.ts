@@ -62,17 +62,17 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const { policyType: rawPolicyType } = await params;
   if (!isPolicyType(rawPolicyType)) {
-    return badRequestResponse("Tipo de politica invalido.");
+    return badRequestResponse("Tipo de política inválido.");
   }
   const policyType: PolicyType = rawPolicyType;
 
   const body = await parseJsonBody<PublishPolicyPayload>(request);
   if (!body || typeof body.body !== "string") {
-    return badRequestResponse("Debes incluir el texto de la politica.");
+    return badRequestResponse("Debes incluir el texto de la política.");
   }
 
   if (body.accepted !== true) {
-    return badRequestResponse("Debes confirmar la aceptacion legal antes de publicar.");
+    return badRequestResponse("Debes confirmar la aceptación legal antes de publicar.");
   }
 
   const normalizedTitle =
@@ -143,6 +143,6 @@ export async function POST(request: Request, { params }: RouteParams) {
       acceptancePending: !requiredIds,
     });
   } catch (error) {
-    return serverErrorResponse(error, "No se pudo publicar la politica.");
+    return serverErrorResponse(error, "No se pudo publicar la política.");
   }
 }

@@ -45,6 +45,23 @@
   --elevation-mid: 0 14px 30px var(--shadow-black-018);
   --elevation-high: 0 22px 54px var(--shadow-black-035);
 
+  /* Vendor dashboard — refined light theme */
+  --vendor-nav-bg: #ffffff;
+  --vendor-nav-border: #f0f0f0;
+  --vendor-nav-text: #8c8c8c;
+  --vendor-nav-text-active: var(--color-carbon);
+  --vendor-nav-accent: var(--color-brand);
+  --vendor-page-bg: #f7f7f8;
+  --vendor-card-border: #ececec;
+  --vendor-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  --vendor-card-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.05);
+  --vendor-metric-positive: #0d9f6e;
+  --vendor-status-new: #3b82f6;
+  --vendor-status-processing: #f59e0b;
+  --vendor-status-shipped: #6366f1;
+  --vendor-status-delivered: #10b981;
+  --vendor-status-canceled: #9ca3af;
+
   color-scheme: light;
   --background: var(--color-white);
   --foreground: var(--color-carbon);

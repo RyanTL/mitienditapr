@@ -14,10 +14,10 @@ export function VendorShopShareAction() {
       <button
         type="button"
         onClick={() => setIsSharePopupOpen(true)}
-        className="inline-flex items-center gap-2 rounded-2xl border border-[var(--color-gray)] px-3 py-2 text-sm font-semibold text-[var(--color-carbon)]"
+        className="inline-flex items-center gap-2 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 active:scale-95"
       >
         <ShareIcon className="h-4 w-4" />
-        Compartir mi tienda
+        Compartir
       </button>
 
       <ShopSharePopup

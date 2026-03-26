@@ -107,7 +107,7 @@ export async function GET() {
       ]);
 
     if (ordersError || !orderRows) {
-      throw new Error(ordersError?.message ?? "No se pudieron cargar ordenes.");
+      throw new Error(ordersError?.message ?? "No se pudieron cargar órdenes.");
     }
 
     if (productNameError || !productNameRows) {
@@ -167,6 +167,6 @@ export async function GET() {
 
     return NextResponse.json({ orders: serializedOrders });
   } catch (error) {
-    return serverErrorResponse(error, "No se pudieron cargar tus ordenes.");
+    return serverErrorResponse(error, "No se pudieron cargar tus órdenes.");
   }
 }

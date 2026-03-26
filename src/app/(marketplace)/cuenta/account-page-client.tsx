@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
+import { EyeIcon, EyeOffIcon } from "@/components/icons";
 import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
 import {
   changeAccountPassword,
@@ -17,15 +19,75 @@ type AccountPageClientProps = {
   initialAddress: string;
 };
 
-type FieldState = {
-  fullName: string;
-  email: string;
-  phone: string;
-  address: string;
-};
+function getUserInitial(name: string, email: string): string {
+  const trimmed = name.trim();
+  if (trimmed.length > 0) return trimmed[0].toUpperCase();
+  const local = email.split("@")[0];
+  return local.length > 0 ? local[0].toUpperCase() : "?";
+}
 
-function normalizeEmail(value: string) {
-  return value.trim().toLowerCase();
+const inputClass =
+  "w-full rounded-2xl bg-[var(--color-gray-100)] px-4 py-3 text-sm text-[var(--color-carbon)] outline-none border-2 border-transparent transition-colors placeholder:text-[var(--color-gray-500)] focus:border-[var(--color-brand)] focus:bg-white";
+
+const textareaClass =
+  "w-full resize-none rounded-2xl bg-[var(--color-gray-100)] px-4 py-3 text-sm text-[var(--color-carbon)] outline-none border-2 border-transparent transition-colors placeholder:text-[var(--color-gray-500)] focus:border-[var(--color-brand)] focus:bg-white";
+
+function FieldLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
+  return (
+    <label htmlFor={htmlFor} className="block text-xs font-semibold text-[var(--color-gray-500)] mb-1.5">
+      {children}
+    </label>
+  );
+}
+
+function PasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  minLength,
+  required,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  minLength?: number;
+  required?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <div className="relative">
+        <input
+          id={id}
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          minLength={minLength}
+          required={required}
+          className={inputClass + " pr-11"}
+        />
+        <button
+          type="button"
+          aria-label={visible ? "Ocultar" : "Mostrar"}
+          onClick={() => setVisible((v) => !v)}
+          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--color-gray-500)] hover:text-[var(--color-carbon)] transition-colors"
+        >
+          {visible ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Feedback({ error, success }: { error: string | null; success: string | null }) {
+  if (error)
+    return <p className="rounded-2xl bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>;
+  if (success)
+    return <p className="rounded-2xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{success}</p>;
+  return null;
 }
 
 export function AccountPageClient({
@@ -34,13 +96,12 @@ export function AccountPageClient({
   initialPhone,
   initialAddress,
 }: AccountPageClientProps) {
-  const [fields, setFields] = useState<FieldState>({
-    fullName: initialFullName,
-    email: initialEmail,
-    phone: initialPhone,
-    address: initialAddress,
-  });
+  const [fullName, setFullName] = useState(initialFullName);
+  const [email, setEmail] = useState(initialEmail);
+  const [phone, setPhone] = useState(initialPhone);
+  const [address, setAddress] = useState(initialAddress);
   const [currentAuthEmail, setCurrentAuthEmail] = useState(initialEmail);
+
   const [isSavingInfo, setIsSavingInfo] = useState(false);
   const [infoError, setInfoError] = useState<string | null>(null);
   const [infoSuccess, setInfoSuccess] = useState<string | null>(null);
@@ -63,292 +124,205 @@ export function AccountPageClient({
 
   const refreshSnapshot = useCallback(async () => {
     try {
-      const snapshot = await fetchAccountSnapshot();
-      setFields((current) => ({
-        ...current,
-        fullName: snapshot.fullName,
-        phone: snapshot.phone,
-        address: snapshot.address,
-      }));
-      setCurrentAuthEmail(snapshot.email);
+      const snap = await fetchAccountSnapshot();
+      setFullName(snap.fullName);
+      setPhone(snap.phone);
+      setAddress(snap.address);
+      setCurrentAuthEmail(snap.email);
+      setEmail(snap.email);
     } catch {
-      // Keep initial values if refresh fails.
+      // keep initial values
     }
   }, []);
 
-  useEffect(() => {
-    void refreshSnapshot();
-  }, [refreshSnapshot]);
+  useEffect(() => { void refreshSnapshot(); }, [refreshSnapshot]);
 
-  const handleSaveInfo = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSaveInfo = async (e: FormEvent) => {
+    e.preventDefault();
     setInfoError(null);
     setInfoSuccess(null);
     setIsSavingInfo(true);
 
-    const nextEmail = normalizeEmail(fields.email);
-    const currentEmail = normalizeEmail(currentAuthEmail);
+    const nextEmail = email.trim().toLowerCase();
+    const currentEmail = currentAuthEmail.trim().toLowerCase();
 
     try {
-      await updateAccountProfile({
-        fullName: fields.fullName,
-        phone: fields.phone,
-        address: fields.address,
-      });
+      await updateAccountProfile({ fullName, phone, address });
 
       if (nextEmail !== currentEmail) {
         await requestAccountEmailChange(nextEmail);
         setCurrentAuthEmail(nextEmail);
-        setInfoSuccess(
-          "Informacion guardada. Revisa tu email para confirmar el cambio de correo.",
-        );
+        setInfoSuccess("Información guardada. Revisa tu email para confirmar el cambio.");
       } else {
-        setInfoSuccess("Informacion guardada correctamente.");
+        setInfoSuccess("Información guardada correctamente.");
       }
-    } catch (error) {
-      setInfoError(
-        error instanceof Error
-          ? error.message
-          : "No se pudo guardar la informacion de la cuenta.",
-      );
+    } catch (err) {
+      setInfoError(err instanceof Error ? err.message : "No se pudo guardar la información.");
     } finally {
       setIsSavingInfo(false);
     }
   };
 
-  const handleUpdatePassword = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleUpdatePassword = async (e: FormEvent) => {
+    e.preventDefault();
     setPasswordError(null);
     setPasswordSuccess(null);
 
-    const trimmedCurrent = currentPassword.trim();
-    const trimmedNew = newPassword.trim();
-    const trimmedConfirm = confirmPassword.trim();
+    const curr = currentPassword.trim();
+    const next = newPassword.trim();
+    const conf = confirmPassword.trim();
 
-    if (trimmedNew.length < 6) {
-      setPasswordError("La nueva contrasena debe tener al menos 6 caracteres.");
-      return;
-    }
-
-    if (trimmedCurrent === trimmedNew) {
-      setPasswordError("La nueva contrasena debe ser distinta a la actual.");
-      return;
-    }
-
-    if (trimmedNew !== trimmedConfirm) {
-      setPasswordError("La confirmacion no coincide con la nueva contrasena.");
-      return;
-    }
+    if (next.length < 6) { setPasswordError("La nueva contraseña debe tener al menos 6 caracteres."); return; }
+    if (curr === next) { setPasswordError("La nueva contraseña debe ser distinta a la actual."); return; }
+    if (next !== conf) { setPasswordError("La confirmación no coincide con la nueva contraseña."); return; }
 
     setIsSavingPassword(true);
-
     try {
-      await changeAccountPassword({
-        currentPassword: trimmedCurrent,
-        newPassword: trimmedNew,
-      });
-
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setPasswordSuccess("Contrasena actualizada correctamente.");
-    } catch (error) {
-      setPasswordError(
-        error instanceof Error
-          ? error.message
-          : "No se pudo actualizar la contrasena.",
-      );
+      await changeAccountPassword({ currentPassword: curr, newPassword: next });
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+      setPasswordSuccess("Contraseña actualizada correctamente.");
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : "No se pudo actualizar la contraseña.");
     } finally {
       setIsSavingPassword(false);
     }
   };
 
+  const avatarInitial = getUserInitial(fullName, currentAuthEmail);
+
   return (
-    <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-6 pb-32 lg:pb-8 text-[var(--color-carbon)] md:px-5">
-      <main className="mx-auto w-full max-w-md space-y-4 md:max-w-3xl lg:max-w-4xl">
-        <header>
-          <h1 className="text-3xl font-bold leading-tight">Cuenta</h1>
-          <p className="mt-1 text-sm text-[var(--color-gray-500)]">
-            Administra tu informacion personal y seguridad.
-          </p>
-        </header>
+    <div className="min-h-screen bg-[var(--color-gray-100)] text-[var(--color-carbon)]">
+      <div className="mx-auto w-full max-w-md px-4 pt-8 pb-36 md:px-5 lg:pb-12">
 
-        <section className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)] md:p-5">
-          <h2 className="text-base font-bold">Informacion de cuenta</h2>
+        {/* Avatar */}
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-carbon)] text-3xl font-bold text-[var(--color-white)] shadow-lg">
+            {avatarInitial}
+          </div>
+          {fullName.trim() && (
+            <p className="text-lg font-bold">{fullName.trim()}</p>
+          )}
+          <p className="text-sm text-[var(--color-gray-500)]">{currentAuthEmail}</p>
+        </div>
 
-          <form className="mt-3 space-y-3" onSubmit={handleSaveInfo}>
-            <div className="space-y-1">
-              <label htmlFor="account-full-name" className="text-sm font-medium">
-                Nombre
-              </label>
-              <input
-                id="account-full-name"
-                type="text"
-                value={fields.fullName}
-                onChange={(event) =>
-                  setFields((current) => ({
-                    ...current,
-                    fullName: event.target.value,
-                  }))
-                }
-                placeholder="Tu nombre"
-                className="w-full rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
-              />
-            </div>
+        <div className="space-y-4">
 
-            <div className="space-y-1">
-              <label htmlFor="account-email" className="text-sm font-medium">
-                Email
-              </label>
-              <input
-                id="account-email"
-                type="email"
-                required
-                value={fields.email}
-                onChange={(event) =>
-                  setFields((current) => ({
-                    ...current,
-                    email: event.target.value,
-                  }))
-                }
-                placeholder="tu@email.com"
-                className="w-full rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
-              />
-            </div>
+          {/* Personal info */}
+          <div className="rounded-3xl bg-[var(--color-white)] p-5 shadow-[0_2px_16px_var(--shadow-black-008)]">
+            <h2 className="mb-4 text-sm font-bold text-[var(--color-carbon)]">
+              Información personal
+            </h2>
+            <form className="space-y-3" onSubmit={handleSaveInfo}>
+              <div>
+                <FieldLabel htmlFor="full-name">Nombre</FieldLabel>
+                <input
+                  id="full-name"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Tu nombre completo"
+                  className={inputClass}
+                />
+              </div>
 
-            <div className="space-y-1">
-              <label htmlFor="account-phone" className="text-sm font-medium">
-                Telefono
-              </label>
-              <input
-                id="account-phone"
-                type="tel"
-                value={fields.phone}
-                onChange={(event) =>
-                  setFields((current) => ({
-                    ...current,
-                    phone: event.target.value,
-                  }))
-                }
-                placeholder="(939) 000-0000"
-                className="w-full rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
-              />
-            </div>
+              <div>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  className={inputClass}
+                />
+              </div>
 
-            <div className="space-y-1">
-              <label htmlFor="account-address" className="text-sm font-medium">
-                Direccion
-              </label>
-              <textarea
-                id="account-address"
-                rows={3}
-                value={fields.address}
-                onChange={(event) =>
-                  setFields((current) => ({
-                    ...current,
-                    address: event.target.value,
-                  }))
-                }
-                placeholder="Direccion completa"
-                className="w-full resize-none rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
-              />
-            </div>
+              <div>
+                <FieldLabel htmlFor="phone">Teléfono</FieldLabel>
+                <input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(939) 000-0000"
+                  className={inputClass}
+                />
+              </div>
 
-            {infoError ? (
-              <p className="rounded-xl bg-[var(--color-gray)] px-3 py-2 text-sm text-[var(--color-danger)]">
-                {infoError}
-              </p>
-            ) : null}
+              <div>
+                <FieldLabel htmlFor="address">Dirección</FieldLabel>
+                <textarea
+                  id="address"
+                  rows={3}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Tu dirección completa"
+                  className={textareaClass}
+                />
+              </div>
 
-            {infoSuccess ? (
-              <p className="rounded-xl bg-[var(--color-gray)] px-3 py-2 text-sm text-[var(--color-brand)]">
-                {infoSuccess}
-              </p>
-            ) : null}
+              <Feedback error={infoError} success={infoSuccess} />
 
-            <button
-              type="submit"
-              disabled={isSavingInfo}
-              className="w-full rounded-2xl bg-[var(--color-brand)] px-4 py-3 text-sm font-semibold text-[var(--color-white)] disabled:opacity-70"
-            >
-              {isSavingInfo ? "Guardando..." : "Guardar informacion"}
-            </button>
-          </form>
-        </section>
+              <button
+                type="submit"
+                disabled={isSavingInfo}
+                className="w-full rounded-2xl bg-[var(--color-brand)] py-3 text-sm font-semibold text-[var(--color-white)] transition-opacity disabled:opacity-60"
+              >
+                {isSavingInfo ? "Guardando..." : "Guardar cambios"}
+              </button>
+            </form>
+          </div>
 
-        <section className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)] md:p-5">
-          <h2 className="text-base font-bold">Seguridad</h2>
-
-          <form className="mt-3 space-y-3" onSubmit={handleUpdatePassword}>
-            <div className="space-y-1">
-              <label htmlFor="account-current-password" className="text-sm font-medium">
-                Contrasena actual
-              </label>
-              <input
-                id="account-current-password"
-                type="password"
-                required
+          {/* Password */}
+          <div className="rounded-3xl bg-[var(--color-white)] p-5 shadow-[0_2px_16px_var(--shadow-black-008)]">
+            <h2 className="mb-4 text-sm font-bold text-[var(--color-carbon)]">Contraseña</h2>
+            <form className="space-y-3" onSubmit={handleUpdatePassword}>
+              <PasswordField
+                id="current-password"
+                label="Contraseña actual"
                 value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                className="w-full rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label htmlFor="account-new-password" className="text-sm font-medium">
-                Nueva contrasena
-              </label>
-              <input
-                id="account-new-password"
-                type="password"
-                minLength={6}
+                onChange={setCurrentPassword}
                 required
+              />
+              <PasswordField
+                id="new-password"
+                label="Nueva contraseña"
                 value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                className="w-full rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label htmlFor="account-confirm-password" className="text-sm font-medium">
-                Confirmar nueva contrasena
-              </label>
-              <input
-                id="account-confirm-password"
-                type="password"
+                onChange={setNewPassword}
                 minLength={6}
                 required
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                className="w-full rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
               />
-            </div>
+              <PasswordField
+                id="confirm-password"
+                label="Confirmar nueva contraseña"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                minLength={6}
+                required
+              />
 
-            {passwordError ? (
-              <p className="rounded-xl bg-[var(--color-gray)] px-3 py-2 text-sm text-[var(--color-danger)]">
-                {passwordError}
-              </p>
-            ) : null}
+              <Feedback error={passwordError} success={passwordSuccess} />
 
-            {passwordSuccess ? (
-              <p className="rounded-xl bg-[var(--color-gray)] px-3 py-2 text-sm text-[var(--color-brand)]">
-                {passwordSuccess}
-              </p>
-            ) : null}
+              <button
+                type="submit"
+                disabled={!canSubmitPassword}
+                className="w-full rounded-2xl bg-[var(--color-carbon)] py-3 text-sm font-semibold text-[var(--color-white)] transition-opacity disabled:opacity-40"
+              >
+                {isSavingPassword ? "Actualizando..." : "Actualizar contraseña"}
+              </button>
+            </form>
+          </div>
 
-            <button
-              type="submit"
-              disabled={!canSubmitPassword}
-              className="w-full rounded-2xl bg-[var(--color-carbon)] px-4 py-3 text-sm font-semibold text-[var(--color-white)] disabled:opacity-70"
-            >
-              {isSavingPassword ? "Actualizando..." : "Cambiar contrasena"}
-            </button>
-          </form>
-        </section>
-      </main>
+          {/* Sign out */}
+          <div className="rounded-3xl bg-[var(--color-white)] p-5 shadow-[0_2px_16px_var(--shadow-black-008)]">
+            <SignOutButton className="w-full rounded-2xl border-2 border-red-100 bg-red-50 py-3 text-sm font-semibold text-red-500 transition-colors hover:bg-red-100" />
+          </div>
+
+        </div>
+      </div>
 
       <BackHomeBottomNav fallbackHref="/" />
     </div>
   );
 }
-

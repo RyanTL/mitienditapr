@@ -139,7 +139,7 @@ export function fetchVendorProducts() {
       shopId: string;
       name: string;
       description: string;
-      imageUrl: string;
+      imageUrl: string | null;
       priceUsd: number;
       isActive: boolean;
       createdAt: string;
@@ -172,6 +172,7 @@ export function createVendorProduct(payload: {
   name: string;
   description?: string;
   imageUrl?: string;
+  images?: Array<{ imageUrl: string; alt?: string | null }>;
   isActive?: boolean;
   variant: VendorVariantInput;
 }) {

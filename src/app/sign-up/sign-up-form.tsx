@@ -43,10 +43,12 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
       const supabase = createSupabaseBrowserClient();
       const origin =
         typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+      // Pass next path via cookie — query params in redirectTo break Supabase's allowlist check
+      document.cookie = `oauth_next=${encodeURIComponent(nextPath)}; path=/; max-age=300; SameSite=Lax`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+          redirectTo: `${origin}/auth/callback`,
           queryParams: { access_type: "offline", prompt: "select_account" },
         },
       });

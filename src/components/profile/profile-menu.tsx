@@ -127,21 +127,11 @@ function AuthMenuContent({
   return (
     <>
       <header className="mb-2 px-1 pt-1 pb-3">
-        <p className="text-lg font-bold leading-none">Mi cuenta</p>
-        <p className="mt-1 text-sm text-[var(--color-carbon)]">{userEmail}</p>
+        <p className="text-sm text-[var(--color-gray-500)]">{userEmail}</p>
       </header>
 
       <nav>
         <ul className="space-y-0.5">
-          <li>
-            <Link
-              href="/cuenta"
-              onClick={onClose}
-              className="block w-full rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
-            >
-              Cuenta
-            </Link>
-          </li>
           <li>
             <Link
               href="/favoritos"
@@ -227,13 +217,14 @@ function AuthMenuContent({
           <li className="my-2 border-t border-[var(--color-gray)]" />
 
           <li>
-            <button
-              type="button"
+            <Link
+              href="/cuenta"
+              onClick={onClose}
               className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-base font-medium hover:bg-[var(--color-gray)]"
             >
               <SettingsIcon />
               Ajustes
-            </button>
+            </Link>
           </li>
 
           <li className="my-2 border-t border-[var(--color-gray)]" />

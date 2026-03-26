@@ -17,10 +17,12 @@ import {
 import { getAppBaseUrl } from "@/lib/vendor/urls";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  ensureVendorOnboardingRecord,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
   getVendorSubscriptionByShopId,
+  upsertVendorOnboardingStep,
 } from "@/lib/supabase/vendor-server";
 
 function isActiveSubscriptionStatus(status: string | null | undefined) {
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
 
     if (isActiveSubscriptionStatus(existingSubscription?.status)) {
       return NextResponse.json({
-        url: `${baseUrl}/vendedor/onboarding?step=6&subscription=already_active`,
+        url: `${baseUrl}/vendedor/onboarding?step=2&subscription=already_active`,
       });
     }
 
@@ -89,8 +91,18 @@ export async function POST(request: Request) {
         throw new Error(upsertSubscriptionError.message);
       }
 
+      // Mark onboarding complete immediately for bypass mode.
+      const onboarding = await ensureVendorOnboardingRecord(dataClient, profile.id);
+      await upsertVendorOnboardingStep(
+        dataClient,
+        profile.id,
+        "completed",
+        2,
+        onboarding.data_json,
+      );
+
       return NextResponse.json({
-        url: `${baseUrl}/vendedor/onboarding?step=6&subscription=success`,
+        url: `${baseUrl}/vendedor/onboarding?step=2&subscription=success`,
       });
     }
 
@@ -108,8 +120,8 @@ export async function POST(request: Request) {
     const checkoutSession = await createStripeSubscriptionCheckoutSession({
       customerId,
       priceId,
-      successUrl: `${baseUrl}/vendedor/onboarding?step=6&subscription=success`,
-      cancelUrl: `${baseUrl}/vendedor/onboarding?step=6&subscription=cancel`,
+      successUrl: `${baseUrl}/vendedor/onboarding?step=2&subscription=success`,
+      cancelUrl: `${baseUrl}/vendedor/onboarding?step=2&subscription=cancel`,
       metadata: {
         shop_id: shop.id,
         vendor_profile_id: profile.id,
@@ -142,6 +154,6 @@ export async function POST(request: Request) {
       checkoutSessionId: checkoutSession.id,
     });
   } catch (error) {
-    return serverErrorResponse(error, "No se pudo iniciar el checkout de suscripcion.");
+    return serverErrorResponse(error, "No se pudo iniciar el checkout de suscripción.");
   }
 }

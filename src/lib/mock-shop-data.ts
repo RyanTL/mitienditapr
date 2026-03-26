@@ -34,7 +34,7 @@ export const mockShopDetails: ShopDetail[] = [
     rating: "4.8",
     reviewCount: 43,
     description:
-      "Esto es una breve descripcion con limite de letras para describir que vendes y a que te dedicas.",
+      "Esto es una breve descripción con límite de letras para describir que vendes y a que te dedicas.",
     products: [
       {
         id: "1",
@@ -117,7 +117,7 @@ export const mockShopDetails: ShopDetail[] = [
     rating: "4.9",
     reviewCount: 58,
     description:
-      "Seleccion especial de articulos para tu estilo diario con envios rapidos y buena calidad.",
+      "Selección especial de artículos para tu estilo diario con envíos rápidos y buena calidad.",
     products: [
       {
         id: "1",
@@ -263,7 +263,7 @@ export const mockShopDetails: ShopDetail[] = [
         imageUrl:
           "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=640&q=80",
         alt: "Bolso tejido",
-        description: "Bolso tejido a mano con estilo unico.",
+        description: "Bolso tejido a mano con estilo único.",
       },
       {
         id: "8",

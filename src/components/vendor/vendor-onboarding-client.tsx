@@ -1,1067 +1,546 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { CheckIcon } from "@/components/icons";
-import { VendorPageShell } from "@/components/vendor/vendor-page-shell";
 import {
-  createStripeConnectAccountLink,
   createStripeSubscriptionCheckout,
-  createVendorProduct,
   fetchVendorStatus,
-  publishVendorShop,
   redeemVendorAccessCode,
   saveVendorOnboardingStep,
   startVendorOnboarding,
   uploadVendorImage,
 } from "@/lib/vendor/client";
-import {
-  VENDOR_ONBOARDING_STEPS,
-  VENDOR_ONBOARDING_STEP_COUNT,
-} from "@/lib/vendor/constants";
+import { slugifyShopName } from "@/lib/vendor/slug";
 import type { VendorStatusResponse } from "@/lib/vendor/types";
 
 type FormState = {
-  businessName: string;
-  phone: string;
-  category: string;
-  bio: string;
-  shopName: string;
+  vendorName: string;
   slug: string;
   description: string;
   logoUrl: string;
-  shippingFlatFeeUsd: string;
-  offersPickup: boolean;
-  refundPolicy: string;
-  shippingPolicy: string;
-  privacyPolicy: string;
-  terms: string;
   accessCode: string;
-  firstProductName: string;
-  firstProductDescription: string;
-  firstProductPriceUsd: string;
-  firstProductStockQty: string;
-  firstProductImageUrl: string;
 };
 
-const DEFAULT_FORM_STATE: FormState = {
-  businessName: "",
-  phone: "",
-  category: "",
-  bio: "",
-  shopName: "",
+const DEFAULT_FORM: FormState = {
+  vendorName: "",
   slug: "",
   description: "",
   logoUrl: "",
-  shippingFlatFeeUsd: "0",
-  offersPickup: false,
-  refundPolicy: "No se aceptan devoluciones despues de 7 dias.",
-  shippingPolicy: "Envios de 1 a 3 dias laborables.",
-  privacyPolicy: "Tus datos se usan solo para procesar ordenes.",
-  terms: "Al comprar aceptas los terminos de la tienda.",
   accessCode: "",
-  firstProductName: "",
-  firstProductDescription: "",
-  firstProductPriceUsd: "10",
-  firstProductStockQty: "1",
-  firstProductImageUrl: "",
 };
 
-function mapStepPayload(
-  source: Record<string, unknown> | null | undefined,
-  step: number,
-) {
-  if (!source) {
-    return null;
-  }
+function hydrateForm(snapshot: VendorStatusResponse, current: FormState): FormState {
+  const step1 = (snapshot.onboarding?.data_json as Record<string, unknown> | null)?.[
+    "step_1"
+  ] as Record<string, unknown> | null;
 
-  const value = source[`step_${step}`];
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function getString(input: Record<string, unknown> | null, key: string, fallback = "") {
-  if (!input) {
-    return fallback;
-  }
-
-  const value = input[key];
-  return typeof value === "string" ? value : fallback;
-}
-
-function getBoolean(input: Record<string, unknown> | null, key: string, fallback = false) {
-  if (!input) {
-    return fallback;
-  }
-
-  const value = input[key];
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function hydrateFormFromStatus(
-  snapshot: VendorStatusResponse,
-  currentFormState: FormState,
-) {
-  const step2 = mapStepPayload(snapshot.onboarding?.data_json, 2);
-  const step3 = mapStepPayload(snapshot.onboarding?.data_json, 3);
-  const step4 = mapStepPayload(snapshot.onboarding?.data_json, 4);
-  const step6 = mapStepPayload(snapshot.onboarding?.data_json, 6);
-  const step7 = mapStepPayload(snapshot.onboarding?.data_json, 7);
+  const getString = (src: Record<string, unknown> | null, key: string, fb = "") => {
+    const v = src?.[key];
+    return typeof v === "string" ? v : fb;
+  };
 
   return {
-    ...currentFormState,
-    businessName:
-      getString(step2, "businessName", "") ||
+    ...current,
+    vendorName:
+      getString(step1, "vendorName") ||
       snapshot.shop?.vendor_name ||
       snapshot.profile.full_name ||
       "",
-    phone: getString(step2, "phone", currentFormState.phone),
-    category: getString(step2, "category", currentFormState.category),
-    bio: getString(step2, "bio", currentFormState.bio),
-    shopName: getString(step3, "shopName", snapshot.shop?.vendor_name ?? ""),
-    slug: getString(step3, "slug", snapshot.shop?.slug ?? ""),
-    description: getString(step3, "description", snapshot.shop?.description ?? ""),
-    logoUrl: getString(step3, "logoUrl", snapshot.shop?.logo_url ?? ""),
-    shippingFlatFeeUsd:
-      getString(
-        step4,
-        "shippingFlatFeeUsd",
-        String(snapshot.shop?.shipping_flat_fee_usd ?? 0),
-      ) || "0",
-    offersPickup: getBoolean(step4, "offersPickup", snapshot.shop?.offers_pickup ?? false),
-    refundPolicy: getString(step4, "refundPolicy", currentFormState.refundPolicy),
-    shippingPolicy: getString(step4, "shippingPolicy", currentFormState.shippingPolicy),
-    privacyPolicy: getString(step4, "privacyPolicy", currentFormState.privacyPolicy),
-    terms: getString(step4, "terms", currentFormState.terms),
-    accessCode: getString(step6, "accessCode", currentFormState.accessCode),
-    firstProductName: getString(step7, "firstProductName", currentFormState.firstProductName),
-    firstProductDescription: getString(
-      step7,
-      "firstProductDescription",
-      currentFormState.firstProductDescription,
-    ),
-    firstProductPriceUsd: getString(
-      step7,
-      "firstProductPriceUsd",
-      currentFormState.firstProductPriceUsd,
-    ),
-    firstProductStockQty: getString(
-      step7,
-      "firstProductStockQty",
-      currentFormState.firstProductStockQty,
-    ),
-    firstProductImageUrl: getString(
-      step7,
-      "firstProductImageUrl",
-      currentFormState.firstProductImageUrl,
-    ),
+    slug: getString(step1, "slug") || snapshot.shop?.slug || "",
+    description: getString(step1, "description") || snapshot.shop?.description || "",
+    logoUrl: getString(step1, "logoUrl") || snapshot.shop?.logo_url || "",
   };
 }
 
-function toNumber(input: string, fallback = 0) {
-  const parsed = Number(input);
-  if (Number.isFinite(parsed)) {
-    return parsed;
-  }
-  return fallback;
+function StepDots({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={[
+            "h-2 rounded-full transition-all",
+            i + 1 === current
+              ? "w-6 bg-[var(--color-brand)]"
+              : i + 1 < current
+                ? "w-2 bg-[var(--color-brand)] opacity-40"
+                : "w-2 bg-[var(--color-gray-300,#d1d5db)]",
+          ].join(" ")}
+        />
+      ))}
+    </div>
+  );
+}
+
+function CameraPlaceholder() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8 text-[var(--color-gray-500)]">
+      <path
+        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <circle cx="12" cy="13" r="4" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
 }
 
 export function VendorOnboardingClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
   const [status, setStatus] = useState<VendorStatusResponse | null>(null);
-  const [formState, setFormState] = useState<FormState>(DEFAULT_FORM_STATE);
+  const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+  const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const [isUploadingFirstProductImage, setIsUploadingFirstProductImage] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [infoMsg, setInfoMsg] = useState<string | null>(null);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
-  const refreshStatus = useCallback(async () => {
-    const nextStatus = await fetchVendorStatus();
-    setStatus(nextStatus);
-    setFormState((current) => hydrateFormFromStatus(nextStatus, current));
-    return nextStatus;
+  const isOnboardingComplete = useCallback((s: VendorStatusResponse) => {
+    return (
+      s.onboarding?.status === "completed" ||
+      s.subscription?.status === "active" ||
+      s.subscription?.status === "trialing" ||
+      s.billingBypassEnabled
+    );
   }, []);
 
+  // Initial load
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
     async function load() {
       setIsLoading(true);
-      setErrorMessage(null);
-
       try {
-        const response = await startVendorOnboarding();
-        if (!isMounted) {
+        const res = await startVendorOnboarding();
+        if (!mounted) return;
+
+        const snap = res.snapshot;
+        setStatus(snap);
+        setForm((f) => hydrateForm(snap, f));
+
+        if (isOnboardingComplete(snap)) {
+          router.replace("/vendedor/panel");
           return;
         }
 
-        setStatus(response.snapshot);
-        setFormState((current) =>
-          hydrateFormFromStatus(response.snapshot, current),
-        );
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-        const message =
-          error instanceof Error ? error.message : "No se pudo cargar onboarding.";
-        setErrorMessage(message);
+        const step = Math.min(Math.max(snap.onboarding?.current_step ?? 1, 1), 2);
+        setCurrentStep(step);
+      } catch (e) {
+        if (mounted) setFormError(e instanceof Error ? e.message : "No se pudo cargar.");
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (mounted) setIsLoading(false);
       }
     }
 
     void load();
-
     return () => {
-      isMounted = false;
+      mounted = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Handle Stripe redirect query params (run once on mount)
   useEffect(() => {
-    if (searchParams.get("connect") === "done") {
-      setFeedback("Stripe Connect completado. Continua con el siguiente paso.");
-    } else if (searchParams.get("subscription") === "success") {
-      setFeedback("Suscripcion activada correctamente.");
-    } else if (searchParams.get("subscription") === "already_active") {
-      setFeedback("Tu suscripcion ya esta activa.");
-    } else if (searchParams.get("subscription") === "cancel") {
-      setFeedback("Puedes intentar el checkout de suscripcion nuevamente.");
+    const sub = searchParams.get("subscription");
+    if (!sub) return;
+
+    if (sub === "success" || sub === "already_active") {
+      void (async () => {
+        setIsSaving(true);
+        setInfoMsg("Verificando tu suscripción…");
+        try {
+          await saveVendorOnboardingStep(2, { subscriptionCheckoutCompleted: true });
+          const snap = await fetchVendorStatus();
+          if (isOnboardingComplete(snap)) {
+            router.replace("/vendedor/panel");
+            return;
+          }
+          // Webhook may lag — redirect anyway after brief delay
+          setInfoMsg("Suscripción activada. Accediendo a tu panel…");
+          setTimeout(() => router.replace("/vendedor/panel"), 1500);
+        } catch {
+          setCurrentStep(2);
+          setInfoMsg("Suscripción procesada. Redirigiendo…");
+          setTimeout(() => router.replace("/vendedor/panel"), 1500);
+        } finally {
+          setIsSaving(false);
+        }
+      })();
+    } else if (sub === "cancel") {
+      setCurrentStep(2);
+      setInfoMsg("Puedes intentarlo de nuevo cuando estés listo.");
     }
-  }, [searchParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const currentStep = useMemo(() => {
-    if (!status?.onboarding) {
-      return 1;
+  // Auto-generate slug from vendor name unless manually edited
+  useEffect(() => {
+    if (!slugManuallyEdited && form.vendorName) {
+      const generated = slugifyShopName(form.vendorName);
+      setForm((f) => ({ ...f, slug: generated }));
     }
-    return Math.min(Math.max(status.onboarding.current_step, 1), VENDOR_ONBOARDING_STEP_COUNT);
-  }, [status?.onboarding]);
+  }, [form.vendorName, slugManuallyEdited]);
 
-  const completionRatio = `${Math.round((currentStep / VENDOR_ONBOARDING_STEP_COUNT) * 100)}%`;
-
-  const handleSaveStep = useCallback(
-    async (step: number, payload: Record<string, unknown>) => {
-      setIsSaving(true);
-      setErrorMessage(null);
-      setFeedback(null);
-
-      try {
-        await saveVendorOnboardingStep(step, payload);
-        await refreshStatus();
-        setFeedback("Paso guardado correctamente.");
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "No se pudo guardar el paso.";
-        setErrorMessage(message);
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [refreshStatus],
-  );
-
-  const handleConnectStripe = useCallback(async () => {
-    setIsSaving(true);
-    setErrorMessage(null);
-    setFeedback(null);
-
-    try {
-      const response = await createStripeConnectAccountLink();
-      await handleSaveStep(5, {
-        stripeConnectAccountId: response.stripeConnectAccountId,
-        connectStarted: true,
-      });
-      window.location.assign(response.url);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo conectar Stripe.";
-      setErrorMessage(message);
-      setIsSaving(false);
-    }
-  }, [handleSaveStep]);
-
-  const handleStartSubscription = useCallback(async () => {
-    setIsSaving(true);
-    setErrorMessage(null);
-    setFeedback(null);
-
-    try {
-      const response = await createStripeSubscriptionCheckout();
-      await handleSaveStep(6, { subscriptionCheckoutStarted: true });
-      window.location.assign(response.url);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo abrir checkout.";
-      setErrorMessage(message);
-      setIsSaving(false);
-    }
-  }, [handleSaveStep]);
-
-  const handleRedeemAccessCode = useCallback(async () => {
-    const code = formState.accessCode.trim();
-    if (!code) {
-      setErrorMessage("Debes escribir un codigo de acceso.");
-      return;
-    }
-
-    setIsSaving(true);
-    setErrorMessage(null);
-    setFeedback(null);
-
-    try {
-      const result = await redeemVendorAccessCode(code);
-      await refreshStatus();
-      setFeedback(
-        result.alreadyRedeemed
-          ? "Este codigo ya estaba aplicado a tu cuenta."
-          : "Codigo aplicado correctamente. Ya puedes continuar.",
-      );
-      setFormState((current) => ({
-        ...current,
-        accessCode: "",
-      }));
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo redimir el codigo.";
-      setErrorMessage(message);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [formState.accessCode, refreshStatus]);
-
-  const handleCreateFirstProduct = useCallback(async () => {
-    const name = formState.firstProductName.trim();
-    if (!name) {
-      setErrorMessage("Debes indicar nombre del producto.");
-      return;
-    }
-
-    setIsSaving(true);
-    setErrorMessage(null);
-    setFeedback(null);
-
-    try {
-      await createVendorProduct({
-        name,
-        description: formState.firstProductDescription.trim(),
-        imageUrl: formState.firstProductImageUrl.trim() || undefined,
-        variant: {
-          title: "Default",
-          priceUsd: Math.max(0, toNumber(formState.firstProductPriceUsd, 0)),
-          stockQty: Math.max(0, Math.trunc(toNumber(formState.firstProductStockQty, 0))),
-        },
-      });
-
-      await handleSaveStep(7, {
-        firstProductName: formState.firstProductName,
-        firstProductDescription: formState.firstProductDescription,
-        firstProductPriceUsd: formState.firstProductPriceUsd,
-        firstProductStockQty: formState.firstProductStockQty,
-        firstProductImageUrl: formState.firstProductImageUrl,
-      });
-      setFeedback("Tu primer producto se creo correctamente.");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo crear el producto.";
-      setErrorMessage(message);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [formState, handleSaveStep]);
-
-  const handleUploadLogo = useCallback(async (file: File) => {
+  const handleLogoUpload = useCallback(async (file: File) => {
     setIsUploadingLogo(true);
-    setErrorMessage(null);
-    setFeedback(null);
-
+    setFormError(null);
     try {
       const result = await uploadVendorImage(file);
-      setFormState((current) => ({
-        ...current,
-        logoUrl: result.url,
-      }));
-      setFeedback("Logo subido correctamente.");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo subir el logo.";
-      setErrorMessage(message);
+      setForm((f) => ({ ...f, logoUrl: result.url }));
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "No se pudo subir el logo.");
     } finally {
       setIsUploadingLogo(false);
     }
   }, []);
 
-  const handleUploadFirstProductImage = useCallback(async (file: File) => {
-    setIsUploadingFirstProductImage(true);
-    setErrorMessage(null);
-    setFeedback(null);
-
-    try {
-      const result = await uploadVendorImage(file);
-      setFormState((current) => ({
-        ...current,
-        firstProductImageUrl: result.url,
-      }));
-      setFeedback("Imagen del producto subida correctamente.");
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No se pudo subir la imagen del producto.";
-      setErrorMessage(message);
-    } finally {
-      setIsUploadingFirstProductImage(false);
+  const handleSaveStep1 = useCallback(async () => {
+    const vendorName = form.vendorName.trim();
+    if (!vendorName) {
+      setFormError("El nombre de tu tienda es obligatorio.");
+      return;
     }
-  }, []);
+    const slug = form.slug.trim();
+    if (!slug) {
+      setFormError("La URL de tu tienda es obligatoria.");
+      return;
+    }
 
-  const handlePublish = useCallback(async () => {
     setIsSaving(true);
-    setErrorMessage(null);
-    setFeedback(null);
-
+    setFormError(null);
     try {
-      const result = await publishVendorShop();
-      await refreshStatus();
-
-      if (!result.published) {
-        setErrorMessage(
-          `Aun no puedes publicar: ${result.blockingReasons.join(" • ")}`,
-        );
-        return;
-      }
-
-      setFeedback("Tienda publicada. Ya puedes vender en la app.");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo publicar la tienda.";
-      setErrorMessage(message);
+      await saveVendorOnboardingStep(1, {
+        vendorName,
+        slug,
+        description: form.description.trim(),
+        logoUrl: form.logoUrl.trim(),
+      });
+      setCurrentStep(2);
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "No se pudo guardar.");
     } finally {
       setIsSaving(false);
     }
-  }, [refreshStatus]);
+  }, [form]);
+
+  const handleStartSubscription = useCallback(async () => {
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      const res = await createStripeSubscriptionCheckout();
+      window.location.assign(res.url);
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "No se pudo abrir el pago.");
+      setIsSaving(false);
+    }
+  }, []);
+
+  const handleRedeemCode = useCallback(async () => {
+    const code = form.accessCode.trim();
+    if (!code) {
+      setFormError("Escribe un código de acceso.");
+      return;
+    }
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      const result = await redeemVendorAccessCode(code);
+      if (result.alreadyRedeemed) {
+        setInfoMsg("Este código ya estaba aplicado a tu cuenta.");
+      }
+      router.replace("/vendedor/panel");
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Código inválido o ya utilizado.");
+      setIsSaving(false);
+    }
+  }, [form.accessCode, router]);
+
+  const appHost =
+    typeof window !== "undefined" ? window.location.hostname : "mitiendita.pr";
 
   if (isLoading) {
     return (
-      <VendorPageShell
-        title="Onboarding de vendedor"
-        subtitle="Preparando tu cuenta para vender."
-      >
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <p className="text-sm text-[var(--color-gray-500)]">Cargando onboarding...</p>
-        </article>
-      </VendorPageShell>
+      <div className="flex min-h-screen items-center justify-center bg-[var(--color-gray-100)]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-brand)] border-t-transparent" />
+          <p className="text-sm text-[var(--color-gray-500)]">Cargando…</p>
+        </div>
+      </div>
     );
   }
-
-  if (!status) {
-    return (
-      <VendorPageShell
-        title="Onboarding de vendedor"
-        subtitle="No pudimos cargar tu estado actual."
-      >
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <p className="text-sm text-[var(--color-danger)]">
-            {errorMessage ?? "Intenta recargar la pagina."}
-          </p>
-        </article>
-      </VendorPageShell>
-    );
-  }
-
-  const checks = status.checks;
 
   return (
-    <VendorPageShell
-      title="Conviertete en vendedor"
-      subtitle="Completa este checklist para abrir tu tienda."
-    >
-      <div className="grid gap-3 md:grid-cols-2 md:items-start">
-      <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold text-[var(--color-carbon)]">
-            Progreso: paso {currentStep} de {VENDOR_ONBOARDING_STEP_COUNT}
-          </p>
-          <p className="text-xs text-[var(--color-gray-500)]">{completionRatio}</p>
-        </div>
-        <div className="h-2 rounded-full bg-[var(--color-gray-200)]">
-          <div
-            className="h-2 rounded-full bg-[var(--color-brand)] transition-all"
-            style={{ width: completionRatio }}
-          />
-        </div>
-      </article>
+    <div className="flex min-h-screen flex-col bg-[var(--color-gray-100)]">
+      {/* Minimal header */}
+      <header className="flex items-center justify-between px-5 py-4">
+        <span className="text-sm font-bold text-[var(--color-carbon)]">Mitiendita</span>
+        <StepDots current={currentStep} total={2} />
+      </header>
 
-      <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-        <ul className="space-y-2">
-          {VENDOR_ONBOARDING_STEPS.map((stepMeta) => {
-            const isDone = stepMeta.step < currentStep;
-            const isCurrent = stepMeta.step === currentStep;
+      <div className="flex flex-1 flex-col items-center px-4 pb-12">
+        <div className="w-full max-w-md space-y-4">
 
-            return (
-              <li
-                key={stepMeta.step}
-                className={[
-                  "flex items-start gap-3 rounded-2xl px-2 py-2",
-                  isCurrent ? "bg-[var(--color-gray-100)]" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                <span
-                  className={[
-                    "mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold",
-                    isDone
-                      ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-[var(--color-white)]"
-                      : "border-[var(--color-gray)] text-[var(--color-carbon)]",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+          {/* ── STEP 1: Tu tienda ── */}
+          {currentStep === 1 && (
+            <>
+              <div className="mt-2">
+                <h1 className="text-2xl font-bold text-[var(--color-carbon)]">Tu tienda</h1>
+                <p className="mt-1 text-sm text-[var(--color-gray-500)]">
+                  Cuéntanos un poco sobre tu negocio.
+                </p>
+              </div>
+
+              {/* Logo upload */}
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={isUploadingLogo}
+                  className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--color-gray-200)] transition hover:bg-[var(--color-gray)]"
+                  aria-label="Subir logo"
                 >
-                  {isDone ? <CheckIcon className="h-3 w-3" /> : stepMeta.step}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--color-carbon)]">
-                    {stepMeta.title}
-                  </p>
-                  <p className="text-xs text-[var(--color-gray-500)]">{stepMeta.description}</p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </article>
-      </div>
-
-      {feedback ? (
-        <article className="rounded-2xl border border-[var(--color-brand)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-brand)]">
-          {feedback}
-        </article>
-      ) : null}
-      {errorMessage ? (
-        <article className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-danger)]">
-          {errorMessage}
-        </article>
-      ) : null}
-      {status.billingBypassEnabled ? (
-        <article className="rounded-2xl border border-[var(--color-brand)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-brand)]">
-          Modo prueba activo: los pasos de facturacion se pueden omitir temporalmente
-          mientras validas onboarding y publicacion.
-        </article>
-      ) : null}
-
-      <div className="md:max-w-3xl">
-      {currentStep === 1 ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <p className="text-sm text-[var(--color-gray-500)]">
-            En esta app vendes creando tu tienda, publicando productos y recibiendo
-            pagos directo en Stripe Connect.
-          </p>
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-            disabled={isSaving}
-            onClick={() => void handleSaveStep(1, { introCompleted: true })}
-          >
-            {isSaving ? "Guardando..." : "Guardar y continuar"}
-          </button>
-        </article>
-      ) : null}
-
-      {currentStep === 2 ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <div className="space-y-3">
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Nombre del negocio
-              </span>
-              <input
-                type="text"
-                value={formState.businessName}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    businessName: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">Telefono</span>
-              <input
-                type="text"
-                value={formState.phone}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    phone: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">Categoria</span>
-              <input
-                type="text"
-                value={formState.category}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    category: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Bio corta
-              </span>
-              <textarea
-                value={formState.bio}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    bio: event.target.value,
-                  }))
-                }
-                className="mt-1 min-h-24 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-          </div>
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-            disabled={isSaving}
-            onClick={() =>
-              void handleSaveStep(2, {
-                businessName: formState.businessName,
-                phone: formState.phone,
-                category: formState.category,
-                bio: formState.bio,
-              })
-            }
-          >
-            {isSaving ? "Guardando..." : "Guardar y continuar"}
-          </button>
-        </article>
-      ) : null}
-
-      {currentStep === 3 ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <div className="space-y-3">
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Nombre de tienda
-              </span>
-              <input
-                type="text"
-                value={formState.shopName}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    shopName: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">Slug</span>
-              <input
-                type="text"
-                value={formState.slug}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    slug: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Descripcion
-              </span>
-              <textarea
-                value={formState.description}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-                className="mt-1 min-h-24 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Logo de tienda
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                disabled={isUploadingLogo}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.currentTarget.value = "";
-                  if (file) {
-                    void handleUploadLogo(file);
-                  }
-                }}
-                className="mt-1 block w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-              {isUploadingLogo ? (
-                <p className="mt-1 text-xs text-[var(--color-gray-500)]">Subiendo logo...</p>
-              ) : null}
-              {formState.logoUrl ? (
-                <Image
-                  src={formState.logoUrl}
-                  alt="Vista previa del logo"
-                  width={56}
-                  height={56}
-                  unoptimized
-                  className="mt-2 h-14 w-14 rounded-full border border-[var(--color-gray)] object-cover"
+                  {form.logoUrl ? (
+                    <Image src={form.logoUrl} alt="Logo" fill className="object-cover" />
+                  ) : isUploadingLogo ? (
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-brand)] border-t-transparent" />
+                  ) : (
+                    <CameraPlaceholder />
+                  )}
+                </button>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.currentTarget.files?.[0];
+                    if (file) void handleLogoUpload(file);
+                  }}
                 />
-              ) : null}
-            </label>
-          </div>
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-            disabled={isSaving}
-            onClick={() =>
-              void handleSaveStep(3, {
-                shopName: formState.shopName,
-                slug: formState.slug,
-                description: formState.description,
-                logoUrl: formState.logoUrl,
-              })
-            }
-          >
-            {isSaving ? "Guardando..." : "Guardar y continuar"}
-          </button>
-        </article>
-      ) : null}
+                <div>
+                  <p className="text-sm font-semibold text-[var(--color-carbon)]">Logo</p>
+                  <p className="text-xs text-[var(--color-gray-500)]">
+                    Opcional · PNG, JPG, WebP
+                  </p>
+                </div>
+              </div>
 
-      {currentStep === 4 ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <div className="space-y-3">
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Tarifa fija de envio (USD)
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={formState.shippingFlatFeeUsd}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    shippingFlatFeeUsd: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={formState.offersPickup}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    offersPickup: event.target.checked,
-                  }))
-                }
-              />
-              Ofrecer recogido en persona
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Politica de reembolso
-              </span>
-              <textarea
-                value={formState.refundPolicy}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    refundPolicy: event.target.value,
-                  }))
-                }
-                className="mt-1 min-h-20 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Politica de envio
-              </span>
-              <textarea
-                value={formState.shippingPolicy}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    shippingPolicy: event.target.value,
-                  }))
-                }
-                className="mt-1 min-h-20 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-          </div>
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-            disabled={isSaving}
-            onClick={() =>
-              void handleSaveStep(4, {
-                shippingFlatFeeUsd: toNumber(formState.shippingFlatFeeUsd, 0),
-                offersPickup: formState.offersPickup,
-                refundPolicy: formState.refundPolicy,
-                shippingPolicy: formState.shippingPolicy,
-                privacyPolicy: formState.privacyPolicy,
-                terms: formState.terms,
-              })
-            }
-          >
-            {isSaving ? "Guardando..." : "Guardar y continuar"}
-          </button>
-        </article>
-      ) : null}
+              {/* Form fields */}
+              <div className="rounded-2xl bg-white p-4 shadow-sm space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">
+                    Nombre de tu tienda *
+                  </label>
+                  <input
+                    type="text"
+                    value={form.vendorName}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, vendorName: e.target.value }))
+                    }
+                    placeholder="Ej. Cafetería La Isla"
+                    className="mt-1.5 w-full rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-[var(--color-gray-100)] px-3 py-2.5 text-sm font-medium text-[var(--color-carbon)] placeholder:text-[var(--color-gray-500)] focus:border-[var(--color-brand)] focus:outline-none"
+                  />
+                </div>
 
-      {currentStep === 5 ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          {status.billingBypassEnabled ? (
-            <>
-              <p className="text-sm text-[var(--color-gray-500)]">
-                Modo prueba: puedes continuar sin Stripe Connect por ahora.
-              </p>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">
+                    URL de tu tienda *
+                  </label>
+                  <div className="mt-1.5 flex items-center overflow-hidden rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-[var(--color-gray-100)] focus-within:border-[var(--color-brand)]">
+                    <span className="shrink-0 pl-3 text-xs text-[var(--color-gray-500)]">
+                      {appHost}/
+                    </span>
+                    <input
+                      type="text"
+                      value={form.slug}
+                      onChange={(e) => {
+                        setSlugManuallyEdited(true);
+                        setForm((f) => ({
+                          ...f,
+                          slug: slugifyShopName(e.target.value),
+                        }));
+                      }}
+                      placeholder="mi-tienda"
+                      className="flex-1 bg-transparent py-2.5 pr-3 text-sm font-medium text-[var(--color-carbon)] placeholder:text-[var(--color-gray-500)] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">
+                    Descripción{" "}
+                    <span className="font-normal normal-case">(opcional)</span>
+                  </label>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, description: e.target.value }))
+                    }
+                    placeholder="Cuéntale a tus clientes qué vendes…"
+                    rows={3}
+                    maxLength={280}
+                    className="mt-1.5 w-full resize-none rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-[var(--color-gray-100)] px-3 py-2.5 text-sm text-[var(--color-carbon)] placeholder:text-[var(--color-gray-500)] focus:border-[var(--color-brand)] focus:outline-none"
+                  />
+                  <p className="mt-0.5 text-right text-xs text-[var(--color-gray-500)]">
+                    {form.description.length}/280
+                  </p>
+                </div>
+              </div>
+
+              {formError && (
+                <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {formError}
+                </p>
+              )}
+
               <button
                 type="button"
-                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
                 disabled={isSaving}
-                onClick={() => void handleSaveStep(5, { billingBypass: true })}
+                onClick={() => void handleSaveStep1()}
+                className="w-full rounded-full bg-[var(--color-brand)] py-3.5 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
               >
-                {isSaving ? "Guardando..." : "Continuar en modo prueba"}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-[var(--color-gray-500)]">
-                Necesitas Stripe Connect Express para recibir pagos de compradores.
-              </p>
-              <button
-                type="button"
-                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-                disabled={isSaving}
-                onClick={() => void handleConnectStripe()}
-              >
-                {isSaving ? "Abriendo..." : "Conectar Stripe Express"}
+                {isSaving ? "Guardando…" : "Continuar →"}
               </button>
             </>
           )}
-        </article>
-      ) : null}
 
-      {currentStep === 6 ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          {status.billingBypassEnabled ? (
+          {/* ── STEP 2: Activa tu plan ── */}
+          {currentStep === 2 && (
             <>
-              <p className="text-sm text-[var(--color-gray-500)]">
-                Modo prueba: la suscripcion mensual esta temporalmente omitida.
-              </p>
-              <button
-                type="button"
-                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-                disabled={isSaving}
-                onClick={() => void handleSaveStep(6, { billingBypass: true })}
-              >
-                {isSaving ? "Guardando..." : "Continuar en modo prueba"}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-[var(--color-gray-500)]">
-                Activa la suscripcion de $10/mes para publicar tu tienda.
-              </p>
-              <button
-                type="button"
-                className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-                disabled={isSaving}
-                onClick={() => void handleStartSubscription()}
-              >
-                {isSaving ? "Abriendo..." : "Ir a checkout de suscripcion"}
-              </button>
+              <div className="mt-2">
+                <h1 className="text-2xl font-bold text-[var(--color-carbon)]">
+                  Activa tu plan
+                </h1>
+                <p className="mt-1 text-sm text-[var(--color-gray-500)]">
+                  Suscríbete para abrir tu tienda y comenzar a vender.
+                </p>
+              </div>
 
-              <div className="mt-5 rounded-2xl bg-[var(--color-gray-100)] p-3">
-                <p className="text-xs font-semibold text-[var(--color-carbon)]">
-                  Tengo codigo de acceso
+              {/* Shop summary */}
+              {status?.shop && (
+                <div className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm">
+                  {status.shop.logo_url ? (
+                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl">
+                      <Image
+                        src={status.shop.logo_url}
+                        alt="Logo"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-gray-200)]">
+                      <span className="text-lg font-bold text-[var(--color-gray-500)]">
+                        {((status.shop.vendor_name ?? form.vendorName) || "T")[0]?.toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-semibold text-[var(--color-carbon)]">
+                      {status.shop.vendor_name ?? form.vendorName}
+                    </p>
+                    <p className="text-xs text-[var(--color-gray-500)]">
+                      {appHost}/{status.shop.slug ?? form.slug}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Plan card */}
+              <div className="rounded-2xl bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-bold text-[var(--color-carbon)]">Plan mensual</p>
+                    <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">
+                      Cancela cuando quieras
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-[var(--color-carbon)]">$10</span>
+                    <span className="text-sm text-[var(--color-gray-500)]">/mes</span>
+                  </div>
+                </div>
+                <ul className="mt-4 space-y-2">
+                  {[
+                    "Tienda pública en Mitiendita.pr",
+                    "Código QR para compartir",
+                    "Productos y categorías ilimitadas",
+                    "Seguimiento de pedidos en vivo",
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-[var(--color-gray-500)]">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-white">
+                        <CheckIcon className="h-2.5 w-2.5" />
+                      </span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => void handleStartSubscription()}
+                  className="mt-5 w-full rounded-full bg-[var(--color-brand)] py-3.5 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+                >
+                  {isSaving ? "Cargando…" : "Suscribirme por $10/mes"}
+                </button>
+              </div>
+
+              {/* Access code */}
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">
+                  ¿Tienes un código de acceso?
                 </p>
                 <div className="mt-2 flex gap-2">
                   <input
                     type="text"
-                    value={formState.accessCode}
-                    onChange={(event) =>
-                      setFormState((current) => ({
-                        ...current,
-                        accessCode: event.target.value,
-                      }))
+                    value={form.accessCode}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, accessCode: e.target.value }))
                     }
-                    placeholder="Ej: MTP-XXXXXX-XXXXXX-XXXXXX"
-                    className="w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
+                    placeholder="CODIGO123"
+                    className="flex-1 rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-[var(--color-gray-100)] px-3 py-2.5 text-sm font-medium text-[var(--color-carbon)] placeholder:text-[var(--color-gray-500)] focus:border-[var(--color-brand)] focus:outline-none"
                   />
                   <button
                     type="button"
-                    className="shrink-0 rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-xs font-semibold text-[var(--color-carbon)]"
                     disabled={isSaving}
-                    onClick={() => void handleRedeemAccessCode()}
+                    onClick={() => void handleRedeemCode()}
+                    className="shrink-0 rounded-xl border border-[var(--color-carbon)] px-4 py-2.5 text-sm font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)] disabled:opacity-60"
                   >
                     Aplicar
                   </button>
                 </div>
               </div>
+
+              {infoMsg && (
+                <p className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                  {infoMsg}
+                </p>
+              )}
+              {formError && (
+                <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {formError}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => { setFormError(null); setCurrentStep(1); }}
+                className="w-full py-2 text-sm text-[var(--color-gray-500)] hover:text-[var(--color-carbon)]"
+              >
+                ← Volver al paso anterior
+              </button>
             </>
           )}
-        </article>
-      ) : null}
-
-      {currentStep === 7 ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <div className="space-y-3">
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Nombre producto
-              </span>
-              <input
-                type="text"
-                value={formState.firstProductName}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    firstProductName: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Precio (USD)
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={formState.firstProductPriceUsd}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    firstProductPriceUsd: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">Stock</span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={formState.firstProductStockQty}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    firstProductStockQty: event.target.value,
-                  }))
-                }
-                className="mt-1 w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-[var(--color-gray-500)]">
-                Imagen del producto (opcional)
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                disabled={isUploadingFirstProductImage}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.currentTarget.value = "";
-                  if (file) {
-                    void handleUploadFirstProductImage(file);
-                  }
-                }}
-                className="mt-1 block w-full rounded-xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 text-sm"
-              />
-              {isUploadingFirstProductImage ? (
-                <p className="mt-1 text-xs text-[var(--color-gray-500)]">
-                  Subiendo imagen...
-                </p>
-              ) : null}
-              {formState.firstProductImageUrl ? (
-                <Image
-                  src={formState.firstProductImageUrl}
-                  alt="Vista previa del producto"
-                  width={80}
-                  height={80}
-                  unoptimized
-                  className="mt-2 h-20 w-20 rounded-xl border border-[var(--color-gray)] object-cover"
-                />
-              ) : null}
-            </label>
-          </div>
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)]"
-            disabled={isSaving}
-            onClick={() => void handleCreateFirstProduct()}
-          >
-            {isSaving ? "Guardando..." : "Crear producto y continuar"}
-          </button>
-        </article>
-      ) : null}
-
-      {currentStep === 8 ? (
-        <article className="rounded-3xl bg-[var(--color-white)] p-4 shadow-[0_10px_20px_var(--shadow-black-008)]">
-          <p className="text-sm text-[var(--color-gray-500)]">
-            Revisa tus requisitos y publica tu tienda.
-          </p>
-
-          <ul className="mt-3 space-y-1 text-sm">
-            {checks.blockingReasons.length > 0 ? (
-              checks.blockingReasons.map((reason) => (
-                <li key={reason} className="text-[var(--color-danger)]">
-                  • {reason}
-                </li>
-              ))
-            ) : (
-              <li className="text-[var(--color-brand)]">Todo listo para publicar.</li>
-            )}
-          </ul>
-
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-white)] disabled:opacity-60"
-            disabled={isSaving || !checks.canPublish}
-            onClick={() => void handlePublish()}
-          >
-            {isSaving ? "Publicando..." : "Publicar tienda"}
-          </button>
-        </article>
-      ) : null}
+        </div>
       </div>
-    </VendorPageShell>
+    </div>
   );
 }
