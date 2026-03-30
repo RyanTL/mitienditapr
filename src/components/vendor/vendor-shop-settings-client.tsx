@@ -37,6 +37,7 @@ import {
   updateVendorShopSettings,
 } from "@/lib/vendor/client";
 import type { VendorShopStatus } from "@/lib/vendor/constants";
+import { toNumber } from "@/lib/utils";
 
 type ShopResponse = Awaited<ReturnType<typeof fetchVendorShopSettings>>;
 
@@ -84,11 +85,6 @@ const STATUS_LABELS: Record<string, string> = {
   paused: "Pausada",
   unpaid: "Impaga",
 };
-
-function toNumber(value: string, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function mapFormStateFromResponse(response: ShopResponse): ShopSettingsFormState {
   return {

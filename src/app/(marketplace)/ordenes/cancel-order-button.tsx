@@ -28,11 +28,11 @@ export function CancelOrderButton({ orderId }: { orderId: string }) {
         type="button"
         onClick={handleClick}
         disabled={pending}
-        className="text-xs font-medium text-[var(--color-white)] underline underline-offset-2 disabled:opacity-50"
+        className="rounded-full border border-[var(--color-gray-300)] px-3.5 py-1.5 text-xs font-semibold text-[var(--color-carbon)] transition-colors hover:bg-[var(--color-gray-100)] disabled:opacity-50"
       >
-        {pending ? "Cancelando..." : "Cancelar orden"}
+        {pending ? "Cancelando..." : "Cancelar"}
       </button>
-      {error && <p className="mt-0.5 text-xs text-red-300">{error}</p>}
+      {error && <p className="mt-1 text-xs text-[var(--color-danger)]">{error}</p>}
     </div>
   );
 }

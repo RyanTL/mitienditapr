@@ -7,30 +7,7 @@ import type {
   VendorPolicyPublishResponse,
   VendorShopPoliciesResponse,
 } from "@/lib/policies/types";
-
-async function fetchJson<TResponse>(path: string, options: RequestInit = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-  });
-
-  const body = (await response.json().catch(() => null)) as
-    | (TResponse & { error?: string })
-    | null;
-
-  if (!response.ok) {
-    throw new Error(body?.error ?? `Request failed (${response.status}).`);
-  }
-
-  if (!body) {
-    throw new Error("Respuesta invalida del servidor.");
-  }
-
-  return body;
-}
+import { fetchJson } from "@/lib/fetch-client";
 
 export function fetchVendorPolicyTemplates() {
   return fetchJson<{ templates: PolicyTemplate[] }>("/api/vendor/policies/templates", {

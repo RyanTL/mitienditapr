@@ -21,6 +21,7 @@ import {
   uploadVendorImage,
 } from "@/lib/vendor/client";
 import { formatUsd } from "@/lib/formatters";
+import { toNumber } from "@/lib/utils";
 
 type VendorProduct = Awaited<ReturnType<typeof fetchVendorProducts>>["products"][number];
 
@@ -61,11 +62,6 @@ const DEFAULT_PRODUCT_DRAFT: ProductDraft = {
 
 const MAX_PRODUCT_IMAGES = 6;
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-
-function toNumber(v: string, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
 
 function buildDraftFromProduct(product: VendorProduct): ProductDraft {
   const tracking = product.variants.filter((v) => v.isActive && v.stockQty !== null);
@@ -340,6 +336,11 @@ function ProductSheet({
   const handleSave = useCallback(async () => {
     const name = draft.name.trim();
     if (!name) { setError("El nombre es obligatorio."); return; }
+
+    if (sheetState.open && sheetState.mode === "create" && pendingImages.length === 0) {
+      setError("Debes agregar al menos una foto.");
+      return;
+    }
 
     setIsSaving(true);
     setError(null);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -69,10 +70,6 @@ type ImageRow = {
   alt: string | null;
   sort_order: number;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function readText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -229,7 +226,21 @@ export async function POST(request: Request) {
     return badRequestResponse("El nombre del producto es requerido.");
   }
 
+  if (name.length > 200) {
+    return NextResponse.json(
+      { error: "El nombre del producto no puede exceder 200 caracteres." },
+      { status: 400 },
+    );
+  }
+
   const description = readText(body.description);
+
+  if (description && description.length > 5000) {
+    return NextResponse.json(
+      { error: "La descripción no puede exceder 5,000 caracteres." },
+      { status: 400 },
+    );
+  }
   const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
   const images =
     Array.isArray(body.images)
@@ -276,6 +287,12 @@ export async function POST(request: Request) {
       : imageUrl
         ? [{ imageUrl, alt: name }]
         : [];
+  if (imagesToInsert.length === 0) {
+    return NextResponse.json(
+      { error: "Se requiere al menos una imagen." },
+      { status: 400 }
+    );
+  }
   const primaryImageUrl = imagesToInsert[0]?.imageUrl ?? null;
 
   let dataClient = context.supabase;

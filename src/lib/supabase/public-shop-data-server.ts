@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   buildShopDetail,
@@ -5,7 +7,7 @@ import {
   type ShopRow,
 } from "@/lib/supabase/public-shop-data-shared";
 
-export async function fetchShopDetailBySlugServer(shopSlug: string) {
+export const fetchShopDetailBySlugServer = cache(async function fetchShopDetailBySlugServer(shopSlug: string) {
   const supabase = await createSupabaseServerClient();
   const { data: shopData, error: shopError } = await supabase
     .from("shops")
@@ -38,4 +40,4 @@ export async function fetchShopDetailBySlugServer(shopSlug: string) {
   }
 
   return buildShopDetail(shop, (productsData as ProductRow[] | null) ?? []);
-}
+});

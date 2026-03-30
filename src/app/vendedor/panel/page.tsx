@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import {
   ChevronIcon,
   OrdersIcon,
-  PackageIcon,
   PlusIcon,
   SettingsIcon,
 } from "@/components/icons";
@@ -51,16 +50,12 @@ export default async function VendorPanelPage() {
     : null;
 
   const shopName = snapshot.shop?.vendor_name ?? "Tu tienda";
-  const shopSlug = snapshot.shop?.slug ?? "";
   const newOrderCount = snapshot.metrics.newOrderCount;
   const productCount = snapshot.metrics.productCount;
   const orderCount = snapshot.metrics.orderCount;
   const revenueThirtyDays = analytics?.revenueLastThirtyDaysUsd ?? 0;
   const totalRevenue = analytics?.totalRevenueUsd ?? 0;
   const avgOrderValue = analytics?.avgOrderValueUsd ?? 0;
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-  const shopUrl = shopSlug ? `${appUrl}/${shopSlug}` : null;
-
   return (
     <VendorPageShell
       title={shopName}

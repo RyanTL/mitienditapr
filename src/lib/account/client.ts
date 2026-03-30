@@ -8,12 +8,14 @@ export type AccountSnapshot = {
   fullName: string;
   phone: string;
   address: string;
+  zipCode: string;
 };
 
 export type UpdateAccountProfileInput = {
   fullName: string;
   phone: string;
   address: string;
+  zipCode: string;
 };
 
 function toNullableTrimmed(value: string) {
@@ -34,7 +36,7 @@ export async function fetchAccountSnapshot(): Promise<AccountSnapshot> {
 
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
-    .select("full_name,phone,address")
+    .select("full_name,phone,address,zip_code")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -47,11 +49,13 @@ export async function fetchAccountSnapshot(): Promise<AccountSnapshot> {
         full_name: string | null;
         phone: string | null;
         address: string | null;
+        zip_code: string | null;
       }
     | null) ?? {
     full_name: null,
     phone: null,
     address: null,
+    zip_code: null,
   };
 
   return {
@@ -60,6 +64,7 @@ export async function fetchAccountSnapshot(): Promise<AccountSnapshot> {
     fullName: profile.full_name ?? "",
     phone: profile.phone ?? "",
     address: profile.address ?? "",
+    zipCode: profile.zip_code ?? "",
   };
 }
 
@@ -73,6 +78,7 @@ export async function updateAccountProfile(input: UpdateAccountProfileInput) {
       full_name: toNullableTrimmed(input.fullName),
       phone: toNullableTrimmed(input.phone),
       address: toNullableTrimmed(input.address),
+      zip_code: toNullableTrimmed(input.zipCode),
     })
     .eq("id", snapshot.userId);
 

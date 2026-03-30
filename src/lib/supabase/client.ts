@@ -12,11 +12,6 @@ export function createSupabaseBrowserClient() {
     browserClient = createBrowserClient(
       getSupabaseUrl(),
       getSupabasePublishableKey(),
-      {
-        auth: {
-          lockAcquireTimeout: 30000,
-        },
-      },
     );
   }
 

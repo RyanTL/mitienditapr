@@ -1,4 +1,4 @@
-import type { MarketplaceShopCard, ShopDetail } from "@/lib/mock-shop-data";
+import type { MarketplaceShopCard, ShopDetail } from "@/lib/supabase/shop-types";
 
 const FALLBACK_IMAGE_URL =
   "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=640&q=80";

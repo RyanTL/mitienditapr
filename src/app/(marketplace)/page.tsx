@@ -206,7 +206,7 @@ export default function HomePage() {
               >
                 <div className="mb-3 flex items-center gap-2.5">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
-                    N
+                    {shop.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <h2 className="text-base font-extrabold leading-tight text-[var(--color-carbon)] lg:text-lg">

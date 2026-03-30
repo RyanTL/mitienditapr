@@ -199,8 +199,8 @@ export async function POST(request: Request) {
 
   const orderId = orderRow.id as string;
 
-  // Insert order items
-  const { error: orderItemsError } = await supabase.from("order_items").insert(
+  // Insert order items (admin client required — no buyer INSERT policy on order_items)
+  const { error: orderItemsError } = await adminClient.from("order_items").insert(
     shopCartItems.map((item) => ({
       order_id: orderId,
       product_id: item.product_id,
@@ -212,7 +212,7 @@ export async function POST(request: Request) {
 
   if (orderItemsError) {
     // Attempt rollback
-    await supabase.from("orders").delete().eq("id", orderId).eq("profile_id", user.id);
+    await adminClient.from("orders").delete().eq("id", orderId).eq("profile_id", user.id);
     return NextResponse.json(
       { error: "No se pudo registrar los artículos de la orden." },
       { status: 500 },

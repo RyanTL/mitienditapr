@@ -214,13 +214,19 @@ export function GlobalCartPageClient() {
                       <article key={item.id} className="rounded-2xl border border-[var(--color-gray)] p-3">
                         <div className="flex gap-3">
                           <div className="relative h-[84px] w-[84px] overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-                            <Image
-                              src={item.product.imageUrl}
-                              alt={item.product.alt}
-                              fill
-                              className="object-cover"
-                              sizes="84px"
-                            />
+                            {item.product.imageUrl ? (
+                              <Image
+                                src={item.product.imageUrl}
+                                alt={item.product.alt}
+                                fill
+                                className="object-cover"
+                                sizes="84px"
+                              />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center text-center text-[10px] leading-tight text-[var(--color-gray-500)]">
+                                Sin foto
+                              </span>
+                            )}
                           </div>
 
                           <div className="min-w-0 flex-1">
@@ -330,6 +336,7 @@ export function GlobalCartPageClient() {
           totalUsd={primaryShop.subtotal}
           isOpen={isCheckoutSheetOpen}
           onClose={() => setIsCheckoutSheetOpen(false)}
+          onCheckoutSuccess={() => void loadCartItems()}
         />
       ) : null}
     </div>

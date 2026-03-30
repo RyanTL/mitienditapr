@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data";
+import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data-server";
 
 import CartPageClient from "./CartPageClient";
 

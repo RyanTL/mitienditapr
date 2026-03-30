@@ -10,7 +10,7 @@ import {
   type VendorOrderStatus,
 } from "@/lib/vendor/constants";
 import { fetchVendorOrders, updateVendorOrderStatus } from "@/lib/vendor/client";
-import { formatUsd } from "@/lib/formatters";
+import { formatDateEsPr, formatUsd } from "@/lib/formatters";
 
 type VendorOrder = Awaited<ReturnType<typeof fetchVendorOrders>>["orders"][number];
 
@@ -37,15 +37,6 @@ const TRANSITION_LABEL: Record<VendorOrderStatus, string> = {
   delivered: "Marcar entregada",
   canceled: "Cancelar",
 };
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-PR", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
 
 type FilterValue = VendorOrderStatus | "all";
 
@@ -170,7 +161,7 @@ export function VendorOrdersClient() {
                       #{order.id.slice(-6).toUpperCase()}
                     </p>
                     <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">{buyer}</p>
-                    <p className="text-xs text-[var(--color-gray-500)]">{formatDate(order.createdAt)}</p>
+                    <p className="text-xs text-[var(--color-gray-500)]">{formatDateEsPr(order.createdAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[currentStatus]}`}>
                     {STATUS_LABELS[currentStatus]}

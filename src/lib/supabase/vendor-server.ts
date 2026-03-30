@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isRecord } from "@/lib/utils";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   getCurrentShopPolicyVersions,
@@ -90,10 +91,6 @@ export type VendorRequestContext = {
   userId: string;
   profile: ProfileRow;
 };
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function normalizeOnboardingData(value: unknown) {
   return isRecord(value) ? value : {};

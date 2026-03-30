@@ -19,7 +19,7 @@ import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { formatUsd } from "@/lib/formatters";
 import { fetchPublicShopPolicies } from "@/lib/policies/client";
 import type { PublicShopPoliciesResponse, PolicyType } from "@/lib/policies/types";
-import type { ShopDetail } from "@/lib/mock-shop-data";
+import type { ShopDetail } from "@/lib/supabase/shop-types";
 import {
   checkoutCartByShop,
   fetchCartItems,
@@ -304,7 +304,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
           {shouldShowShopHeader ? (
             <header className="mb-5 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-icon)] text-xl font-bold text-[var(--color-carbon)]">
-                N
+                {shop.vendorName.charAt(0).toUpperCase()}
               </div>
               <div>
                 <h1 className="text-base font-bold leading-none text-[var(--color-carbon)]">

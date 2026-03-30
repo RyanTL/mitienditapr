@@ -2,33 +2,7 @@
 
 import type { VendorOrderStatus, VendorShopStatus } from "@/lib/vendor/constants";
 import type { VendorStatusResponse } from "@/lib/vendor/types";
-
-async function fetchJson<TResponse>(
-  path: string,
-  options: RequestInit = {},
-): Promise<TResponse> {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-  });
-
-  const body = (await response.json().catch(() => null)) as
-    | (TResponse & { error?: string })
-    | null;
-
-  if (!response.ok) {
-    throw new Error(body?.error ?? `Request failed (${response.status}).`);
-  }
-
-  if (!body) {
-    throw new Error("Respuesta invalida del servidor.");
-  }
-
-  return body;
-}
+import { fetchJson } from "@/lib/fetch-client";
 
 export function fetchVendorStatus() {
   return fetchJson<VendorStatusResponse>("/api/vendor/status", {

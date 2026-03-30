@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -30,10 +31,6 @@ type ProductRow = {
 type OrderItemRow = {
   id: string;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getNumeric(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -69,6 +66,20 @@ export async function PATCH(
   const body = await parseJsonBody<ProductPatchPayload>(request);
   if (!body || !isRecord(body)) {
     return badRequestResponse("Cuerpo invalido.");
+  }
+
+  if (typeof body.name === "string" && body.name.trim().length > 200) {
+    return NextResponse.json(
+      { error: "El nombre del producto no puede exceder 200 caracteres." },
+      { status: 400 },
+    );
+  }
+
+  if (typeof body.description === "string" && body.description.trim().length > 5000) {
+    return NextResponse.json(
+      { error: "La descripción no puede exceder 5,000 caracteres." },
+      { status: 400 },
+    );
   }
 
   let dataClient = context.supabase;

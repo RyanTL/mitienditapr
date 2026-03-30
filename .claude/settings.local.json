@@ -22,7 +22,28 @@
       "Bash(lsof -i :3001 -t)",
       "Bash(/Users/ryan/mitiendita-mobile/tsconfig.json:*)",
       "Bash(grep -n \"CREATE TABLE\\\\|ALTER TABLE\" /Users/ryan/mitienditapr/supabase/migrations/*.sql)",
-      "Bash(grep -n \"view\\\\|VIEW\\\\|COUNT\\\\|SUM\\\\|AVG\" /Users/ryan/mitienditapr/supabase/migrations/*.sql)"
+      "Bash(grep -n \"view\\\\|VIEW\\\\|COUNT\\\\|SUM\\\\|AVG\" /Users/ryan/mitienditapr/supabase/migrations/*.sql)",
+      "Bash(npx tsc:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit --pretty)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/homebrew/Cellar/node/25.5.0/bin/**)",
+      "Read(//Users/ryan/**)",
+      "Bash(export PATH=\"/usr/local/bin:$PATH\")",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(ls /Users/ryan/mitienditapr/src/lib/supabase/public-shop-data*.ts)",
+      "Bash(PATH=\"$PATH:./node_modules/.bin\" tsc --noEmit)",
+      "Bash(source ~/.zshrc)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(ls /usr/local/bin/node*)",
+      "Bash(PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\" /Users/ryan/mitienditapr/node_modules/.bin/tsc --noEmit)",
+      "Bash(npm run:*)",
+      "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\")",
+      "Bash(PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\" npm run build)",
+      "Bash(PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\" npm run lint)",
+      "Bash(xargs kill:*)",
+      "Bash(rm -f /Users/ryan/mitienditapr/.next/dev/lock)"
     ]
   }
 }

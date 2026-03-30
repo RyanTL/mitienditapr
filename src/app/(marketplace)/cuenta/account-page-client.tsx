@@ -17,6 +17,7 @@ type AccountPageClientProps = {
   initialFullName: string;
   initialPhone: string;
   initialAddress: string;
+  initialZipCode: string;
 };
 
 function getUserInitial(name: string, email: string): string {
@@ -95,11 +96,13 @@ export function AccountPageClient({
   initialFullName,
   initialPhone,
   initialAddress,
+  initialZipCode,
 }: AccountPageClientProps) {
   const [fullName, setFullName] = useState(initialFullName);
   const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState(initialPhone);
   const [address, setAddress] = useState(initialAddress);
+  const [zipCode, setZipCode] = useState(initialZipCode);
   const [currentAuthEmail, setCurrentAuthEmail] = useState(initialEmail);
 
   const [isSavingInfo, setIsSavingInfo] = useState(false);
@@ -128,6 +131,7 @@ export function AccountPageClient({
       setFullName(snap.fullName);
       setPhone(snap.phone);
       setAddress(snap.address);
+      setZipCode(snap.zipCode);
       setCurrentAuthEmail(snap.email);
       setEmail(snap.email);
     } catch {
@@ -147,7 +151,7 @@ export function AccountPageClient({
     const currentEmail = currentAuthEmail.trim().toLowerCase();
 
     try {
-      await updateAccountProfile({ fullName, phone, address });
+      await updateAccountProfile({ fullName, phone, address, zipCode });
 
       if (nextEmail !== currentEmail) {
         await requestAccountEmailChange(nextEmail);
@@ -246,6 +250,20 @@ export function AccountPageClient({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="(939) 000-0000"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <FieldLabel htmlFor="zip-code">Código postal</FieldLabel>
+                <input
+                  id="zip-code"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={5}
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                  placeholder="00XXX"
                   className={inputClass}
                 />
               </div>

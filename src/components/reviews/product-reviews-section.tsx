@@ -14,6 +14,8 @@ import type {
   ReviewSummary,
 } from "@/lib/reviews/types";
 
+import { formatDateEsPr, renderStars } from "@/lib/formatters";
+
 import { StarRatingInput } from "./star-rating-input";
 
 type ProductReviewsSectionProps = {
@@ -21,19 +23,6 @@ type ProductReviewsSectionProps = {
   productId: string;
   initialSummary?: ReviewSummary;
 };
-
-function formatReviewDate(dateValue: string) {
-  return new Intl.DateTimeFormat("es-PR", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(dateValue));
-}
-
-function renderStars(rating: number) {
-  const clamped = Math.max(0, Math.min(5, Math.round(rating)));
-  return `${"★".repeat(clamped)}${"☆".repeat(5 - clamped)}`;
-}
 
 export function ProductReviewsSection({
   shopSlug,
@@ -282,7 +271,7 @@ export function ProductReviewsSection({
                     {review.reviewerDisplayName}
                   </p>
                   <p className="text-xs text-[var(--color-gray-500)]">
-                    {formatReviewDate(review.createdAt)}
+                    {formatDateEsPr(review.createdAt)}
                   </p>
                 </div>
                 <p className="mt-1 text-sm text-[var(--color-brand)]">

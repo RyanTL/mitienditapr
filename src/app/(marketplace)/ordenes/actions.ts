@@ -49,7 +49,7 @@ export async function cancelOrder(orderId: string): Promise<{ error?: string }> 
     return { error: "Orden no encontrada o no se puede cancelar." };
   }
 
-  const { error } = await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
+  const { error } = await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId).eq("profile_id", user.id);
 
   if (error) {
     return { error: "No se pudo cancelar la orden." };

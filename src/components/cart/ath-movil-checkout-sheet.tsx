@@ -13,6 +13,7 @@ type AthMovilCheckoutSheetProps = {
   totalUsd: number;
   isOpen: boolean;
   onClose: () => void;
+  onCheckoutSuccess?: () => void;
 };
 
 type CheckoutState = "idle" | "confirming" | "success" | "error";
@@ -24,6 +25,7 @@ export function AthMovilCheckoutSheet({
   totalUsd,
   isOpen,
   onClose,
+  onCheckoutSuccess,
 }: AthMovilCheckoutSheetProps) {
   const [state, setState] = useState<CheckoutState>("idle");
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export function AthMovilCheckoutSheet({
 
       setOrderId(body.orderId ?? null);
       setState("success");
+      onCheckoutSuccess?.();
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Ocurrió un error. Intenta de nuevo.",
@@ -141,7 +144,7 @@ export function AthMovilCheckoutSheet({
                   3
                 </span>
                 <p className="text-sm leading-relaxed text-[var(--color-carbon)]">
-                  Regresa aquí y presiona <strong>"Ya envié el pago"</strong>
+                  Regresa aquí y presiona <strong>&quot;Ya envié el pago&quot;</strong>
                 </p>
               </li>
             </ol>

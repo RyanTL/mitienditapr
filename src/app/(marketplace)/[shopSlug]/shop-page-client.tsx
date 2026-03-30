@@ -22,13 +22,13 @@ import { ShopSharePopup } from "@/components/share/shop-share-popup";
 import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
-import { formatUsd } from "@/lib/formatters";
+import { formatDateEsPr, formatUsd, renderStars } from "@/lib/formatters";
 import { POLICY_TYPE_LABELS } from "@/lib/policies/constants";
 import { fetchPublicShopPolicies } from "@/lib/policies/client";
 import type { PolicyType, PublicShopPoliciesResponse } from "@/lib/policies/types";
 import { fetchShopReviews } from "@/lib/reviews/client";
 import type { ShopReviewsResponse } from "@/lib/reviews/types";
-import type { ShopDetail } from "@/lib/mock-shop-data";
+import type { ShopDetail } from "@/lib/supabase/shop-types";
 
 type ShopPageClientProps = {
   shop: ShopDetail;
@@ -43,19 +43,6 @@ const REPORT_REASON_OPTIONS = [
 
 function getContactEmail(shopSlug: string) {
   return `hola+${shopSlug}@mitienditapr.com`;
-}
-
-function renderStars(rating: number) {
-  const clamped = Math.max(0, Math.min(5, Math.round(rating)));
-  return `${"★".repeat(clamped)}${"☆".repeat(5 - clamped)}`;
-}
-
-function formatReviewDate(value: string) {
-  return new Intl.DateTimeFormat("es-PR", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
 }
 
 export function ShopPageClient({ shop }: ShopPageClientProps) {
@@ -341,7 +328,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
-                  N
+                  {shop.vendorName.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <p className="text-base font-bold text-[var(--color-carbon)]">{shop.vendorName}</p>
@@ -409,7 +396,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                           {renderStars(review.rating)}
                         </p>
                         <p className="mt-1 text-xs text-[var(--color-carbon)]">
-                          {review.reviewerDisplayName} · {formatReviewDate(review.createdAt)}
+                          {review.reviewerDisplayName} · {formatDateEsPr(review.createdAt)}
                         </p>
                       </article>
                     ))}

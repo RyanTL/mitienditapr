@@ -17,7 +17,7 @@ import { ProductReviewsSection } from "@/components/reviews/product-reviews-sect
 import { ProductShareButton } from "@/components/share/product-share-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { formatUsd } from "@/lib/formatters";
-import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data";
+import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data-server";
 
 type ProductPageProps = {
   params: Promise<{ shopSlug: string; productId: string }>;
@@ -68,7 +68,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         {/* Mobile-only shop header */}
         <header className="mb-4 flex items-center gap-2 lg:hidden">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-lg font-bold text-[var(--color-white)]">
-            N
+            {shop.vendorName.charAt(0).toUpperCase()}
           </div>
           <Link
             href={`/${shop.slug}`}
@@ -101,7 +101,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             {/* Desktop-only shop header inside info column */}
             <header className="mb-3 hidden items-center gap-2 lg:flex">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-bold text-[var(--color-white)]">
-                N
+                {shop.vendorName.charAt(0).toUpperCase()}
               </div>
               <Link
                 href={`/${shop.slug}`}

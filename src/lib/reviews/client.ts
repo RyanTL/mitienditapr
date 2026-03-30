@@ -7,6 +7,7 @@ import type {
   UpsertMyProductReviewPayload,
   UpsertMyProductReviewResponse,
 } from "@/lib/reviews/types";
+import { fetchJson } from "@/lib/fetch-client";
 
 export class ReviewsRequestError extends Error {
   status: number;
@@ -18,39 +19,6 @@ export class ReviewsRequestError extends Error {
   }
 }
 
-async function fetchJson<TResponse>(
-  path: string,
-  options: RequestInit = {},
-): Promise<TResponse> {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-  });
-
-  const body = (await response.json().catch(() => null)) as
-    | (TResponse & { error?: string })
-    | null;
-
-  if (!response.ok) {
-    throw new ReviewsRequestError(
-      body?.error ?? `Request failed (${response.status}).`,
-      response.status,
-    );
-  }
-
-  if (!body) {
-    throw new ReviewsRequestError(
-      "Respuesta invalida del servidor.",
-      response.status,
-    );
-  }
-
-  return body;
-}
-
 export function fetchProductReviews(shopSlug: string, productId: string) {
   return fetchJson<ProductReviewsResponse>(
     `/api/shops/${encodeURIComponent(shopSlug)}/products/${encodeURIComponent(productId)}/reviews`,
@@ -58,6 +26,7 @@ export function fetchProductReviews(shopSlug: string, productId: string) {
       method: "GET",
       cache: "no-store",
     },
+    ReviewsRequestError,
   );
 }
 
@@ -72,6 +41,7 @@ export function upsertMyProductReview(
       method: "PUT",
       body: JSON.stringify(payload),
     },
+    ReviewsRequestError,
   );
 }
 
@@ -81,6 +51,7 @@ export function deleteMyProductReview(shopSlug: string, productId: string) {
     {
       method: "DELETE",
     },
+    ReviewsRequestError,
   );
 }
 
@@ -95,5 +66,6 @@ export function fetchShopReviews(shopSlug: string, limit = 8) {
       method: "GET",
       cache: "no-store",
     },
+    ReviewsRequestError,
   );
 }

@@ -12,6 +12,7 @@ type ProfileRow = {
   full_name: string | null;
   phone: string | null;
   address: string | null;
+  zip_code: string | null;
 };
 
 export default async function AccountPage() {
@@ -27,7 +28,7 @@ export default async function AccountPage() {
 
   const { data: profileData } = await supabase
     .from("profiles")
-    .select("full_name,phone,address")
+    .select("full_name,phone,address,zip_code")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -35,6 +36,7 @@ export default async function AccountPage() {
     full_name: null,
     phone: null,
     address: null,
+    zip_code: null,
   };
 
   return (
@@ -43,6 +45,7 @@ export default async function AccountPage() {
       initialFullName={profile.full_name ?? ""}
       initialPhone={profile.phone ?? ""}
       initialAddress={profile.address ?? ""}
+      initialZipCode={profile.zip_code ?? ""}
     />
   );
 }

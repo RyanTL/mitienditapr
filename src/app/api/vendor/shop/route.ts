@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -43,10 +44,6 @@ type ShopPatchPayload = {
 };
 
 const MUTABLE_STATUSES = new Set<VendorShopStatus>(["paused", "active"]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getString(input: Record<string, unknown>, key: string) {
   const value = input[key];
@@ -134,6 +131,20 @@ export async function PATCH(request: Request) {
   const body = await parseJsonBody<ShopPatchPayload>(request);
   if (!body || !isRecord(body)) {
     return badRequestResponse("Cuerpo invalido.");
+  }
+
+  if (typeof body.vendorName === "string" && body.vendorName.trim().length > 100) {
+    return NextResponse.json(
+      { error: "El nombre de la tienda no puede exceder 100 caracteres." },
+      { status: 400 },
+    );
+  }
+
+  if (typeof body.description === "string" && body.description.trim().length > 2000) {
+    return NextResponse.json(
+      { error: "La descripción de la tienda no puede exceder 2,000 caracteres." },
+      { status: 400 },
+    );
   }
 
   let dataClient = context.supabase;
