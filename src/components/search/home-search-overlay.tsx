@@ -122,7 +122,7 @@ export function HomeSearchOverlay({
 
       <section
         className={[
-          "absolute top-4 right-3 left-3 mx-auto w-full max-w-md origin-top-right rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] shadow-[0_18px_44px_var(--shadow-black-018)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:top-6 md:max-w-2xl lg:max-w-3xl",
+          "absolute top-4 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-md origin-top rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] shadow-[0_18px_44px_var(--shadow-black-018)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:top-6 md:max-w-2xl lg:max-w-3xl",
           isOpen
             ? "translate-y-0 scale-100 opacity-100"
             : "translate-y-4 scale-[0.96] opacity-0",
