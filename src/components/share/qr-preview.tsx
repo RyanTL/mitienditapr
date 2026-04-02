@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
 
 type QrPreviewProps = {
   shareUrl: string;
@@ -25,6 +24,7 @@ export function QrPreview({ shareUrl, shopName, onReady }: QrPreviewProps) {
       onReady?.(null);
 
       try {
+        const { default: QRCode } = await import("qrcode");
         const dataUrl = await QRCode.toDataURL(shareUrl, {
           errorCorrectionLevel: "M",
           margin: 2,

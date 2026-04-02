@@ -38,8 +38,15 @@ import {
 } from "@/lib/vendor/client";
 import type { VendorShopStatus } from "@/lib/vendor/constants";
 import { toNumber } from "@/lib/utils";
+import type { VendorShopSettingsResponse } from "@/lib/vendor/types";
 
-type ShopResponse = Awaited<ReturnType<typeof fetchVendorShopSettings>>;
+type ShopResponse = VendorShopSettingsResponse;
+
+type VendorShopSettingsClientProps = {
+  initialStatusData?: ShopResponse;
+  initialPolicyTemplates?: PolicyTemplate[];
+  initialPolicyData?: VendorShopPoliciesResponse;
+};
 
 type PolicyDraftState = {
   title: string;
@@ -142,6 +149,44 @@ function getDraftFromPolicy(input: {
   } satisfies PolicyDraftState;
 }
 
+function buildTemplatesByType(templates: PolicyTemplate[]) {
+  return templates.reduce((map, template) => {
+    const current = map.get(template.policyType) ?? [];
+    map.set(template.policyType, [...current, template]);
+    return map;
+  }, new Map<PolicyType, PolicyTemplate[]>());
+}
+
+function buildPolicyDrafts(
+  policies: VendorShopPoliciesResponse | null,
+  templates: PolicyTemplate[],
+) {
+  const templatesByType = buildTemplatesByType(templates);
+
+  return {
+    terms: getDraftFromPolicy({
+      policyType: "terms",
+      policies,
+      templatesByType,
+    }),
+    shipping: getDraftFromPolicy({
+      policyType: "shipping",
+      policies,
+      templatesByType,
+    }),
+    refund: getDraftFromPolicy({
+      policyType: "refund",
+      policies,
+      templatesByType,
+    }),
+    privacy: getDraftFromPolicy({
+      policyType: "privacy",
+      policies,
+      templatesByType,
+    }),
+  };
+}
+
 // ─── Section wrapper ────────────────────────────────────────────────────────
 
 type SectionIconComponent = (props: ComponentPropsWithoutRef<"svg">) => ReactNode;
@@ -177,19 +222,29 @@ function Section({
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export function VendorShopSettingsClient() {
-  const [statusData, setStatusData] = useState<ShopResponse | null>(null);
-  const [formState, setFormState] = useState<ShopSettingsFormState>(DEFAULT_FORM_STATE);
-  const [policyTemplates, setPolicyTemplates] = useState<PolicyTemplate[]>([]);
-  const [policyData, setPolicyData] = useState<VendorShopPoliciesResponse | null>(null);
+export function VendorShopSettingsClient({
+  initialStatusData,
+  initialPolicyTemplates = [],
+  initialPolicyData,
+}: VendorShopSettingsClientProps) {
+  const hasInitialData = Boolean(initialStatusData && initialPolicyData);
+  const [statusData, setStatusData] = useState<ShopResponse | null>(
+    initialStatusData ?? null,
+  );
+  const [formState, setFormState] = useState<ShopSettingsFormState>(() =>
+    initialStatusData ? mapFormStateFromResponse(initialStatusData) : DEFAULT_FORM_STATE,
+  );
+  const [policyTemplates, setPolicyTemplates] = useState<PolicyTemplate[]>(
+    initialPolicyTemplates,
+  );
+  const [policyData, setPolicyData] = useState<VendorShopPoliciesResponse | null>(
+    initialPolicyData ?? null,
+  );
   const [selectedPolicyType, setSelectedPolicyType] = useState<PolicyType>("terms");
-  const [policyDrafts, setPolicyDrafts] = useState<Record<PolicyType, PolicyDraftState>>({
-    terms: createDefaultPolicyDraft(),
-    shipping: createDefaultPolicyDraft(),
-    refund: createDefaultPolicyDraft(),
-    privacy: createDefaultPolicyDraft(),
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const [policyDrafts, setPolicyDrafts] = useState<Record<PolicyType, PolicyDraftState>>(
+    () => buildPolicyDrafts(initialPolicyData ?? null, initialPolicyTemplates),
+  );
+  const [isLoading, setIsLoading] = useState(!hasInitialData);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublishingPolicy, setIsPublishingPolicy] = useState(false);
@@ -200,11 +255,7 @@ export function VendorShopSettingsClient() {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const templatesByType = useMemo(() => {
-    return policyTemplates.reduce((map, template) => {
-      const current = map.get(template.policyType) ?? [];
-      map.set(template.policyType, [...current, template]);
-      return map;
-    }, new Map<PolicyType, PolicyTemplate[]>());
+    return buildTemplatesByType(policyTemplates);
   }, [policyTemplates]);
 
   const activePolicyDraft = policyDrafts[selectedPolicyType];
@@ -227,19 +278,9 @@ export function VendorShopSettingsClient() {
       setFormState(mapFormStateFromResponse(shopResponse));
       setPolicyTemplates(templatesResponse.templates);
       setPolicyData(policiesResponse);
-
-      const templateMap = templatesResponse.templates.reduce((map, template) => {
-        const current = map.get(template.policyType) ?? [];
-        map.set(template.policyType, [...current, template]);
-        return map;
-      }, new Map<PolicyType, PolicyTemplate[]>());
-
-      setPolicyDrafts({
-        terms: getDraftFromPolicy({ policyType: "terms", policies: policiesResponse, templatesByType: templateMap }),
-        shipping: getDraftFromPolicy({ policyType: "shipping", policies: policiesResponse, templatesByType: templateMap }),
-        refund: getDraftFromPolicy({ policyType: "refund", policies: policiesResponse, templatesByType: templateMap }),
-        privacy: getDraftFromPolicy({ policyType: "privacy", policies: policiesResponse, templatesByType: templateMap }),
-      });
+      setPolicyDrafts(
+        buildPolicyDrafts(policiesResponse, templatesResponse.templates),
+      );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo cargar configuración.");
     } finally {
@@ -247,7 +288,13 @@ export function VendorShopSettingsClient() {
     }
   }, []);
 
-  useEffect(() => { void loadSettings(); }, [loadSettings]);
+  useEffect(() => {
+    if (hasInitialData) {
+      return;
+    }
+
+    void loadSettings();
+  }, [hasInitialData, loadSettings]);
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);

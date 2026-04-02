@@ -48,13 +48,17 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ shopSlug: string; productId: string }> },
 ) {
-  const { allowed } = checkRateLimit(request, "reviews:put", { maxRequests: 10, windowMs: 15 * 60 * 1000 });
-  if (!allowed) return tooManyRequestsResponse();
-
   const auth = await requireAuthenticatedUser();
   if (!auth.user) {
     return unauthorizedResponse();
   }
+
+  const { allowed } = checkRateLimit(request, "reviews:put", {
+    maxRequests: 10,
+    windowMs: 15 * 60 * 1000,
+    identifier: auth.user.id,
+  });
+  if (!allowed) return tooManyRequestsResponse();
 
   const { shopSlug, productId } = await params;
   const payload = await parseJsonBody<ReviewPayload>(request);

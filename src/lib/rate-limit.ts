@@ -18,10 +18,14 @@ function getClientIp(request: Request): string {
 export function checkRateLimit(
   request: Request,
   key: string,
-  { maxRequests, windowMs }: { maxRequests: number; windowMs: number },
+  {
+    maxRequests,
+    windowMs,
+    identifier,
+  }: { maxRequests: number; windowMs: number; identifier?: string | null },
 ): { allowed: boolean } {
-  const ip = getClientIp(request);
-  const storeKey = `${key}:${ip}`;
+  const subject = identifier?.trim() || getClientIp(request);
+  const storeKey = `${key}:${subject}`;
   const now = Date.now();
   const entry = store.get(storeKey);
 

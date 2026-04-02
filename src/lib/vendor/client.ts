@@ -1,7 +1,11 @@
 "use client";
 
 import type { VendorOrderStatus, VendorShopStatus } from "@/lib/vendor/constants";
-import type { VendorStatusResponse } from "@/lib/vendor/types";
+import type {
+  VendorProductsResponse,
+  VendorShopSettingsResponse,
+  VendorStatusResponse,
+} from "@/lib/vendor/types";
 import { fetchJson } from "@/lib/fetch-client";
 
 export function fetchVendorStatus() {
@@ -45,28 +49,7 @@ export function publishVendorShop() {
 }
 
 export function fetchVendorShopSettings() {
-  return fetchJson<{
-    shop: VendorStatusResponse["shop"];
-    policies: {
-      shop_id: string;
-      refund_policy: string;
-      shipping_policy: string;
-      privacy_policy: string;
-      terms: string;
-    } | null;
-    policyCompletion?: {
-      terms: "completed" | "recommended" | "required";
-      shipping: "completed" | "recommended" | "required";
-      refund: "completed" | "recommended" | "required";
-      privacy: "completed" | "recommended" | "required";
-      requiredReady: boolean;
-    };
-    currentPolicyVersionIds?: {
-      terms: string;
-      shipping: string;
-    } | null;
-    checks: VendorStatusResponse["checks"];
-  }>("/api/vendor/shop", {
+  return fetchJson<VendorShopSettingsResponse>("/api/vendor/shop", {
     method: "GET",
     cache: "no-store",
   });
@@ -107,38 +90,7 @@ export type VendorVariantInput = {
 };
 
 export function fetchVendorProducts() {
-  return fetchJson<{
-    products: Array<{
-      id: string;
-      shopId: string;
-      name: string;
-      description: string;
-      imageUrl: string | null;
-      priceUsd: number;
-      isActive: boolean;
-      createdAt: string;
-      updatedAt: string;
-      variants: Array<{
-        id: string;
-        productId: string;
-        title: string;
-        sku: string | null;
-        attributes: Record<string, unknown>;
-        priceUsd: number;
-        stockQty: number;
-        isActive: boolean;
-      }>;
-      images: Array<{
-        id: string;
-        productId: string;
-        imageUrl: string;
-        alt: string | null;
-        sortOrder: number;
-      }>;
-    }>;
-    productLimit: number | null;
-    productCount: number;
-  }>("/api/vendor/products", {
+  return fetchJson<VendorProductsResponse>("/api/vendor/products", {
     method: "GET",
     cache: "no-store",
   });
@@ -174,22 +126,9 @@ export function updateVendorProduct(
   });
 }
 
-export function archiveVendorProduct(productId: string) {
-  return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}/archive`, {
-    method: "POST",
-  });
-}
-
 export function deleteVendorProduct(productId: string) {
   return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}`, {
     method: "DELETE",
-  });
-}
-
-export function createVendorVariant(productId: string, payload: VendorVariantInput) {
-  return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}/variants`, {
-    method: "POST",
-    body: JSON.stringify(payload),
   });
 }
 
@@ -218,16 +157,6 @@ export function deleteVendorProductImage(productId: string, imageId: string) {
       method: "DELETE",
     },
   );
-}
-
-export function updateVendorVariant(
-  variantId: string,
-  payload: Partial<VendorVariantInput>,
-) {
-  return fetchJson<{ ok: true }>(`/api/vendor/variants/${variantId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
 }
 
 export function fetchVendorOrders() {
@@ -265,15 +194,6 @@ export function updateVendorOrderStatus(orderId: string, status: VendorOrderStat
   });
 }
 
-export function createStripeConnectAccountLink() {
-  return fetchJson<{ url: string; stripeConnectAccountId: string }>(
-    "/api/stripe/connect/account-link",
-    {
-      method: "POST",
-    },
-  );
-}
-
 export function createStripeSubscriptionCheckout() {
   return fetchJson<{ url: string }>("/api/stripe/subscription/checkout", {
     method: "POST",
@@ -303,81 +223,6 @@ export function redeemVendorAccessCode(code: string) {
   }>("/api/vendor/subscription/redeem-code", {
     method: "POST",
     body: JSON.stringify({ code }),
-  });
-}
-
-export function fetchAdminVendorAccessCodes() {
-  return fetchJson<{
-    codes: Array<{
-      id: string;
-      label: string;
-      isActive: boolean;
-      maxRedemptions: number | null;
-      redeemedCount: number;
-      benefitType: "free_months" | "lifetime_free";
-      benefitMonths: number | null;
-      expiresAt: string | null;
-      createdAt: string;
-      updatedAt: string;
-    }>;
-  }>("/api/admin/vendor-access-codes", {
-    method: "GET",
-    cache: "no-store",
-  });
-}
-
-export function createAdminVendorAccessCode(payload: {
-  label: string;
-  benefitType: "free_months" | "lifetime_free";
-  benefitMonths?: number | null;
-  maxRedemptions?: number | null;
-  expiresAt?: string | null;
-}) {
-  return fetchJson<{
-    code: {
-      id: string;
-      label: string;
-      plainCode: string;
-      isActive: boolean;
-      maxRedemptions: number | null;
-      redeemedCount: number;
-      benefitType: "free_months" | "lifetime_free";
-      benefitMonths: number | null;
-      expiresAt: string | null;
-      createdAt: string;
-      updatedAt: string;
-    };
-  }>("/api/admin/vendor-access-codes", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateAdminVendorAccessCode(
-  codeId: string,
-  payload: {
-    label?: string;
-    isActive?: boolean;
-    maxRedemptions?: number | null;
-    expiresAt?: string | null;
-  },
-) {
-  return fetchJson<{
-    code: {
-      id: string;
-      label: string;
-      isActive: boolean;
-      maxRedemptions: number | null;
-      redeemedCount: number;
-      benefitType: "free_months" | "lifetime_free";
-      benefitMonths: number | null;
-      expiresAt: string | null;
-      createdAt: string;
-      updatedAt: string;
-    };
-  }>(`/api/admin/vendor-access-codes/${codeId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
   });
 }
 

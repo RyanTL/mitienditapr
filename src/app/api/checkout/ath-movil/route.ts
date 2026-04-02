@@ -39,18 +39,6 @@ type ProfileRow = {
 };
 
 export async function POST(request: Request) {
-  const rateCheck = checkRateLimit(request, "checkout:ath-movil", {
-    maxRequests: 5,
-    windowMs: 10 * 60 * 1000,
-  });
-
-  if (!rateCheck.allowed) {
-    return NextResponse.json(
-      { error: "Demasiados intentos. Intenta de nuevo en unos minutos." },
-      { status: 429 },
-    );
-  }
-
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -59,6 +47,19 @@ export async function POST(request: Request) {
 
   if (userError || !user) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+  }
+
+  const rateCheck = checkRateLimit(request, "checkout:ath-movil", {
+    maxRequests: 5,
+    windowMs: 10 * 60 * 1000,
+    identifier: user.id,
+  });
+
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Intenta de nuevo en unos minutos." },
+      { status: 429 },
+    );
   }
 
   let body: { shopSlug?: string };

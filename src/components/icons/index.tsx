@@ -350,19 +350,6 @@ export function EyeOffIcon({ className = "h-5 w-5", ...props }: IconProps) {
   );
 }
 
-export function BarChartIcon({ className = "h-6 w-6", ...props }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
-      <path
-        d="M4 20h16M8 16V10M12 16V4M16 16V8"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 export function PlusIcon({ className = "h-5 w-5", ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>

@@ -1,16 +1,16 @@
 "use client";
 
 import type {
-  PolicyTemplate,
   PolicyType,
   PublicShopPoliciesResponse,
   VendorPolicyPublishResponse,
   VendorShopPoliciesResponse,
 } from "@/lib/policies/types";
 import { fetchJson } from "@/lib/fetch-client";
+import type { VendorPolicyTemplatesResponse } from "@/lib/vendor/types";
 
 export function fetchVendorPolicyTemplates() {
-  return fetchJson<{ templates: PolicyTemplate[] }>("/api/vendor/policies/templates", {
+  return fetchJson<VendorPolicyTemplatesResponse>("/api/vendor/policies/templates", {
     method: "GET",
     cache: "no-store",
   });

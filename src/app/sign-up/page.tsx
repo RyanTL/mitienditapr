@@ -1,19 +1,13 @@
 import { SignUpForm } from "@/app/sign-up/sign-up-form";
+import { normalizeSafeAppPath } from "@/lib/utils";
 
 type SignUpPageProps = {
   searchParams: Promise<{ next?: string }>;
 };
 
-function normalizeNextPath(nextPath: string | undefined) {
-  if (!nextPath || !nextPath.startsWith("/")) {
-    return "/";
-  }
-  return nextPath;
-}
-
 export default async function SignUpPage({ searchParams }: SignUpPageProps) {
   const { next } = await searchParams;
-  const nextPath = normalizeNextPath(next);
+  const nextPath = normalizeSafeAppPath(next);
 
   return (
     <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-8 md:flex md:items-center md:justify-center md:px-6">

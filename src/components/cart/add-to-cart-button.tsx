@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { CART_CHANGED_EVENT, type CartChangedEventDetail, addProductToCart } from "@/lib/supabase/cart";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { requireBrowserSession, redirectToSignIn } from "@/lib/supabase/browser-auth";
 
 type AddToCartButtonProps = {
   shopSlug: string;
@@ -44,12 +44,8 @@ export function AddToCartButton({
       return;
     }
 
-    // Check auth instantly (local memory) — redirect before any UI change
-    const supabase = createSupabaseBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await requireBrowserSession(router, pathname);
     if (!session) {
-      const nextPath = pathname ?? "/";
-      router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
       return;
     }
 
@@ -78,8 +74,7 @@ export function AddToCartButton({
       const result = await addProductToCart(shopSlug, productId, quantity);
       if (result.unauthorized) {
         rollbackOptimisticCart();
-        const nextPath = pathname ?? "/";
-        router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
+        redirectToSignIn(router, pathname);
         return;
       }
     } catch (error) {

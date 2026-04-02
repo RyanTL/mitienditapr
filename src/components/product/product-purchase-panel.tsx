@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ChevronDownIcon } from "@/components/icons";
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { ShippingAddressSheet } from "@/components/product/shipping-address-sheet";
+import { requireBrowserSession, redirectToSignIn } from "@/lib/supabase/browser-auth";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { addProductToCart } from "@/lib/supabase/cart";
 
@@ -58,15 +59,13 @@ export function ProductPurchasePanel({
     return () => { cancelled = true; };
   }, []);
 
-  function handleOpenAddressSheet() {
-    const supabase = createSupabaseBrowserClient();
-    void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push(`/sign-in?next=${encodeURIComponent(pathname)}`);
-        return;
-      }
-      setIsAddressSheetOpen(true);
-    });
+  async function handleOpenAddressSheet() {
+    const session = await requireBrowserSession(router, pathname);
+    if (!session) {
+      return;
+    }
+
+    setIsAddressSheetOpen(true);
   }
 
   async function handleBuyNow() {
@@ -77,7 +76,7 @@ export function ProductPurchasePanel({
       const result = await addProductToCart(shopSlug, productId, quantity);
 
       if (result.unauthorized) {
-        router.push(`/sign-in?next=${encodeURIComponent(pathname)}`);
+        redirectToSignIn(router, pathname);
         return;
       }
 
@@ -104,7 +103,7 @@ export function ProductPurchasePanel({
       <button
         type="button"
         className="mt-5 inline-flex items-center gap-1.5 text-sm text-[var(--color-carbon)] hover:opacity-70 transition-opacity"
-        onClick={handleOpenAddressSheet}
+        onClick={() => void handleOpenAddressSheet()}
       >
         {shippingLabel}
         <span className="inline-flex items-center justify-center">

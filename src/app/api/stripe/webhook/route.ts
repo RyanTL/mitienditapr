@@ -361,8 +361,9 @@ export async function POST(request: Request) {
   try {
     webhookSecret = readStripeWebhookSecret();
   } catch (error) {
+    console.error("[stripe/webhook] Missing webhook configuration:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Missing STRIPE_WEBHOOK_SECRET." },
+      { error: "Webhook endpoint is not configured." },
       { status: 500 },
     );
   }
@@ -411,13 +412,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ received: true });
   } catch (error) {
+    console.error("[stripe/webhook] Failed to process event:", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No se pudo procesar el webhook de Stripe.",
-      },
+      { error: "No se pudo procesar el webhook de Stripe." },
       { status: 500 },
     );
   }

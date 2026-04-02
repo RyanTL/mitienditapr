@@ -3,13 +3,7 @@ import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendWelcomeEmail } from "@/lib/email/resend";
-
-function normalizeNextPath(nextPath: string | null) {
-  if (!nextPath || !nextPath.startsWith("/")) {
-    return "/";
-  }
-  return nextPath;
-}
+import { normalizeSafeAppPath } from "@/lib/utils";
 
 function isNewUser(user: { created_at?: string } | null | undefined): boolean {
   if (!user?.created_at) return false;
@@ -27,7 +21,7 @@ export async function GET(request: Request) {
   // Email flows pass next via the URL query param.
   const cookieStore = await cookies();
   const nextFromCookie = cookieStore.get("oauth_next")?.value;
-  const nextPath = normalizeNextPath(
+  const nextPath = normalizeSafeAppPath(
     requestUrl.searchParams.get("next") ??
       (nextFromCookie ? decodeURIComponent(nextFromCookie) : null),
   );

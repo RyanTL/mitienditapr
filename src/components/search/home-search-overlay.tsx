@@ -6,7 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SearchIcon } from "@/components/icons";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
-import type { MarketplaceSearchShop } from "@/lib/supabase/public-shop-data-browser";
+import {
+  includesMarketplaceSearchText,
+  normalizeMarketplaceSearchText,
+} from "@/lib/marketplace/search";
+import type { MarketplaceSearchShop } from "@/lib/supabase/public-shop-data-shared";
 
 type HomeSearchOverlayProps = {
   isOpen: boolean;
@@ -25,18 +29,6 @@ type SearchProduct = {
 
 const FALLBACK_IMAGE_URL =
   "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=640&q=80";
-
-function toSearchText(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
-}
-
-function includesSearchText(value: string, searchText: string) {
-  return toSearchText(value).includes(searchText);
-}
 
 export function HomeSearchOverlay({
   isOpen,
@@ -63,7 +55,7 @@ export function HomeSearchOverlay({
     }
   }, [isOpen]);
 
-  const searchText = toSearchText(query);
+  const searchText = normalizeMarketplaceSearchText(query);
   const allProducts = useMemo<SearchProduct[]>(
     () =>
       shops.flatMap((shop) =>
@@ -86,8 +78,8 @@ export function HomeSearchOverlay({
 
     return shops.filter(
       (shop) =>
-        includesSearchText(shop.name, searchText) ||
-        includesSearchText(shop.slug, searchText),
+        includesMarketplaceSearchText(shop.name, searchText) ||
+        includesMarketplaceSearchText(shop.slug, searchText),
     );
   }, [searchText, shops]);
 
@@ -98,8 +90,8 @@ export function HomeSearchOverlay({
 
     return allProducts.filter(
       (product) =>
-        includesSearchText(product.name, searchText) ||
-        includesSearchText(product.shopName, searchText),
+        includesMarketplaceSearchText(product.name, searchText) ||
+        includesMarketplaceSearchText(product.shopName, searchText),
     );
   }, [allProducts, searchText]);
 

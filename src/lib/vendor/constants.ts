@@ -4,12 +4,7 @@ export const VENDOR_ONBOARDING_STEPS = [
 
 export const VENDOR_FREE_TIER_PRODUCT_LIMIT = 4;
 
-export type VendorStep = (typeof VENDOR_ONBOARDING_STEPS)[number]["step"];
-
 export const VENDOR_ONBOARDING_STEP_COUNT = VENDOR_ONBOARDING_STEPS.length;
-
-export const VENDOR_DEFAULT_SUBSCRIPTION_PRICE_USD = 10;
-export const VENDOR_DEFAULT_SUBSCRIPTION_INTERVAL = "month";
 
 export const VENDOR_ORDER_STATUSES = [
   "new",

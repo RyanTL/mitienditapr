@@ -30,9 +30,6 @@ function isActiveSubscriptionStatus(status: string | null | undefined) {
 }
 
 export async function POST(request: Request) {
-  const { allowed } = checkRateLimit(request, "stripe:checkout", { maxRequests: 5, windowMs: 10 * 60 * 1000 });
-  if (!allowed) return tooManyRequestsResponse();
-
   if (!isVendorModeEnabled) {
     return badRequestResponse("Vendor mode is disabled.");
   }
@@ -41,6 +38,13 @@ export async function POST(request: Request) {
   if (!context) {
     return unauthorizedResponse();
   }
+
+  const { allowed } = checkRateLimit(request, "stripe:checkout", {
+    maxRequests: 5,
+    windowMs: 10 * 60 * 1000,
+    identifier: context.userId,
+  });
+  if (!allowed) return tooManyRequestsResponse();
 
   let dataClient = context.supabase;
   try {

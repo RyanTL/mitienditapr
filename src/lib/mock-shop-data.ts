@@ -1,6 +1,4 @@
-import type { MarketplaceShopCard, Product, ShopDetail } from "@/lib/supabase/shop-types";
-
-export type { MarketplaceShopCard, Product, ShopDetail };
+import type { ShopDetail } from "@/lib/supabase/shop-types";
 
 export const mockShopDetails: ShopDetail[] = [
   {
@@ -253,21 +251,3 @@ export const mockShopDetails: ShopDetail[] = [
     athMovilPhone: null,
   },
 ];
-
-export const marketplaceShopCards: MarketplaceShopCard[] = mockShopDetails.map(
-  (shop) => ({
-    id: shop.slug,
-    name: shop.vendorName,
-    rating: shop.rating,
-    reviewCount: shop.reviewCount,
-    products: shop.products.slice(0, 3).map(({ id, imageUrl, alt }) => ({
-      id,
-      imageUrl,
-      alt,
-    })),
-  }),
-);
-
-export function getShopBySlug(shopSlug: string) {
-  return mockShopDetails.find((shop) => shop.slug === shopSlug);
-}

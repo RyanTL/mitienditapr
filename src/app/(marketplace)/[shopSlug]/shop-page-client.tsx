@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -18,7 +19,6 @@ import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-but
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { BOTTOM_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
-import { ShopSharePopup } from "@/components/share/shop-share-popup";
 import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
@@ -29,6 +29,15 @@ import type { PolicyType, PublicShopPoliciesResponse } from "@/lib/policies/type
 import { fetchShopReviews } from "@/lib/reviews/client";
 import type { ShopReviewsResponse } from "@/lib/reviews/types";
 import type { ShopDetail } from "@/lib/supabase/shop-types";
+import { fetchVendorStatus } from "@/lib/vendor/client";
+
+const ShopSharePopup = dynamic(
+  () =>
+    import("@/components/share/shop-share-popup").then(
+      (mod) => mod.ShopSharePopup,
+    ),
+  { ssr: false },
+);
 
 type ShopPageClientProps = {
   shop: ShopDetail;
@@ -86,26 +95,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
 
     async function resolveOwnerMode() {
       try {
-        const response = await fetch("/api/vendor/status", {
-          method: "GET",
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          if (isMounted) {
-            setIsOwnerViewingShop(false);
-          }
-          return;
-        }
-
-        const body = (await response.json().catch(() => null)) as
-          | {
-              shop?: {
-                slug?: string;
-              } | null;
-            }
-          | null;
-
+        const body = await fetchVendorStatus();
         if (!isMounted) {
           return;
         }
@@ -628,12 +618,14 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
         </div>
       ) : null}
 
-      <ShopSharePopup
-        isOpen={isSharePopupOpen}
-        onClose={() => setIsSharePopupOpen(false)}
-        shopSlug={shop.slug}
-        ownerMode={isOwnerViewingShop}
-      />
+      {isSharePopupOpen ? (
+        <ShopSharePopup
+          isOpen={isSharePopupOpen}
+          onClose={() => setIsSharePopupOpen(false)}
+          shopSlug={shop.slug}
+          ownerMode={isOwnerViewingShop}
+        />
+      ) : null}
     </div>
   );
 }

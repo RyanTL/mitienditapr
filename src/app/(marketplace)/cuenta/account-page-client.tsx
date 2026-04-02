@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
 import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
 import {
   changeAccountPassword,
-  fetchAccountSnapshot,
   requestAccountEmailChange,
   updateAccountProfile,
 } from "@/lib/account/client";
@@ -124,22 +123,6 @@ export function AccountPageClient({
       !isSavingPassword,
     [confirmPassword, currentPassword, isSavingPassword, newPassword],
   );
-
-  const refreshSnapshot = useCallback(async () => {
-    try {
-      const snap = await fetchAccountSnapshot();
-      setFullName(snap.fullName);
-      setPhone(snap.phone);
-      setAddress(snap.address);
-      setZipCode(snap.zipCode);
-      setCurrentAuthEmail(snap.email);
-      setEmail(snap.email);
-    } catch {
-      // keep initial values
-    }
-  }, []);
-
-  useEffect(() => { void refreshSnapshot(); }, [refreshSnapshot]);
 
   const handleSaveInfo = async (e: FormEvent) => {
     e.preventDefault();

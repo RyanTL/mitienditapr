@@ -17,7 +17,13 @@ export function badRequestResponse(message: string) {
 }
 
 export function serverErrorResponse(error: unknown, fallbackMessage: string) {
-  const message = error instanceof Error ? error.message : fallbackMessage;
+  console.error("[api] Request failed:", error);
+  const message =
+    process.env.NODE_ENV === "production"
+      ? fallbackMessage
+      : error instanceof Error
+        ? error.message
+        : fallbackMessage;
   return NextResponse.json<ErrorPayload>({ error: message }, { status: 500 });
 }
 

@@ -10,12 +10,27 @@ import {
 } from "@/lib/supabase/vendor-policy-server";
 import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import {
+  VENDOR_FREE_TIER_PRODUCT_LIMIT,
   VENDOR_ONBOARDING_STEP_COUNT,
   type VendorOnboardingStatus,
   type VendorShopStatus,
 } from "@/lib/vendor/constants";
 import { slugifyShopName } from "@/lib/vendor/slug";
 import { POLICY_TYPE_LABELS } from "@/lib/policies/constants";
+import type {
+  PolicyTemplate,
+  PolicyType,
+  VendorShopPoliciesResponse,
+} from "@/lib/policies/types";
+import type {
+  VendorPolicyTemplatesResponse,
+  VendorProductsResponse,
+  VendorShopSettingsResponse,
+} from "@/lib/vendor/types";
+import {
+  buildVendorPolicyCompletion,
+  getLatestVendorPolicyAcceptance,
+} from "@/lib/supabase/vendor-policy-server";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -84,6 +99,48 @@ type ProductRow = {
 
 type VariantRow = {
   id: string;
+};
+
+type VendorProductRow = {
+  id: string;
+  shop_id: string;
+  name: string;
+  description: string;
+  price_usd: number;
+  image_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type VendorProductVariantRow = {
+  id: string;
+  product_id: string;
+  title: string;
+  sku: string | null;
+  attributes_json: Record<string, unknown>;
+  price_usd: number;
+  stock_qty: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type VendorProductImageRow = {
+  id: string;
+  product_id: string;
+  image_url: string;
+  alt: string | null;
+  sort_order: number;
+};
+
+type PolicyTemplateRow = {
+  id: string;
+  policy_type: PolicyType;
+  locale: string;
+  title: string;
+  body_template: string;
+  version: number;
 };
 
 export type VendorRequestContext = {
@@ -401,14 +458,6 @@ function hasRequiredShopFields(shop: VendorShopRow) {
   );
 }
 
-function isActiveSubscriptionStatus(status: string | null | undefined) {
-  if (!status) {
-    return false;
-  }
-
-  return status === "active" || status === "trialing";
-}
-
 function isManualCodeExpired(subscription: VendorSubscriptionRow | null) {
   if (!subscription) {
     return false;
@@ -425,16 +474,202 @@ function isManualCodeExpired(subscription: VendorSubscriptionRow | null) {
   return new Date(subscription.current_period_end).getTime() <= Date.now();
 }
 
-function canUseSubscriptionForPublishing(subscription: VendorSubscriptionRow | null) {
-  if (!subscription) {
-    return false;
+function mapVendorProducts(
+  products: VendorProductRow[],
+  variants: VendorProductVariantRow[],
+  images: VendorProductImageRow[],
+): VendorProductsResponse["products"] {
+  const variantsByProductId = new Map<string, VendorProductVariantRow[]>();
+  variants.forEach((variant) => {
+    const currentVariants = variantsByProductId.get(variant.product_id) ?? [];
+    currentVariants.push(variant);
+    variantsByProductId.set(variant.product_id, currentVariants);
+  });
+
+  const imagesByProductId = new Map<string, VendorProductImageRow[]>();
+  images.forEach((image) => {
+    const currentImages = imagesByProductId.get(image.product_id) ?? [];
+    currentImages.push(image);
+    imagesByProductId.set(image.product_id, currentImages);
+  });
+
+  return products.map((product) => ({
+    id: product.id,
+    shopId: product.shop_id,
+    name: product.name,
+    description: product.description,
+    imageUrl: product.image_url,
+    priceUsd: Number(product.price_usd),
+    isActive: product.is_active,
+    createdAt: product.created_at,
+    updatedAt: product.updated_at,
+    variants: (variantsByProductId.get(product.id) ?? []).map((variant) => ({
+      id: variant.id,
+      productId: variant.product_id,
+      title: variant.title,
+      sku: variant.sku,
+      attributes: variant.attributes_json,
+      priceUsd: Number(variant.price_usd),
+      stockQty: variant.stock_qty,
+      isActive: variant.is_active,
+      createdAt: variant.created_at,
+      updatedAt: variant.updated_at,
+    })),
+    images: (imagesByProductId.get(product.id) ?? []).map((image) => ({
+      id: image.id,
+      productId: image.product_id,
+      imageUrl: image.image_url,
+      alt: image.alt,
+      sortOrder: image.sort_order,
+    })),
+  }));
+}
+
+export async function getVendorPolicyTemplatesData(
+  supabase: SupabaseClient,
+): Promise<VendorPolicyTemplatesResponse> {
+  const { data, error } = await supabase
+    .from("policy_templates")
+    .select("id,policy_type,locale,title,body_template,version")
+    .eq("is_active", true)
+    .eq("locale", "es-PR")
+    .order("policy_type", { ascending: true })
+    .order("version", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
   }
 
-  if (!isActiveSubscriptionStatus(subscription.status)) {
-    return false;
+  return {
+    templates: ((data as PolicyTemplateRow[] | null) ?? []).map((row) => ({
+      id: row.id,
+      policyType: row.policy_type,
+      locale: row.locale,
+      title: row.title,
+      bodyTemplate: row.body_template,
+      version: row.version,
+    })) satisfies PolicyTemplate[],
+  };
+}
+
+export async function getVendorProductsData(
+  supabase: SupabaseClient,
+  profile: ProfileRow,
+): Promise<VendorProductsResponse> {
+  const ensuredProfile = await ensureVendorRole(supabase, profile);
+  const shop = await ensureVendorShopForProfile(supabase, ensuredProfile);
+
+  const { data: productRows, error: productsError } = await supabase
+    .from("products")
+    .select("id,shop_id,name,description,price_usd,image_url,is_active,created_at,updated_at")
+    .eq("shop_id", shop.id)
+    .order("created_at", { ascending: false });
+
+  if (productsError || !productRows) {
+    throw new Error(productsError?.message ?? "No se pudieron cargar tus productos.");
   }
 
-  return !isManualCodeExpired(subscription);
+  const products = productRows as VendorProductRow[];
+  const subscription = await getVendorSubscriptionByShopId(supabase, shop.id);
+  const hasActiveSubscription =
+    subscription?.status === "active" || subscription?.status === "trialing";
+  const productLimit = hasActiveSubscription ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
+
+  if (products.length === 0) {
+    return {
+      products: [],
+      productLimit,
+      productCount: 0,
+    };
+  }
+
+  const productIds = products.map((product) => product.id);
+  const [{ data: variantRows, error: variantsError }, { data: imageRows, error: imagesError }] =
+    await Promise.all([
+      supabase
+        .from("product_variants")
+        .select(
+          "id,product_id,title,sku,attributes_json,price_usd,stock_qty,is_active,created_at,updated_at",
+        )
+        .in("product_id", productIds)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("product_images")
+        .select("id,product_id,image_url,alt,sort_order")
+        .in("product_id", productIds)
+        .order("sort_order", { ascending: true }),
+    ]);
+
+  if (variantsError || !variantRows) {
+    throw new Error(variantsError?.message ?? "No se pudieron cargar variantes.");
+  }
+
+  if (imagesError || !imageRows) {
+    throw new Error(imagesError?.message ?? "No se pudieron cargar imagenes.");
+  }
+
+  return {
+    products: mapVendorProducts(
+      products,
+      variantRows as VendorProductVariantRow[],
+      imageRows as VendorProductImageRow[],
+    ),
+    productLimit,
+    productCount: products.length,
+  };
+}
+
+export async function getVendorShopSettingsData(
+  supabase: SupabaseClient,
+  profileId: string,
+): Promise<VendorShopSettingsResponse> {
+  const shop = await getVendorShopByProfileId(supabase, profileId);
+  if (!shop) {
+    return {
+      shop: null,
+      policies: null,
+      checks: {
+        canPublish: false,
+        activeVariantCount: 0,
+        blockingReasons: ["Debes crear tu tienda."],
+      },
+    };
+  }
+
+  const [policies, checks] = await Promise.all([
+    getShopPoliciesByShopId(supabase, shop.id),
+    getVendorPublishChecks(supabase, profileId),
+  ]);
+  const currentPolicyVersions = await getCurrentShopPolicyVersions(supabase, shop.id);
+
+  return {
+    shop,
+    policies,
+    policyCompletion: buildVendorPolicyCompletion(currentPolicyVersions),
+    currentPolicyVersionIds: getRequiredPolicyIds(currentPolicyVersions),
+    checks,
+  };
+}
+
+export async function getVendorShopPoliciesData(
+  supabase: SupabaseClient,
+  profileId: string,
+): Promise<VendorShopPoliciesResponse> {
+  const shop = await getVendorShopByProfileId(supabase, profileId);
+  if (!shop) {
+    throw new Error("Debes crear tu tienda primero.");
+  }
+
+  const currentPolicies = await getCurrentShopPolicyVersions(supabase, shop.id);
+  const completion = buildVendorPolicyCompletion(currentPolicies);
+  const latestAcceptance = await getLatestVendorPolicyAcceptance(supabase, shop.id);
+
+  return {
+    locale: "es-PR",
+    currentPolicies,
+    completion,
+    latestAcceptance,
+  };
 }
 
 export async function getVendorPublishChecks(

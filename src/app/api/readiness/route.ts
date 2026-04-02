@@ -62,6 +62,8 @@ type ReadinessResult = {
   errors: string[];
 };
 
+type PublicReadinessResult = Pick<ReadinessResult, "ok" | "timestamp">;
+
 async function checkTableExists(admin: SupabaseClient, tableName: string) {
   const { error } = await admin
     .from(tableName)
@@ -133,7 +135,13 @@ export async function GET() {
   };
 
   if (missingEnv.length > 0) {
-    return NextResponse.json(result, { status: 503 });
+    return NextResponse.json(
+      {
+        ok: false,
+        timestamp: result.timestamp,
+      } satisfies PublicReadinessResult,
+      { status: 503 },
+    );
   }
 
   try {
@@ -175,6 +183,7 @@ export async function GET() {
     );
     result.dbConnected = true;
   } catch (error) {
+    console.error("[readiness] Readiness check failed:", error);
     result.errors.push(
       error instanceof Error ? error.message : "DB readiness check failed.",
     );
@@ -194,5 +203,10 @@ export async function GET() {
     result.checks.shopPoliciesShippingVersion &&
     result.errors.length === 0;
 
-  return NextResponse.json(result, { status: result.ok ? 200 : 503 });
+  const publicResult: PublicReadinessResult = {
+    ok: result.ok,
+    timestamp: result.timestamp,
+  };
+
+  return NextResponse.json(publicResult, { status: result.ok ? 200 : 503 });
 }

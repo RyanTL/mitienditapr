@@ -50,9 +50,6 @@ async function ensurePublicBucket(
 }
 
 export async function POST(request: Request) {
-  const { allowed } = checkRateLimit(request, "uploads:image", { maxRequests: 30, windowMs: 10 * 60 * 1000 });
-  if (!allowed) return tooManyRequestsResponse();
-
   if (!isVendorModeEnabled) {
     return badRequestResponse("Vendor mode is disabled.");
   }
@@ -62,11 +59,18 @@ export async function POST(request: Request) {
     return unauthorizedResponse();
   }
 
+  const { allowed } = checkRateLimit(request, "uploads:image", {
+    maxRequests: 30,
+    windowMs: 10 * 60 * 1000,
+    identifier: context.userId,
+  });
+  if (!allowed) return tooManyRequestsResponse();
+
   let admin: SupabaseClient;
   try {
     admin = createSupabaseAdminClient();
   } catch (error) {
-    return serverErrorResponse(error, "Configura SUPABASE_SECRET_KEY para subir imagenes.");
+    return serverErrorResponse(error, "La subida de imágenes no está configurada.");
   }
 
   try {

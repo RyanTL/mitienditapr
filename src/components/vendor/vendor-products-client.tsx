@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AlertIcon, ChevronIcon, PackageIcon } from "@/components/icons";
@@ -22,8 +23,13 @@ import {
 } from "@/lib/vendor/client";
 import { formatUsd } from "@/lib/formatters";
 import { toNumber } from "@/lib/utils";
+import type { VendorProductsResponse } from "@/lib/vendor/types";
 
-type VendorProduct = Awaited<ReturnType<typeof fetchVendorProducts>>["products"][number];
+type VendorProduct = VendorProductsResponse["products"][number];
+
+type VendorProductsClientProps = {
+  initialData?: VendorProductsResponse;
+};
 
 type SheetState =
   | { open: false }
@@ -641,10 +647,14 @@ function ProductSheet({
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function VendorProductsClient() {
-  const [products, setProducts] = useState<VendorProduct[]>([]);
-  const [productLimit, setProductLimit] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function VendorProductsClient({ initialData }: VendorProductsClientProps) {
+  const [products, setProducts] = useState<VendorProduct[]>(
+    initialData?.products ?? [],
+  );
+  const [productLimit, setProductLimit] = useState<number | null>(
+    initialData?.productLimit ?? null,
+  );
+  const [isLoading, setIsLoading] = useState(!initialData);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [sheetState, setSheetState] = useState<SheetState>({ open: false });
 
@@ -664,7 +674,13 @@ export function VendorProductsClient() {
 
   const isAtLimit = productLimit !== null && products.length >= productLimit;
 
-  useEffect(() => { void loadProducts(); }, [loadProducts]);
+  useEffect(() => {
+    if (initialData) {
+      return;
+    }
+
+    void loadProducts();
+  }, [initialData, loadProducts]);
 
   const lowStockCount = products.filter((p) => {
     if (!p.isActive) return false;
@@ -695,12 +711,12 @@ export function VendorProductsClient() {
           <p className="mt-1 text-sm text-[var(--color-gray-500)]">
             Suscríbete al Plan Vendedor por $10/mes para productos ilimitados.
           </p>
-          <a
+          <Link
             href="/vendedor/suscripcion"
             className="mt-3 inline-flex items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
           >
             Desbloquear productos ilimitados
-          </a>
+          </Link>
         </div>
       )}
 
