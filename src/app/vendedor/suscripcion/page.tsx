@@ -1,16 +1,16 @@
 import { redirect } from "next/navigation";
 
-import { VendorProductsClient } from "@/components/vendor/vendor-products-client";
+import { VendorSubscriptionClient } from "@/components/vendor/vendor-subscription-client";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   getVendorRequestContext,
   getVendorStatusSnapshot,
 } from "@/lib/supabase/vendor-server";
 
-export default async function VendorProductsPage() {
+export default async function VendorSubscriptionPage() {
   const context = await getVendorRequestContext();
   if (!context) {
-    redirect("/sign-in?next=/vendedor/productos");
+    redirect("/sign-in?next=/vendedor/suscripcion");
   }
 
   let dataClient = context.supabase;
@@ -31,5 +31,13 @@ export default async function VendorProductsPage() {
     redirect("/vendedor/onboarding");
   }
 
-  return <VendorProductsClient />;
+  const isSubscribed =
+    snapshot.subscription?.status === "active" ||
+    snapshot.subscription?.status === "trialing";
+
+  if (isSubscribed) {
+    redirect("/vendedor/panel");
+  }
+
+  return <VendorSubscriptionClient />;
 }

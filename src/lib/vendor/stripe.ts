@@ -32,6 +32,16 @@ export type StripeWebhookEvent<TData = unknown> = {
   };
 };
 
+export type StripeCheckoutSessionResponse = {
+  id: string;
+  url: string | null;
+  status?: string;
+  payment_status?: string;
+  customer?: string;
+  subscription?: string;
+  metadata?: Record<string, string>;
+};
+
 function readStripeSecretKey() {
   const value = process.env.STRIPE_SECRET_KEY;
   if (!value) {
@@ -96,6 +106,29 @@ async function stripeRequest<TResponse>(
   return json;
 }
 
+async function stripeGetRequest<TResponse>(path: string): Promise<TResponse> {
+  const secretKey = readStripeSecretKey();
+
+  const response = await fetch(`https://api.stripe.com/v1${path}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+    },
+    cache: "no-store",
+  });
+
+  const json = (await response.json().catch(() => null)) as
+    | (TResponse & { error?: { message?: string } })
+    | null;
+
+  if (!response.ok || !json) {
+    const fallbackMessage = `Stripe request failed (${response.status}).`;
+    throw new Error(json?.error?.message ?? fallbackMessage);
+  }
+
+  return json;
+}
+
 type StripeExpressAccountResponse = {
   id: string;
 };
@@ -139,11 +172,6 @@ export async function createStripeCustomer(input: {
   });
 }
 
-type StripeCheckoutSessionResponse = {
-  id: string;
-  url: string | null;
-};
-
 export async function createStripeSubscriptionCheckoutSession(input: {
   customerId: string;
   priceId: string;
@@ -160,12 +188,26 @@ export async function createStripeSubscriptionCheckoutSession(input: {
   return stripeRequest<StripeCheckoutSessionResponse>("/checkout/sessions", {
     mode: "subscription",
     customer: input.customerId,
+    "payment_method_types[0]": "card",
+    "payment_method_types[1]": "link",
     "line_items[0][price]": input.priceId,
     "line_items[0][quantity]": 1,
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
     ...metadataParams,
   });
+}
+
+export async function readStripeCheckoutSession(sessionId: string) {
+  return stripeGetRequest<StripeCheckoutSessionResponse>(
+    `/checkout/sessions/${encodeURIComponent(sessionId)}`,
+  );
+}
+
+export async function readStripeSubscription(subscriptionId: string) {
+  return stripeGetRequest<StripeSubscriptionEventObject>(
+    `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+  );
 }
 
 export function verifyStripeWebhookSignature(input: {

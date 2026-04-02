@@ -177,7 +177,7 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        {!isLoadingShops && !shopsError && shopCards.length === 0 ? (
+        {!isLoadingShops && !shopsError && shopCards.length === 0 && !isFiltering ? (
           <section className="rounded-3xl bg-[var(--color-white)] px-4 py-5 text-center shadow-[0_1px_3px_var(--shadow-black-008),0_8px_24px_var(--shadow-black-008)]">
             <p className="text-sm font-semibold text-[var(--color-carbon)]">
               No hay tiendas disponibles.

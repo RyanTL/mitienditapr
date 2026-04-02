@@ -1,7 +1,8 @@
 export const VENDOR_ONBOARDING_STEPS = [
   { step: 1, title: "Tu tienda", description: "Configura el nombre y aspecto de tu tienda." },
-  { step: 2, title: "Activa tu plan", description: "Suscríbete por $10/mes para abrir tu tienda." },
 ] as const;
+
+export const VENDOR_FREE_TIER_PRODUCT_LIMIT = 4;
 
 export type VendorStep = (typeof VENDOR_ONBOARDING_STEPS)[number]["step"];
 

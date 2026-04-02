@@ -2,13 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
-import { BackIcon, CheckIcon, CloseIcon } from "@/components/icons";
+import { BackIcon, CloseIcon } from "@/components/icons";
 import {
-  createStripeSubscriptionCheckout,
-  fetchVendorStatus,
-  redeemVendorAccessCode,
   saveVendorOnboardingStep,
   startVendorOnboarding,
   uploadVendorImage,
@@ -23,7 +20,6 @@ type FormState = {
   slug: string;
   description: string;
   logoUrl: string;
-  accessCode: string;
 };
 
 const EMPTY: FormState = {
@@ -31,7 +27,6 @@ const EMPTY: FormState = {
   slug: "",
   description: "",
   logoUrl: "",
-  accessCode: "",
 };
 
 /* ── Helpers ────────────────────────────────────────── */
@@ -51,12 +46,7 @@ function hydrate(snap: VendorStatusResponse, prev: FormState): FormState {
 }
 
 function done(s: VendorStatusResponse) {
-  return (
-    s.onboarding?.status === "completed" ||
-    s.subscription?.status === "active" ||
-    s.subscription?.status === "trialing" ||
-    s.billingBypassEnabled
-  );
+  return s.onboarding?.status === "completed";
 }
 
 /* ── Sub-components ─────────────────────────────────── */
@@ -108,7 +98,6 @@ const CSS = `
 .ob2{animation:onb-up .55s cubic-bezier(.16,1,.3,1) .1s both}
 .ob3{animation:onb-up .55s cubic-bezier(.16,1,.3,1) .16s both}
 .ob4{animation:onb-up .55s cubic-bezier(.16,1,.3,1) .22s both}
-.ob5{animation:onb-up .55s cubic-bezier(.16,1,.3,1) .28s both}
 .obh{animation:onb-hero .7s cubic-bezier(.16,1,.3,1) both}
 .obh1{animation:onb-hero .7s cubic-bezier(.16,1,.3,1) .08s both}
 .obh2{animation:onb-hero .7s cubic-bezier(.16,1,.3,1) .16s both}
@@ -116,32 +105,23 @@ const CSS = `
 
 /* ── Constants ──────────────────────────────────────── */
 
-const SEGMENTS = 4;
-const FEATURES = [
-  "Tienda pública en mitienditapr.com",
-  "Código QR para compartir",
-  "Productos ilimitados",
-  "Seguimiento de pedidos en vivo",
-];
+const SEGMENTS = 3;
 
 /* ── Component ──────────────────────────────────────── */
 
 export function VendorOnboardingClient() {
   const router = useRouter();
-  const params = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* state */
   const [, setSnap] = useState<VendorStatusResponse | null>(null);
   const [form, setForm] = useState(EMPTY);
-  const [step, setStep] = useState(0); // 0 welcome · 1 name · 2 desc · 3 logo · 4 plan
+  const [step, setStep] = useState(0); // 0 welcome · 1 name · 2 desc · 3 logo
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [slugEdited, setSlugEdited] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(false);
 
   /* anim refs */
   const dir = useRef(0);
@@ -160,6 +140,7 @@ export function VendorOnboardingClient() {
   // init
   useEffect(() => {
     let alive = true;
+
     (async () => {
       setLoading(true);
       try {
@@ -171,7 +152,6 @@ export function VendorOnboardingClient() {
           router.replace("/vendedor/panel");
           return;
         }
-        if ((snapshot.onboarding?.current_step ?? 1) >= 2) setStep(4);
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : "No se pudo cargar.");
       } finally {
@@ -184,38 +164,6 @@ export function VendorOnboardingClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // stripe redirect
-  useEffect(() => {
-    const sub = params.get("subscription");
-    if (!sub) return;
-    if (sub === "success" || sub === "already_active") {
-      (async () => {
-        setSaving(true);
-        setInfo("Verificando tu suscripción…");
-        try {
-          await saveVendorOnboardingStep(2, { subscriptionCheckoutCompleted: true });
-          const s = await fetchVendorStatus();
-          if (done(s)) {
-            router.replace("/vendedor/panel");
-            return;
-          }
-          setInfo("Suscripción activada. Accediendo…");
-          setTimeout(() => router.replace("/vendedor/panel"), 1500);
-        } catch {
-          setStep(4);
-          setInfo("Suscripción procesada. Redirigiendo…");
-          setTimeout(() => router.replace("/vendedor/panel"), 1500);
-        } finally {
-          setSaving(false);
-        }
-      })();
-    } else if (sub === "cancel") {
-      setStep(4);
-      setInfo("Puedes intentarlo de nuevo cuando estés listo.");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // auto-slug
   useEffect(() => {
     if (!slugEdited && form.vendorName) {
@@ -225,7 +173,7 @@ export function VendorOnboardingClient() {
 
   /* ── handlers ── */
 
-  async function saveAndPlan() {
+  async function saveAndFinish() {
     const name = form.vendorName.trim();
     const slug = form.slug.trim();
     if (!name) {
@@ -247,12 +195,11 @@ export function VendorOnboardingClient() {
         description: form.description.trim(),
         logoUrl: form.logoUrl.trim(),
       });
-      go(4);
+      router.replace("/vendedor/panel?welcome=onboarding-complete");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "No se pudo guardar.";
       setError(msg);
       if (/url|slug/i.test(msg)) go(1);
-    } finally {
       setSaving(false);
     }
   }
@@ -267,42 +214,12 @@ export function VendorOnboardingClient() {
       }
       go(2);
     } else if (step === 2) go(3);
-    else if (step === 3) void saveAndPlan();
+    else if (step === 3) void saveAndFinish();
   }
 
   function back() {
     if (step > 0) go(step - 1);
     else router.back();
-  }
-
-  async function subscribe() {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await createStripeSubscriptionCheckout();
-      window.location.assign(res.url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo abrir el pago.");
-      setSaving(false);
-    }
-  }
-
-  async function redeem() {
-    const code = form.accessCode.trim();
-    if (!code) {
-      setError("Escribe un código de acceso.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const r = await redeemVendorAccessCode(code);
-      if (r.alreadyRedeemed) setInfo("Ya tenías este código aplicado.");
-      router.replace("/vendedor/panel");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Código inválido.");
-      setSaving(false);
-    }
   }
 
   async function upload(file: File) {
@@ -379,7 +296,7 @@ export function VendorOnboardingClient() {
                     tienda
                   </h1>
                   <p className="obh1 mt-4 max-w-[300px] text-[16px] leading-[1.5] text-[#86868b]">
-                    Vende en Puerto Rico con tu propia tienda online. Rápido, fácil, sin
+                    Vende en Puerto Rico con tu propia tienda online. Gratis, fácil, sin
                     complicaciones.
                   </p>
                 </div>
@@ -546,119 +463,7 @@ export function VendorOnboardingClient() {
                     disabled={saving || uploading}
                     className="w-full rounded-full bg-black py-[18px] text-[16px] font-semibold text-white transition-all active:scale-[0.98] disabled:bg-[#d1d1d6]"
                   >
-                    {saving ? "Guardando…" : "Continuar"}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ── Plan ─────────────────────────────── */}
-            {step === 4 && (
-              <>
-                <div className="flex flex-1 flex-col px-7 pt-4 pb-4">
-                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black">
-                    Activa tu
-                    <br />
-                    tienda
-                  </h1>
-                  <p className="ob2 mt-2.5 text-[15px] text-[#86868b]">
-                    Suscríbete para comenzar a vender
-                  </p>
-
-                  {/* preview */}
-                  <div className="ob3 mt-8 flex items-center gap-3.5">
-                    {form.logoUrl ? (
-                      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl">
-                        <Image src={form.logoUrl} alt="" fill className="object-cover" />
-                      </div>
-                    ) : (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#f5f5f7]">
-                        <span className="text-[18px] font-bold text-[#aeaeb2]">
-                          {(form.vendorName || "T")[0]?.toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-[16px] font-semibold text-black">
-                        {form.vendorName}
-                      </p>
-                      <p className="truncate text-[13px] text-[#aeaeb2]">
-                        {host}/{form.slug}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* plan card */}
-                  <div className="ob4 mt-6 rounded-2xl border border-[#e5e5ea] p-5">
-                    <div className="flex items-baseline justify-between">
-                      <p className="text-[15px] font-semibold text-black">Plan Vendedor</p>
-                      <div>
-                        <span className="text-[32px] font-bold tracking-tight text-black">
-                          $10
-                        </span>
-                        <span className="ml-0.5 text-[14px] text-[#aeaeb2]">/mes</span>
-                      </div>
-                    </div>
-                    <div className="mt-5 space-y-3">
-                      {FEATURES.map((feat) => (
-                        <div key={feat} className="flex items-center gap-2.5">
-                          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-black">
-                            <CheckIcon className="h-2.5 w-2.5 text-white" />
-                          </span>
-                          <span className="text-[14px] text-[#3c3c43]">{feat}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="mt-4 text-[13px] text-[#aeaeb2]">Cancela cuando quieras</p>
-                  </div>
-
-                  {/* access code */}
-                  <div className="ob5 mt-5">
-                    <button
-                      type="button"
-                      onClick={() => setCodeOpen((v) => !v)}
-                      className="text-[14px] text-[#aeaeb2] underline decoration-[#d1d1d6] underline-offset-2"
-                    >
-                      ¿Tienes un código de acceso?
-                    </button>
-                    {codeOpen && (
-                      <div className="mt-3 flex gap-2">
-                        <input
-                          type="text"
-                          value={form.accessCode}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, accessCode: e.target.value }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void redeem();
-                          }}
-                          placeholder="CODIGO123"
-                          className="flex-1 rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] px-4 py-3 text-[14px] text-black placeholder:text-[#d1d1d6] focus:border-black focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void redeem()}
-                          className="shrink-0 rounded-xl border border-black px-5 py-3 text-[14px] font-semibold text-black transition-opacity hover:opacity-60 disabled:opacity-40"
-                        >
-                          Aplicar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {info && <p className="mt-4 text-[14px] text-[#007aff]">{info}</p>}
-                  {error && <p className="mt-4 text-[14px] text-[#ff3b30]">{error}</p>}
-                </div>
-
-                <div className="shrink-0 px-7 pb-12 pt-4">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void subscribe()}
-                    className="w-full rounded-full bg-black py-[18px] text-[16px] font-semibold text-white transition-all active:scale-[0.98] disabled:bg-[#d1d1d6]"
-                  >
-                    {saving ? "Cargando…" : "Suscribirme por $10/mes"}
+                    {saving ? "Creando tu tienda…" : "Crear mi tienda"}
                   </button>
                 </div>
               </>

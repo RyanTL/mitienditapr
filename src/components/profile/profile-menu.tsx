@@ -39,9 +39,21 @@ async function fetchVendorMenuEntry(): Promise<VendorMenuEntry | null> {
     .eq("vendor_profile_id", session.user.id)
     .maybeSingle();
 
-  return shop
-    ? { href: "/vendedor/panel", label: "Panel de vendedor" }
-    : { href: "/vendedor/onboarding", label: "Conviértete en vendedor" };
+  if (!shop) {
+    return { href: "/vendedor/onboarding", label: "Conviértete en vendedor" };
+  }
+
+  const { data: onboarding } = await supabase
+    .from("vendor_onboarding")
+    .select("status")
+    .eq("vendor_profile_id", session.user.id)
+    .maybeSingle();
+
+  if (onboarding?.status === "completed") {
+    return { href: "/vendedor/panel", label: "Panel de vendedor" };
+  }
+
+  return { href: "/vendedor/onboarding", label: "Completa tu tienda" };
 }
 
 type ProfileMenuProps = {

@@ -643,6 +643,7 @@ function ProductSheet({
 // ── Main component ────────────────────────────────────────────────────────────
 export function VendorProductsClient() {
   const [products, setProducts] = useState<VendorProduct[]>([]);
+  const [productLimit, setProductLimit] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [sheetState, setSheetState] = useState<SheetState>({ open: false });
@@ -653,12 +654,15 @@ export function VendorProductsClient() {
     try {
       const res = await fetchVendorProducts();
       setProducts(res.products);
+      setProductLimit(res.productLimit);
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "No se pudieron cargar productos.");
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const isAtLimit = productLimit !== null && products.length >= productLimit;
 
   useEffect(() => { void loadProducts(); }, [loadProducts]);
 
@@ -683,6 +687,29 @@ export function VendorProductsClient() {
         </div>
       )}
 
+      {!isLoading && isAtLimit && (
+        <div className="rounded-2xl border border-[var(--color-brand)]/20 bg-[var(--color-brand)]/5 p-4">
+          <p className="text-sm font-semibold text-[var(--color-carbon)]">
+            Has alcanzado el límite de {productLimit} productos gratuitos
+          </p>
+          <p className="mt-1 text-sm text-[var(--color-gray-500)]">
+            Suscríbete al Plan Vendedor por $10/mes para productos ilimitados.
+          </p>
+          <a
+            href="/vendedor/suscripcion"
+            className="mt-3 inline-flex items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
+          >
+            Desbloquear productos ilimitados
+          </a>
+        </div>
+      )}
+
+      {!isLoading && productLimit !== null && !isAtLimit && products.length > 0 && (
+        <p className="text-xs text-[var(--color-gray-500)]">
+          {products.length} de {productLimit} productos gratuitos usados
+        </p>
+      )}
+
       {/* Product list */}
       {isLoading ? (
         <div className="space-y-3">
@@ -704,7 +731,8 @@ export function VendorProductsClient() {
           <button
             type="button"
             onClick={() => setSheetState({ open: true, mode: "create" })}
-            className="rounded-full bg-[var(--color-brand)] px-6 py-2.5 text-sm font-bold text-white"
+            className="rounded-full bg-[var(--color-brand)] px-6 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+            disabled={isAtLimit}
           >
             + Agregar producto
           </button>
@@ -764,8 +792,8 @@ export function VendorProductsClient() {
         onSaved={() => void loadProducts()}
       />
 
-      {/* FAB — hidden when empty state shown */}
-      {products.length > 0 && (
+      {/* FAB — hidden when empty state or at limit */}
+      {products.length > 0 && !isAtLimit && (
         <button
           type="button"
           onClick={() => setSheetState({ open: true, mode: "create" })}

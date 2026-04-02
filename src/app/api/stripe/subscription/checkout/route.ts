@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
     if (isActiveSubscriptionStatus(existingSubscription?.status)) {
       return NextResponse.json({
-        url: `${baseUrl}/vendedor/onboarding?step=2&subscription=already_active`,
+        url: `${baseUrl}/vendedor/panel`,
       });
     }
 
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       );
 
       return NextResponse.json({
-        url: `${baseUrl}/vendedor/onboarding?step=2&subscription=success`,
+        url: `${baseUrl}/vendedor/panel`,
       });
     }
 
@@ -120,8 +120,8 @@ export async function POST(request: Request) {
     const checkoutSession = await createStripeSubscriptionCheckoutSession({
       customerId,
       priceId,
-      successUrl: `${baseUrl}/vendedor/onboarding?step=2&subscription=success`,
-      cancelUrl: `${baseUrl}/vendedor/onboarding?step=2&subscription=cancel`,
+      successUrl: `${baseUrl}/vendedor/activacion?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${baseUrl}/vendedor/onboarding?subscription=cancel`,
       metadata: {
         shop_id: shop.id,
         vendor_profile_id: profile.id,

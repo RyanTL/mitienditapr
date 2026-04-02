@@ -7,12 +7,14 @@ import {
   serverErrorResponse,
   unauthorizedResponse,
 } from "@/lib/vendor/api";
+import { VENDOR_FREE_TIER_PRODUCT_LIMIT } from "@/lib/vendor/constants";
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
+  getVendorSubscriptionByShopId,
 } from "@/lib/supabase/vendor-server";
 
 type VariantPayload = {
@@ -167,8 +169,14 @@ export async function GET() {
   }
 
   const products = productRows as ProductRow[];
+
+  const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
+  const hasActiveSubscription =
+    subscription?.status === "active" || subscription?.status === "trialing";
+  const productLimit = hasActiveSubscription ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
+
   if (products.length === 0) {
-    return NextResponse.json({ products: [] });
+    return NextResponse.json({ products: [], productLimit, productCount: 0 });
   }
 
   const productIds = products.map((row) => row.id);
@@ -203,6 +211,8 @@ export async function GET() {
       variantRows as VariantRow[],
       imageRows as ImageRow[],
     ),
+    productLimit,
+    productCount: products.length,
   });
 }
 
@@ -305,6 +315,27 @@ export async function POST(request: Request) {
   try {
     const profile = await ensureVendorRole(dataClient, context.profile);
     const shop = await ensureVendorShopForProfile(dataClient, profile);
+
+    const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
+    const hasActiveSubscription =
+      subscription?.status === "active" || subscription?.status === "trialing";
+
+    if (!hasActiveSubscription) {
+      const { count } = await dataClient
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("shop_id", shop.id);
+
+      if ((count ?? 0) >= VENDOR_FREE_TIER_PRODUCT_LIMIT) {
+        return NextResponse.json(
+          {
+            error: `Has alcanzado el límite de ${VENDOR_FREE_TIER_PRODUCT_LIMIT} productos del plan gratuito. Suscríbete al Plan Vendedor ($10/mes) para productos ilimitados.`,
+            upgradeRequired: true,
+          },
+          { status: 403 },
+        );
+      }
+    }
 
     const { data: productRow, error: productError } = await dataClient
       .from("products")

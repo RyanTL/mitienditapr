@@ -2,16 +2,18 @@ import { NextResponse } from "next/server";
 
 import {
   readStripeWebhookSecret,
+  readStripeSubscription,
   type StripeInvoiceEventObject,
   type StripeSubscriptionEventObject,
   type StripeWebhookEvent,
   verifyStripeWebhookSignature,
 } from "@/lib/vendor/stripe";
-import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
-  ensureVendorOnboardingRecord,
-  upsertVendorOnboardingStep,
-} from "@/lib/supabase/vendor-server";
+  activateVendorStripeSubscription,
+  isActiveVendorSubscriptionStatus,
+  normalizeStripeSubscriptionStatus,
+} from "@/lib/vendor/subscription-activation";
+import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
 type VendorSubscriptionRow = {
   id: string;
@@ -30,44 +32,16 @@ type ShopRow = {
   published_at: string | null;
 };
 
+type ShopProfileRow = {
+  vendor_profile_id: string;
+};
+
 type StripeCheckoutSessionEventObject = {
   id: string;
   customer?: string;
   subscription?: string;
   metadata?: Record<string, string>;
 };
-
-function isActiveStatus(status: string | null | undefined) {
-  if (!status) {
-    return false;
-  }
-
-  return status === "active" || status === "trialing";
-}
-
-function normalizeSubscriptionStatus(status: string | undefined) {
-  if (!status) {
-    return "inactive";
-  }
-
-  const validStatuses = new Set([
-    "active",
-    "trialing",
-    "past_due",
-    "unpaid",
-    "canceled",
-    "incomplete",
-    "incomplete_expired",
-    "paused",
-    "inactive",
-  ]);
-
-  if (validStatuses.has(status)) {
-    return status;
-  }
-
-  return "inactive";
-}
 
 function shouldHandleStripeManagedSubscription(
   subscription: VendorSubscriptionRow | null,
@@ -142,7 +116,7 @@ async function updateShopVisibilityFromSubscription(input: {
     return;
   }
 
-  if (isActiveStatus(input.subscriptionStatus)) {
+  if (isActiveVendorSubscriptionStatus(input.subscriptionStatus)) {
     const { error: restoreError } = await admin
       .from("shops")
       .update({
@@ -252,16 +226,40 @@ async function handleInvoiceEvent(event: StripeWebhookEvent<StripeInvoiceEventOb
   }
 
   if (event.type === "invoice.paid") {
-    const { error: updateError } = await admin
-      .from("vendor_subscriptions")
-      .update({
-        status: "active",
-        last_invoice_status: invoice.status ?? "paid",
-      })
-      .eq("id", subscription.id);
+    const { data: shopProfileData, error: shopProfileError } = await admin
+      .from("shops")
+      .select("vendor_profile_id")
+      .eq("id", subscription.shop_id)
+      .maybeSingle();
 
-    if (updateError) {
-      throw new Error(updateError.message);
+    if (shopProfileError) {
+      throw new Error(shopProfileError.message);
+    }
+
+    const shopProfile = shopProfileData as ShopProfileRow | null;
+
+    if (shopProfile?.vendor_profile_id) {
+      await activateVendorStripeSubscription({
+        supabase: admin,
+        shopId: subscription.shop_id,
+        profileId: shopProfile.vendor_profile_id,
+        customerId: subscription.stripe_customer_id,
+        subscriptionId: subscription.stripe_subscription_id,
+        status: "active",
+        lastInvoiceStatus: invoice.status ?? "paid",
+      });
+    } else {
+      const { error: updateError } = await admin
+        .from("vendor_subscriptions")
+        .update({
+          status: "active",
+          last_invoice_status: invoice.status ?? "paid",
+        })
+        .eq("id", subscription.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
     }
 
     await updateShopVisibilityFromSubscription({
@@ -283,35 +281,27 @@ async function handleCheckoutSessionCompleted(
   const vendorProfileId = session.metadata?.vendor_profile_id;
 
   const admin = createSupabaseAdminClient();
-  if (shopId) {
-    const { error } = await admin
-      .from("vendor_subscriptions")
-      .upsert(
-        {
-          shop_id: shopId,
-          provider: "stripe",
-          status: "active",
-          stripe_customer_id: customerId,
-          stripe_subscription_id: subscriptionId,
-        },
-        { onConflict: "shop_id" },
-      );
+  if (shopId && vendorProfileId) {
+    const subscription = subscriptionId
+      ? await readStripeSubscription(subscriptionId).catch(() => null)
+      : null;
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    // Mark onboarding as completed so the vendor can access the dashboard.
-    if (vendorProfileId) {
-      const onboarding = await ensureVendorOnboardingRecord(admin, vendorProfileId);
-      await upsertVendorOnboardingStep(
-        admin,
-        vendorProfileId,
-        "completed",
-        Math.max(onboarding.current_step, 2),
-        onboarding.data_json,
-      );
-    }
+    await activateVendorStripeSubscription({
+      supabase: admin,
+      shopId,
+      profileId: vendorProfileId,
+      customerId,
+      subscriptionId,
+      status: normalizeStripeSubscriptionStatus(subscription?.status ?? "active"),
+      priceId: subscription?.items?.data?.[0]?.price?.id ?? null,
+      currentPeriodEnd:
+        typeof subscription?.current_period_end === "number"
+          ? new Date(subscription.current_period_end * 1000).toISOString()
+          : null,
+      cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
+      checkoutSessionId: session.id,
+      lastInvoiceStatus: "paid",
+    });
   }
 }
 
@@ -324,7 +314,7 @@ async function handleSubscriptionEvent(
     typeof subscriptionObject.customer === "string"
       ? subscriptionObject.customer
       : undefined;
-  const status = normalizeSubscriptionStatus(subscriptionObject.status);
+  const status = normalizeStripeSubscriptionStatus(subscriptionObject.status);
   const priceId = subscriptionObject.items?.data?.[0]?.price?.id ?? null;
 
   const subscription = await findVendorSubscriptionByStripeRefs({

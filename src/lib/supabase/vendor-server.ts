@@ -492,12 +492,6 @@ export async function getVendorPublishChecks(
     blockingReasons.push("Completa nombre, slug y descripción de la tienda.");
   }
 
-  if (!isVendorBillingBypassEnabled) {
-    if (!canUseSubscriptionForPublishing(subscription)) {
-      blockingReasons.push("Activa la suscripción mensual de $10.");
-    }
-  }
-
   if (isManualCodeExpired(subscription)) {
     blockingReasons.push("Tu acceso gratuito expiró. Redime un nuevo código o activa Stripe.");
   }

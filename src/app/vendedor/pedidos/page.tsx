@@ -25,7 +25,9 @@ export default async function VendorOrdersPage() {
     supabase: dataClient,
   });
 
-  if (!snapshot.onboarding || snapshot.onboarding.status !== "completed") {
+  const isOnboardingDone = snapshot.onboarding?.status === "completed";
+
+  if (!isOnboardingDone) {
     redirect("/vendedor/onboarding");
   }
 

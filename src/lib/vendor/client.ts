@@ -136,6 +136,8 @@ export function fetchVendorProducts() {
         sortOrder: number;
       }>;
     }>;
+    productLimit: number | null;
+    productCount: number;
   }>("/api/vendor/products", {
     method: "GET",
     cache: "no-store",
@@ -275,6 +277,19 @@ export function createStripeConnectAccountLink() {
 export function createStripeSubscriptionCheckout() {
   return fetchJson<{ url: string }>("/api/stripe/subscription/checkout", {
     method: "POST",
+  });
+}
+
+export type VerifyStripeSubscriptionResult = {
+  status: "active" | "pending" | "invalid";
+  message?: string;
+  redirectTo?: string;
+};
+
+export function verifyStripeSubscriptionCheckout(sessionId: string) {
+  return fetchJson<VerifyStripeSubscriptionResult>("/api/stripe/subscription/verify", {
+    method: "POST",
+    body: JSON.stringify({ sessionId }),
   });
 }
 

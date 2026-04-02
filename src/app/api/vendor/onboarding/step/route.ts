@@ -39,7 +39,7 @@ function readString(
 }
 
 function mapNextStep(currentStep: number, incomingStep: number) {
-  return Math.max(currentStep, Math.min(incomingStep + 1, VENDOR_ONBOARDING_STEP_COUNT));
+  return Math.max(currentStep, incomingStep + 1);
 }
 
 async function applyStepSideEffects(input: {
@@ -92,8 +92,7 @@ async function applyStepSideEffects(input: {
     return;
   }
 
-  // Step 2: subscription — handled by dedicated checkout/redeem/webhook routes.
-  // No side effects needed here.
+  // Additional steps can add side effects here as needed.
 }
 
 export async function PATCH(request: Request) {
@@ -144,8 +143,6 @@ export async function PATCH(request: Request) {
     };
 
     const nextStep = mapNextStep(onboarding.current_step, step);
-    // Only mark completed when nextStep strictly exceeds total steps.
-    // Completion is triggered by subscription routes (checkout/redeem/webhook).
     const status: VendorOnboardingStatus =
       nextStep > VENDOR_ONBOARDING_STEP_COUNT ? "completed" : "in_progress";
 

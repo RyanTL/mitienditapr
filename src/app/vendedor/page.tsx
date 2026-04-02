@@ -24,7 +24,9 @@ export default async function VendorIndexPage() {
     supabase: dataClient,
   });
 
-  if (!snapshot.isVendor || !snapshot.hasShop || snapshot.onboarding?.status !== "completed") {
+  const isOnboardingDone = snapshot.onboarding?.status === "completed";
+
+  if (!snapshot.isVendor || !snapshot.hasShop || !isOnboardingDone) {
     redirect("/vendedor/onboarding");
   }
 
