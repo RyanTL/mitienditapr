@@ -12,6 +12,11 @@ import {
   VENDOR_ORDER_TRANSITIONS,
   type VendorOrderStatus,
 } from "@/lib/vendor/constants";
+import { createStripeRefund } from "@/lib/vendor/stripe";
+import {
+  releaseOrderInventory,
+  updateOrderPaymentState,
+} from "@/lib/orders/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendBuyerOrderStatusEmail } from "@/lib/email/resend";
 import {
@@ -24,21 +29,19 @@ type StatusPayload = {
   status?: VendorOrderStatus;
 };
 
-type ProductRow = {
-  id: string;
-};
-
 type OrderRow = {
   id: string;
   status: string;
   vendor_status: VendorOrderStatus | null;
+  payment_status: string;
+  payment_method: string | null;
   profile_id: string;
+  buyer_email: string | null;
+  buyer_name: string | null;
 };
 
-type ProfileRow = {
-  id: string;
-  email: string | null;
-  full_name: string | null;
+type PaymentRow = {
+  stripe_payment_intent_id: string | null;
 };
 
 function isVendorOrderStatus(value: string): value is VendorOrderStatus {
@@ -60,64 +63,49 @@ export async function PATCH(
 
   const { orderId } = await params;
   if (!orderId) {
-    return badRequestResponse("Order id invalido.");
+    return badRequestResponse("Order id inválido.");
   }
 
   const body = await parseJsonBody<StatusPayload>(request);
   const nextStatus = body?.status;
   if (!nextStatus || !isVendorOrderStatus(nextStatus)) {
-    return badRequestResponse("Estado de orden invalido.");
+    return badRequestResponse("Estado de orden inválido.");
   }
 
   let dataClient = context.supabase;
   try {
     dataClient = createSupabaseAdminClient();
   } catch {
-    // Secret key is optional in development.
+    // Development fallback.
   }
 
   try {
     const profile = await ensureVendorRole(dataClient, context.profile);
     const shop = await ensureVendorShopForProfile(dataClient, profile);
 
-    const { data: productRows, error: productsError } = await dataClient
-      .from("products")
-      .select("id")
-      .eq("shop_id", shop.id);
-
-    if (productsError) {
-      throw new Error(productsError.message);
-    }
-
-    const productIds = ((productRows ?? []) as ProductRow[]).map((row) => row.id);
-    if (productIds.length === 0) {
-      return NextResponse.json({ error: "Orden no encontrada." }, { status: 404 });
-    }
-
-    const { data: relatedOrderItem, error: relatedOrderError } = await dataClient
-      .from("order_items")
-      .select("order_id")
-      .eq("order_id", orderId)
-      .in("product_id", productIds)
-      .limit(1)
-      .maybeSingle();
-
-    if (relatedOrderError) {
-      throw new Error(relatedOrderError.message);
-    }
-
-    if (!relatedOrderItem) {
-      return NextResponse.json({ error: "Orden no encontrada." }, { status: 404 });
-    }
-
-    const { data: orderData, error: orderError } = await dataClient
-      .from("orders")
-      .select("id,status,vendor_status,profile_id")
-      .eq("id", orderId)
-      .maybeSingle();
+    const [{ data: orderData, error: orderError }, { data: paymentData, error: paymentError }] =
+      await Promise.all([
+        dataClient
+          .from("orders")
+          .select(
+            "id,status,vendor_status,payment_status,payment_method,profile_id,buyer_email,buyer_name",
+          )
+          .eq("id", orderId)
+          .eq("shop_id", shop.id)
+          .maybeSingle(),
+        dataClient
+          .from("order_payments")
+          .select("stripe_payment_intent_id")
+          .eq("order_id", orderId)
+          .maybeSingle(),
+      ]);
 
     if (orderError) {
       throw new Error(orderError.message);
+    }
+
+    if (paymentError) {
+      throw new Error(paymentError.message);
     }
 
     const order = orderData as OrderRow | null;
@@ -125,58 +113,85 @@ export async function PATCH(
       return NextResponse.json({ error: "Orden no encontrada." }, { status: 404 });
     }
 
+    const payment = (paymentData as PaymentRow | null) ?? {
+      stripe_payment_intent_id: null,
+    };
+
     const currentStatus = order.vendor_status ?? "new";
     if (currentStatus !== nextStatus) {
       const allowedStatuses = VENDOR_ORDER_TRANSITIONS[currentStatus];
       if (!allowedStatuses.includes(nextStatus)) {
         return badRequestResponse(
-          `Transicion invalida: ${currentStatus} -> ${nextStatus}.`,
+          `Transición inválida: ${currentStatus} -> ${nextStatus}.`,
         );
       }
     }
 
-    const orderUpdates: Record<string, unknown> = {
-      vendor_status: nextStatus,
-    };
+    if (nextStatus !== "canceled" && order.payment_status !== "paid") {
+      return badRequestResponse("La orden aún no tiene un pago confirmado.");
+    }
 
     if (nextStatus === "canceled") {
-      orderUpdates.status = "cancelled";
-    } else if (nextStatus === "delivered") {
-      orderUpdates.status = "fulfilled";
-    }
+      if (order.payment_method === "stripe" && order.payment_status === "paid") {
+        if (!payment.stripe_payment_intent_id) {
+          throw new Error("Falta el payment intent de Stripe para reembolsar la orden.");
+        }
 
-    const { error: updateError } = await dataClient
-      .from("orders")
-      .update(orderUpdates)
-      .eq("id", order.id);
+        await createStripeRefund({
+          paymentIntentId: payment.stripe_payment_intent_id,
+        });
 
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
-
-    // Notify buyer of status changes that are meaningful to them
-    const buyerNotifiableStatuses = ["processing", "shipped", "delivered", "canceled"] as const;
-    type BuyerNotifiableStatus = (typeof buyerNotifiableStatuses)[number];
-    const isBuyerNotifiable = (s: string): s is BuyerNotifiableStatus =>
-      (buyerNotifiableStatuses as readonly string[]).includes(s);
-
-    if (isBuyerNotifiable(nextStatus) && order.profile_id) {
-      const { data: buyerData } = await dataClient
-        .from("profiles")
-        .select("id,email,full_name")
-        .eq("id", order.profile_id)
-        .maybeSingle();
-
-      const buyer = buyerData as ProfileRow | null;
-      if (buyer?.email) {
-        void sendBuyerOrderStatusEmail({
-          to: buyer.email,
-          buyerName: buyer.full_name ?? null,
+        await updateOrderPaymentState({
+          admin: dataClient,
           orderId: order.id,
-          shopName: shop.vendor_name,
-          newStatus: nextStatus,
+          paymentStatus: "refunded",
+          orderStatus: "refunded",
+          vendorStatus: "canceled",
+        });
+      } else {
+        await updateOrderPaymentState({
+          admin: dataClient,
+          orderId: order.id,
+          paymentStatus: "failed",
+          orderStatus: "cancelled",
+          vendorStatus: "canceled",
+          failedReason: "vendor_canceled_order",
         });
       }
+
+      await releaseOrderInventory(dataClient, order.id);
+    } else {
+      const orderUpdates: Record<string, unknown> = {
+        vendor_status: nextStatus,
+      };
+
+      if (nextStatus === "delivered") {
+        orderUpdates.status = "fulfilled";
+      }
+
+      const { error: updateError } = await dataClient
+        .from("orders")
+        .update(orderUpdates)
+        .eq("id", order.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+    }
+
+    const buyerNotifiableStatuses = ["processing", "shipped", "delivered", "canceled"] as const;
+    type BuyerNotifiableStatus = (typeof buyerNotifiableStatuses)[number];
+    const isBuyerNotifiable = (value: string): value is BuyerNotifiableStatus =>
+      (buyerNotifiableStatuses as readonly string[]).includes(value);
+
+    if (isBuyerNotifiable(nextStatus) && order.buyer_email) {
+      void sendBuyerOrderStatusEmail({
+        to: order.buyer_email,
+        buyerName: order.buyer_name,
+        orderId: order.id,
+        shopName: shop.vendor_name,
+        newStatus: nextStatus,
+      });
     }
 
     return NextResponse.json({
