@@ -306,7 +306,7 @@ export function GlobalCartPageClient() {
                 {errorMessage}
               </div>
             ) : cartItems.length === 0 ? (
-              <div className="rounded-[2rem] border border-dashed border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-8 text-center shadow-[0_16px_34px_var(--shadow-black-008)]">
+              <div className="rounded-[2rem] bg-[var(--color-white)] px-4 py-8 text-center shadow-[0_16px_34px_var(--shadow-black-008)]">
                 <p className="text-base font-semibold text-[var(--color-carbon)]">
                   Tu carrito está vacío.
                 </p>

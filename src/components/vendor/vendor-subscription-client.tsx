@@ -12,8 +12,8 @@ import {
 const FEATURES = [
   "Productos ilimitados",
   "Tienda pública en mitienditapr.com",
-  "Código QR para compartir",
-  "Seguimiento de pedidos en vivo",
+  "Código QR permanente para compartir",
+  "Soporte rapido",
 ];
 
 export function VendorSubscriptionClient() {
@@ -52,17 +52,15 @@ export function VendorSubscriptionClient() {
   }
 
   return (
-    <VendorPageShell title="Suscripción">
+    <VendorPageShell title="Suscripción" backHref="/vendedor/panel" backLabel="Volver al panel">
       <div className="mx-auto max-w-md space-y-6">
         {/* Current plan */}
         <div className="rounded-2xl border border-[#e5e5ea] bg-white p-5">
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-[var(--color-gray-100)] px-3 py-1 text-xs font-semibold text-[var(--color-gray-500)]">
-              Plan actual
-            </span>
-            <span className="text-sm text-[var(--color-gray-500)]">Gratuito</span>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">Plan actual</p>
+            <span className="text-xs font-semibold text-[var(--color-gray-500)]">Gratuito</span>
           </div>
-          <p className="mt-3 text-sm text-[var(--color-gray-500)]">
+          <p className="mt-2 text-sm text-[var(--color-gray-500)]">
             Hasta 4 productos. Perfecto para probar la plataforma.
           </p>
         </div>

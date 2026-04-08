@@ -10,9 +10,13 @@ type VendorPageShellProps = {
   children: ReactNode;
   /** Render action slot inline with the title (e.g. a status badge or CTA) */
   titleAction?: ReactNode;
+  /** Override the back link destination (defaults to "/") */
+  backHref?: string;
+  /** Override the back link label (defaults to "Volver a las tiendas") */
+  backLabel?: string;
 };
 
-export function VendorPageShell({ title, subtitle, titleAction, children }: VendorPageShellProps) {
+export function VendorPageShell({ title, subtitle, titleAction, backHref = "/", backLabel = "Volver a las tiendas", children }: VendorPageShellProps) {
   return (
     <div className="min-h-screen bg-[var(--vendor-page-bg)] text-[var(--color-carbon)]">
       <VendorDesktopNav />
@@ -22,13 +26,13 @@ export function VendorPageShell({ title, subtitle, titleAction, children }: Vend
           <header className="mb-6">
             {/* Marketplace back link — mobile only */}
             <Link
-              href="/"
+              href={backHref}
               className="mb-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--vendor-nav-text)] transition-colors hover:text-[var(--color-carbon)] md:hidden"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M15 18l-6-6 6-6" />
               </svg>
-              Volver
+              {backLabel}
             </Link>
             <div className="flex items-start justify-between gap-3">
               <h1 className="text-2xl font-extrabold leading-tight tracking-tight md:text-3xl">{title}</h1>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -148,30 +149,45 @@ function AuthMenuContent({
             </button>
 
             {isFollowingListOpen ? (
-              <div className="mt-2 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-2">
+              <div className="mt-1 pl-3">
                 {isLoadingFollowedShops ? (
-                  <p className="px-2 py-2 text-xs text-[var(--color-carbon)]">Cargando...</p>
+                  <p className="py-2 text-xs text-[var(--color-carbon)]">Cargando...</p>
                 ) : followedShopsError ? (
-                  <p className="px-2 py-2 text-xs text-[var(--color-danger)]">{followedShopsError}</p>
+                  <p className="py-2 text-xs text-[var(--color-danger)]">{followedShopsError}</p>
                 ) : followedShops.length === 0 ? (
-                  <p className="px-2 py-2 text-xs text-[var(--color-carbon)]">
+                  <p className="py-2 text-xs text-[var(--color-carbon)]">
                     Aún no sigues tiendas.
                   </p>
                 ) : (
-                  <ul className="space-y-1">
+                  <ul>
                     {followedShops.map((shop) => (
                       <li key={shop.shopId}>
                         <Link
                           href={`/${shop.slug}`}
                           onClick={onClose}
-                          className="block rounded-xl bg-[var(--color-white)] px-3 py-2"
+                          className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-[var(--color-gray)]"
                         >
-                          <p className="truncate text-sm font-semibold text-[var(--color-carbon)]">
-                            {shop.vendorName}
-                          </p>
-                          <p className="mt-0.5 text-xs text-[var(--color-carbon)]">
-                            {shop.rating} ★ ({shop.reviewCount})
-                          </p>
+                          {shop.logoUrl ? (
+                            <Image
+                              src={shop.logoUrl}
+                              alt={shop.vendorName}
+                              width={36}
+                              height={36}
+                              className="h-9 w-9 shrink-0 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-white">
+                              {shop.vendorName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[var(--color-carbon)]">
+                              {shop.vendorName}
+                            </p>
+                            <p className="mt-0.5 text-xs text-[var(--color-carbon)]">
+                              {shop.rating} ★ ({shop.reviewCount})
+                            </p>
+                          </div>
                         </Link>
                       </li>
                     ))}
