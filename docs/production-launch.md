@@ -78,21 +78,44 @@ In each Supabase project:
 
 Every deployment must pass:
 - `npm run lint`
-- `npx tsc --noEmit`
-- `npx next build --webpack`
+- `npm run typecheck`
+- `npm run build`
+- `npm run verify:release -- https://staging.mitienditapr.com`
+- Repeat `npm run verify:release -- https://mitienditapr.com` before final public cutover.
 - `GET /api/healthz` -> `ok: true`
 - `GET /api/readiness` -> HTTP 200 and `ok: true`
 
+Notes:
+- `npm run build` is the webpack-backed production build. Keep it on webpack until the Turbopack stall is root-caused and proven stable.
+- Run the runtime probe against a deployed environment, not a local dev server.
+
 ## 7) Operational Checks Before Public Cutover
+
+Prerequisite:
+- Staging deployment is green before any production cutover.
 
 1. Buyer smoke:
    - sign-up, email confirm, sign-in, cart, checkout, orders
+   - favorites/follows stay in sync across refreshes
 2. Vendor smoke:
    - onboarding, connect Stripe, pay subscription, publish, product CRUD
-3. Invite code smoke:
+   - product edit/delete, publish/unpublish, and billing activation flows
+3. Share and account smoke:
+   - shop share link, QR flow, and `/s/{shareCode}` redirect
+   - cuenta updates for profile, address, email, and password
+4. Invite code smoke:
    - admin creates code
    - vendor redeems code
    - invalid/expired/exhausted code fails
-4. Billing enforcement:
+5. Billing enforcement:
    - simulate invoice failure -> shop unpublished
    - simulate invoice paid -> republish
+6. Runtime flag validation:
+   - `ENABLE_STRICT_DB_MODE=true`
+   - `ENABLE_CATALOG_SEED=false`
+   - `ENABLE_VENDOR_BILLING_BYPASS=false`
+
+## 8) Secret Handling
+
+- Keep all live secrets only in Vercel/Cloudflare/Supabase secure environment storage.
+- Rotate any Supabase or Stripe secret that was ever exposed outside approved secret storage.

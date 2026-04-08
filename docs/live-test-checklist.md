@@ -32,14 +32,17 @@
 - Run `supabase/verify_live_readiness.sql` and verify it returns `LIVE_READINESS_OK`.
 
 ## 4) Runtime checks
+- Run `npm run verify:release -- https://staging.mitienditapr.com`.
+- Repeat `npm run verify:release -- https://mitienditapr.com` before the public cutover.
 - `GET /api/healthz` returns `ok: true`.
 - `GET /api/readiness` returns HTTP 200 and `ok: true`.
 - `POST /api/catalog/seed` is disabled in live mode.
 
 ## 5) Quality gate
 - `npm run lint` passes.
-- `npx tsc --noEmit` passes.
+- `npm run typecheck` passes.
 - `npm run build` passes in a clean environment.
+- `npm run build` uses webpack until the Turbopack production stall is resolved.
 
 ## 6) Smoke scenarios
 - Buyer signup/signin/logout works with confirmed email.
@@ -48,12 +51,17 @@
 - Favorite add/remove works and persists.
 - Cart add/remove/quantity/checkout works from product and home.
 - Reviews create/update/delete works for signed-in buyers.
-- Vendor onboarding works with billing bypass enabled.
+- Vendor onboarding works with billing bypass disabled and billing activation completes.
 - Vendor can create/edit/delete products and publish shop.
 - Shop share link and QR flow works for owner; `/s/{shareCode}` redirects.
 - Cuenta page updates name/phone/address/email and password.
+- Runtime flags are confirmed in staging and production:
+  - `ENABLE_STRICT_DB_MODE=true`
+  - `ENABLE_CATALOG_SEED=false`
+  - `ENABLE_VENDOR_BILLING_BYPASS=false`
 
 ## 7) Live test operations
+- Staging deployment is green before production cutover.
 - Day-1 cohort ready (5 vendors, 20 buyers).
 - Daily bug triage time fixed and documented.
 - P0/P1 hotfix SLA <= 24h.

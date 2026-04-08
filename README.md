@@ -8,9 +8,9 @@ Mobile-first online marketplace that lets local vendors in Puerto Rico sell thei
 |-------|-----------|
 | Framework | Next.js 16 (App Router) |
 | Language | TypeScript |
-| UI | React 19, Tailwind CSS v4, Shadcn/UI |
+| UI | React 19, Tailwind CSS v4, custom UI components |
 | Database | Supabase (PostgreSQL + Auth + Storage) |
-| Payments | Stripe (Subscriptions + Connect) |
+| Payments | Stripe (Subscriptions + Connect via direct API integration) |
 | Hosting | Vercel |
 
 ## Getting Started
@@ -101,7 +101,7 @@ src/
     vendedor/           Vendor dashboard pages
     [shopSlug]/         Dynamic shop & product pages
   components/
-    ui/                 Shadcn primitives (button, card, dialog, etc.)
+    ui/                 Shared custom UI primitives
     vendor/             Vendor dashboard components
     navigation/         Bottom nav, floating cart/search
     cart/               Cart components
