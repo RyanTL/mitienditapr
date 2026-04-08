@@ -76,7 +76,7 @@ export default async function VendorPanelPage({ searchParams }: VendorPanelPageP
           <p className="mt-1 text-sm leading-6 text-emerald-900/80">
             {welcome === "vendor-activated"
               ? "Tu cuenta de vendedor ya está lista. Ya puedes listar productos ilimitados."
-              : "Ya puedes listar hasta 4 productos gratis. Cuando estés listo, suscríbete para productos ilimitados."}
+              : "Tus políticas generales ya están listas. Agrega productos y publicaremos tu tienda automáticamente cuando esté lista para vender."}
           </p>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Link

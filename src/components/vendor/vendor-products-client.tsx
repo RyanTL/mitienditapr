@@ -157,7 +157,7 @@ function ProductSheet({
 }: {
   sheetState: SheetState;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (input?: { shopActivated?: boolean }) => void;
 }) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const pendingImagesRef = useRef<PendingProductImage[]>([]);
@@ -365,7 +365,7 @@ function ProductSheet({
           setIsUploadingImage(false);
         }
 
-        await createVendorProduct({
+        const response = await createVendorProduct({
           name,
           description: draft.description.trim(),
           images: uploadedImages,
@@ -376,15 +376,16 @@ function ProductSheet({
           },
           isActive: draft.isActive,
         });
+        onSaved({ shopActivated: response.shopActivated });
       } else if (sheetState.open && sheetState.mode === "edit") {
-        await updateVendorProduct(sheetState.product.id, {
+        const response = await updateVendorProduct(sheetState.product.id, {
           name,
           description: draft.description.trim(),
           priceUsd: Math.max(0, toNumber(draft.priceUsd)),
           isActive: draft.isActive,
         });
+        onSaved({ shopActivated: response.shopActivated });
       }
-      onSaved();
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo guardar.");
@@ -510,8 +511,8 @@ function ProductSheet({
               className="hidden"
               onChange={(e) => {
                 const files = e.currentTarget.files;
-                e.currentTarget.value = "";
                 void handleImageSelection(files);
+                e.currentTarget.value = "";
               }}
             />
           </div>
@@ -656,6 +657,7 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
   );
   const [isLoading, setIsLoading] = useState(!initialData);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const [sheetState, setSheetState] = useState<SheetState>({ open: false });
 
   const loadProducts = useCallback(async () => {
@@ -690,6 +692,11 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
 
   return (
     <VendorPageShell title="Productos">
+      {feedbackMsg && (
+        <p className="rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+          {feedbackMsg}
+        </p>
+      )}
       {errorMsg && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{errorMsg}</p>
       )}
@@ -805,7 +812,16 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
       <ProductSheet
         sheetState={sheetState}
         onClose={() => setSheetState({ open: false })}
-        onSaved={() => void loadProducts()}
+        onSaved={({ shopActivated } = {}) => {
+          if (shopActivated) {
+            setFeedbackMsg(
+              "Tu tienda ya está en vivo. Compártela con tus clientes y empieza a vender.",
+            );
+          } else {
+            setFeedbackMsg(null);
+          }
+          void loadProducts();
+        }}
       />
 
       {/* FAB — hidden when empty state or at limit */}

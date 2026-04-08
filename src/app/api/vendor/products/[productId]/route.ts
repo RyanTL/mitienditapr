@@ -10,6 +10,7 @@ import {
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
@@ -168,7 +169,12 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ ok: true });
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
+    return NextResponse.json({
+      ok: true,
+      shopActivated: autoPublishResult.activated,
+    });
   } catch (error) {
     return serverErrorResponse(error, "No se pudo actualizar el producto.");
   }

@@ -17,6 +17,7 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   ensureVendorOnboardingRecord,
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorPublishChecks,
@@ -44,28 +45,17 @@ function mapNextStep(currentStep: number, incomingStep: number) {
 
 async function applyStepSideEffects(input: {
   supabase: SupabaseClient;
-  profileId: string;
   shopId: string;
   step: number;
   payload: Record<string, unknown>;
 }) {
-  const { supabase, profileId, shopId, step, payload } = input;
+  const { supabase, shopId, step, payload } = input;
 
   if (step === 1) {
     const vendorName = readString(payload, "vendorName").trim();
     const requestedSlug = readString(payload, "slug").trim();
     const description = readString(payload, "description").trim();
     const logoUrl = readString(payload, "logoUrl").trim();
-
-    if (vendorName) {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ full_name: vendorName })
-        .eq("id", profileId);
-      if (profileError) {
-        throw new Error(profileError.message);
-      }
-    }
 
     const slugSource = requestedSlug || vendorName;
     const slug = slugifyShopName(slugSource);
@@ -131,7 +121,6 @@ export async function PATCH(request: Request) {
 
     await applyStepSideEffects({
       supabase: dataClient,
-      profileId: profile.id,
       shopId: shop.id,
       step,
       payload,
@@ -154,6 +143,8 @@ export async function PATCH(request: Request) {
       nextData,
     );
 
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
     const checks = await getVendorPublishChecks(dataClient, profile.id);
 
     return NextResponse.json({
@@ -161,6 +152,7 @@ export async function PATCH(request: Request) {
       checks,
       nextStep: nextOnboarding.current_step,
       completed: nextOnboarding.status === "completed",
+      shopActivated: autoPublishResult.activated,
     });
   } catch (error) {
     return serverErrorResponse(error, "No se pudo guardar este paso.");

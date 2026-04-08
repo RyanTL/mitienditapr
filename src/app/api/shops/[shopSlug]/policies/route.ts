@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  ensureDefaultShopPolicies,
   getActiveShopBySlug,
   getCurrentShopPolicyVersions,
   getRequiredPolicyIds,
@@ -23,6 +24,12 @@ export async function GET(_request: Request, { params }: RouteParams) {
         { status: 404 },
       );
     }
+
+    await ensureDefaultShopPolicies({
+      supabase,
+      shopId: shop.id,
+      publishedBy: shop.vendor_profile_id,
+    });
 
     const policies = await getCurrentShopPolicyVersions(supabase, shop.id);
 

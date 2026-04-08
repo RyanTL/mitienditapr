@@ -1,8 +1,10 @@
 "use client";
 
 import type { VendorOrderStatus, VendorShopStatus } from "@/lib/vendor/constants";
+import type { OrderPaymentStatus } from "@/lib/orders/constants";
 import type {
   VendorProductsResponse,
+  VendorShopActivationResponse,
   VendorShopSettingsResponse,
   VendorStatusResponse,
 } from "@/lib/vendor/types";
@@ -30,6 +32,7 @@ export function saveVendorOnboardingStep(step: number, payload: Record<string, u
     checks: VendorStatusResponse["checks"];
     nextStep: number;
     completed: boolean;
+    shopActivated: boolean;
   }>("/api/vendor/onboarding/step", {
     method: "PATCH",
     body: JSON.stringify({
@@ -104,10 +107,13 @@ export function createVendorProduct(payload: {
   isActive?: boolean;
   variant: VendorVariantInput;
 }) {
-  return fetchJson<{ product: { id: string; name: string } }>("/api/vendor/products", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return fetchJson<{ product: { id: string; name: string } } & VendorShopActivationResponse>(
+    "/api/vendor/products",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function updateVendorProduct(
@@ -120,10 +126,13 @@ export function updateVendorProduct(
     priceUsd?: number;
   },
 ) {
-  return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  return fetchJson<{ ok: true } & VendorShopActivationResponse>(
+    `/api/vendor/products/${productId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function deleteVendorProduct(productId: string) {
@@ -165,18 +174,37 @@ export function fetchVendorOrders() {
       id: string;
       status: string;
       vendorStatus: VendorOrderStatus;
+      paymentStatus: OrderPaymentStatus;
+      paymentMethod: "stripe" | "ath_movil" | null;
       subtotalUsd: number;
+      shippingFeeUsd: number;
       totalUsd: number;
+      fulfillmentMethod: "shipping" | "pickup";
       createdAt: string;
       buyer: {
         id: string;
         email: string | null;
         fullName: string | null;
+        phone: string | null;
+      } | null;
+      shipping: {
+        address: string | null;
+        zipCode: string | null;
+        pickupNotes: string | null;
+      };
+      payment: {
+        provider: string;
+        status: OrderPaymentStatus;
+        receiptUrl: string | null;
+        receiptNote: string | null;
+        failedReason: string | null;
+        verifiedAt: string | null;
       } | null;
       items: Array<{
         productId: string;
         productVariantId: string | null;
         productName: string;
+        imageUrl: string | null;
         quantity: number;
         unitPriceUsd: number;
       }>;
@@ -194,8 +222,24 @@ export function updateVendorOrderStatus(orderId: string, status: VendorOrderStat
   });
 }
 
+export function verifyVendorOrderPayment(
+  orderId: string,
+  action: "approve" | "reject",
+) {
+  return fetchJson<{ ok: true }>(`/api/vendor/orders/${orderId}/verify-payment`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+}
+
 export function createStripeSubscriptionCheckout() {
   return fetchJson<{ url: string }>("/api/stripe/subscription/checkout", {
+    method: "POST",
+  });
+}
+
+export function createStripeConnectAccountLink() {
+  return fetchJson<{ url: string }>("/api/stripe/connect/account-link", {
     method: "POST",
   });
 }

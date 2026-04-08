@@ -9,7 +9,7 @@ const NAV_TABS = [
   { href: "/vendedor/panel", label: "Inicio", Icon: HomeIcon },
   { href: "/vendedor/pedidos", label: "Pedidos", Icon: OrdersIcon },
   { href: "/vendedor/productos", label: "Productos", Icon: PackageIcon },
-  { href: "/vendedor/tienda", label: "Tienda", Icon: StoreIcon },
+  { href: "/vendedor/tienda", label: "Configuración", Icon: StoreIcon },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {

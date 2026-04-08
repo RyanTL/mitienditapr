@@ -11,6 +11,7 @@ import { VENDOR_FREE_TIER_PRODUCT_LIMIT } from "@/lib/vendor/constants";
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
@@ -385,12 +386,15 @@ export async function POST(request: Request) {
       }
     }
 
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
     return NextResponse.json(
       {
         product: {
           id: productRow.id,
           name: productRow.name,
         },
+        shopActivated: autoPublishResult.activated,
       },
       { status: 201 },
     );

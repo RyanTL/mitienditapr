@@ -102,6 +102,10 @@ export type VendorProductsResponse = {
   productCount: number;
 };
 
+export type VendorShopActivationResponse = {
+  shopActivated: boolean;
+};
+
 export type VendorShopSettingsResponse = {
   shop: VendorStatusResponse["shop"];
   policies: {

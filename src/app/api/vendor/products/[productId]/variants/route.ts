@@ -11,6 +11,7 @@ import {
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
@@ -155,7 +156,15 @@ export async function POST(
 
     await syncProductPriceFromVariants(dataClient, product.id);
 
-    return NextResponse.json({ ok: true }, { status: 201 });
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
+    return NextResponse.json(
+      {
+        ok: true,
+        shopActivated: autoPublishResult.activated,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return serverErrorResponse(error, "No se pudo crear la variante.");
   }

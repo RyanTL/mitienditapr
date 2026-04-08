@@ -10,6 +10,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { getVendorRequestContext, getVendorShopByProfileId } from "@/lib/supabase/vendor-server";
 import {
   buildVendorPolicyCompletion,
+  ensureDefaultShopPolicies,
   getCurrentShopPolicyVersions,
   getLatestVendorPolicyAcceptance,
 } from "@/lib/supabase/vendor-policy-server";
@@ -41,6 +42,12 @@ export async function GET() {
         { status: 400 },
       );
     }
+
+    await ensureDefaultShopPolicies({
+      supabase: dataClient,
+      shopId: shop.id,
+      publishedBy: shop.vendor_profile_id,
+    });
 
     const currentPolicies = await getCurrentShopPolicyVersions(dataClient, shop.id);
     const completion = buildVendorPolicyCompletion(currentPolicies);

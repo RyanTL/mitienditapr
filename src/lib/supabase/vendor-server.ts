@@ -3,10 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isRecord } from "@/lib/utils";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  buildVendorPolicyCompletion,
+  ensureDefaultShopPolicies,
   getCurrentShopPolicyVersions,
-  getMissingRequiredPolicyTypes,
+  getLatestVendorPolicyAcceptance,
   getRequiredPolicyIds,
-  hasPolicyAcceptanceForCurrentRequired,
 } from "@/lib/supabase/vendor-policy-server";
 import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import {
@@ -16,7 +17,6 @@ import {
   type VendorShopStatus,
 } from "@/lib/vendor/constants";
 import { slugifyShopName } from "@/lib/vendor/slug";
-import { POLICY_TYPE_LABELS } from "@/lib/policies/constants";
 import type {
   PolicyTemplate,
   PolicyType,
@@ -27,10 +27,6 @@ import type {
   VendorProductsResponse,
   VendorShopSettingsResponse,
 } from "@/lib/vendor/types";
-import {
-  buildVendorPolicyCompletion,
-  getLatestVendorPolicyAcceptance,
-} from "@/lib/supabase/vendor-policy-server";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -453,8 +449,7 @@ async function getActiveVariantCountForShop(
 function hasRequiredShopFields(shop: VendorShopRow) {
   return (
     shop.vendor_name.trim().length > 0 &&
-    shop.slug.trim().length > 0 &&
-    shop.description.trim().length > 0
+    shop.slug.trim().length > 0
   );
 }
 
@@ -623,6 +618,8 @@ export async function getVendorShopSettingsData(
   supabase: SupabaseClient,
   profileId: string,
 ): Promise<VendorShopSettingsResponse> {
+  await maybeAutoPublishDraftShop(supabase, profileId);
+
   const shop = await getVendorShopByProfileId(supabase, profileId);
   if (!shop) {
     return {
@@ -635,6 +632,12 @@ export async function getVendorShopSettingsData(
       },
     };
   }
+
+  await ensureDefaultShopPolicies({
+    supabase,
+    shopId: shop.id,
+    publishedBy: shop.vendor_profile_id,
+  });
 
   const [policies, checks] = await Promise.all([
     getShopPoliciesByShopId(supabase, shop.id),
@@ -659,6 +662,12 @@ export async function getVendorShopPoliciesData(
   if (!shop) {
     throw new Error("Debes crear tu tienda primero.");
   }
+
+  await ensureDefaultShopPolicies({
+    supabase,
+    shopId: shop.id,
+    publishedBy: shop.vendor_profile_id,
+  });
 
   const currentPolicies = await getCurrentShopPolicyVersions(supabase, shop.id);
   const completion = buildVendorPolicyCompletion(currentPolicies);
@@ -693,6 +702,12 @@ export async function getVendorPublishChecks(
 
   let subscription = await getVendorSubscriptionByShopId(supabase, shop.id);
 
+  await ensureDefaultShopPolicies({
+    supabase,
+    shopId: shop.id,
+    publishedBy: shop.vendor_profile_id,
+  });
+
   if (isManualCodeExpired(subscription)) {
     const nowIso = new Date().toISOString();
     await supabase
@@ -724,7 +739,7 @@ export async function getVendorPublishChecks(
   const activeVariantCount = await getActiveVariantCountForShop(supabase, shop.id);
 
   if (!hasRequiredShopFields(shop)) {
-    blockingReasons.push("Completa nombre, slug y descripción de la tienda.");
+    blockingReasons.push("Completa nombre y slug de la tienda.");
   }
 
   if (isManualCodeExpired(subscription)) {
@@ -735,30 +750,8 @@ export async function getVendorPublishChecks(
     blockingReasons.push("Debes tener al menos una variante activa.");
   }
 
-  const currentPolicies = await getCurrentShopPolicyVersions(supabase, shop.id);
-  const missingRequiredPolicyTypes = getMissingRequiredPolicyTypes(currentPolicies);
-  if (missingRequiredPolicyTypes.length > 0) {
-    blockingReasons.push(
-      `Completa ${missingRequiredPolicyTypes
-        .map((policyType) => POLICY_TYPE_LABELS[policyType])
-        .join(" y ")}.`,
-    );
-  } else {
-    const requiredPolicyIds = getRequiredPolicyIds(currentPolicies);
-    if (requiredPolicyIds) {
-      const hasRequiredAcceptance = await hasPolicyAcceptanceForCurrentRequired({
-        supabase,
-        shopId: shop.id,
-        termsVersionId: requiredPolicyIds.terms,
-        shippingVersionId: requiredPolicyIds.shipping,
-      });
-
-      if (!hasRequiredAcceptance) {
-        blockingReasons.push(
-          "Debes aceptar legalmente Términos y Política de envío después de publicarlas.",
-        );
-      }
-    }
+  if (!shop.ath_movil_phone && !shop.stripe_connect_account_id) {
+    blockingReasons.push("Configura Stripe o ATH Móvil para poder cobrar.");
   }
 
   return {
@@ -770,37 +763,79 @@ export async function getVendorPublishChecks(
   };
 }
 
+export async function maybeAutoPublishDraftShop(
+  supabase: SupabaseClient,
+  profileId: string,
+) {
+  const [shop, onboarding] = await Promise.all([
+    getVendorShopByProfileId(supabase, profileId),
+    getVendorOnboardingByProfileId(supabase, profileId),
+  ]);
+
+  if (!shop || shop.status !== "draft") {
+    return {
+      activated: false,
+      shop,
+    };
+  }
+
+  if (onboarding?.status !== "completed") {
+    return {
+      activated: false,
+      shop,
+    };
+  }
+
+  const checks = await getVendorPublishChecks(supabase, profileId);
+  if (!checks.canPublish || !checks.shop) {
+    return {
+      activated: false,
+      shop: checks.shop,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("shops")
+    .update({
+      status: "active",
+      is_active: true,
+      published_at: nowIso,
+      unpublished_at: null,
+      unpublished_reason: null,
+    })
+    .eq("id", checks.shop.id)
+    .eq("vendor_profile_id", profileId)
+    .eq("status", "draft");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    activated: true,
+    shop: await getVendorShopByProfileId(supabase, profileId),
+  };
+}
+
 export async function getNewOrderCountForShop(
   supabase: SupabaseClient,
   shopId: string,
 ): Promise<number> {
-  const { data: allProductRows } = await supabase
-    .from("products")
-    .select("id")
-    .eq("shop_id", shopId);
-
-  if (!Array.isArray(allProductRows) || allProductRows.length === 0) {
-    return 0;
-  }
-
-  const productIds = allProductRows.map((row) => row.id);
-  const { data: orderItemRows } = await supabase
-    .from("order_items")
-    .select("order_id")
-    .in("product_id", productIds);
-
-  if (!Array.isArray(orderItemRows) || orderItemRows.length === 0) {
-    return 0;
-  }
-
-  const orderIds = Array.from(new Set(orderItemRows.map((row) => row.order_id)));
   const { data: orderRows } = await supabase
     .from("orders")
-    .select("id")
-    .in("id", orderIds)
+    .select("id,payment_status")
+    .eq("shop_id", shopId)
     .eq("vendor_status", "new");
 
-  return Array.isArray(orderRows) ? orderRows.length : 0;
+  return Array.isArray(orderRows)
+    ? orderRows.filter(
+        (row) =>
+          !["requires_payment", "expired"].includes(
+            (row as { payment_status?: string }).payment_status ?? "",
+          ),
+      ).length
+    : 0;
 }
 
 type OrderItemRow = {
@@ -848,54 +883,59 @@ export async function getVendorAnalytics(
     ordersByStatus: {},
   };
 
-  const { data: productRows } = await supabase
-    .from("products")
-    .select("id,name")
+  const { data: orderRows } = await supabase
+    .from("orders")
+    .select("id,vendor_status,created_at,payment_status")
     .eq("shop_id", shopId);
 
-  if (!Array.isArray(productRows) || productRows.length === 0) {
+  if (!Array.isArray(orderRows) || orderRows.length === 0) {
     return empty;
   }
 
-  const products = productRows as ProductNameRow[];
-  const productIds = products.map((p) => p.id);
-  const productNameById = new Map(products.map((p) => [p.id, p.name]));
+  const visibleOrders = (orderRows as Array<OrderRow & { payment_status?: string }>).filter(
+    (order) => !["requires_payment", "expired"].includes(order.payment_status ?? ""),
+  );
+  if (visibleOrders.length === 0) {
+    return empty;
+  }
 
+  const orderIds = visibleOrders.map((order) => order.id);
   const { data: itemRows } = await supabase
     .from("order_items")
     .select("order_id,product_id,quantity,unit_price_usd")
-    .in("product_id", productIds);
+    .in("order_id", orderIds);
 
   if (!Array.isArray(itemRows) || itemRows.length === 0) {
     return empty;
   }
 
   const items = itemRows as OrderItemRow[];
-  const orderIds = Array.from(new Set(items.map((i) => i.order_id)));
 
-  const { data: orderRows } = await supabase
-    .from("orders")
-    .select("id,vendor_status,created_at")
-    .in("id", orderIds);
+  const productIds = Array.from(new Set(items.map((item) => item.product_id)));
+  const { data: productRows } = await supabase
+    .from("products")
+    .select("id,name")
+    .in("id", productIds);
 
-  if (!Array.isArray(orderRows) || orderRows.length === 0) {
+  if (!Array.isArray(productRows) || productRows.length === 0) {
     return empty;
   }
 
-  const orders = orderRows as OrderRow[];
-  const orderById = new Map(orders.map((o) => [o.id, o]));
+  const products = productRows as ProductNameRow[];
+  const productNameById = new Map(products.map((p) => [p.id, p.name]));
+  const orderById = new Map(visibleOrders.map((o) => [o.id, o]));
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   // Status counts (all orders)
   const ordersByStatus: Record<string, number> = {};
-  for (const order of orders) {
+  for (const order of visibleOrders) {
     ordersByStatus[order.vendor_status] = (ordersByStatus[order.vendor_status] ?? 0) + 1;
   }
 
   // Revenue aggregations (exclude canceled)
   const nonCanceledOrderIds = new Set(
-    orders.filter((o) => o.vendor_status !== "canceled").map((o) => o.id),
+    visibleOrders.filter((o) => o.vendor_status !== "canceled").map((o) => o.id),
   );
 
   let totalRevenueUsd = 0;
@@ -948,6 +988,8 @@ export async function getVendorAnalytics(
 
 export async function getVendorStatusSnapshot(context: VendorRequestContext) {
   const { supabase, userId, profile } = context;
+  await maybeAutoPublishDraftShop(supabase, userId);
+
   const shop = await getVendorShopByProfileId(supabase, userId);
   const onboarding = await getVendorOnboardingByProfileId(supabase, userId);
   const checks = await getVendorPublishChecks(supabase, userId);
@@ -964,30 +1006,20 @@ export async function getVendorStatusSnapshot(context: VendorRequestContext) {
 
   const productCount = Array.isArray(productRows) ? productRows.length : 0;
 
-  const { data: allProductRows } = shop
-    ? await supabase.from("products").select("id").eq("shop_id", shop.id)
-    : { data: [] as { id: string }[] };
-
   let orderCount = 0;
   let newOrderCount = 0;
-  if (shop && Array.isArray(allProductRows) && allProductRows.length > 0) {
-    const productIds = allProductRows.map((row) => row.id);
-    const { data: orderItemRows } = await supabase
-      .from("order_items")
-      .select("order_id")
-      .in("product_id", productIds);
+  if (shop) {
+    const { data: orderRows } = await supabase
+      .from("orders")
+      .select("id,vendor_status,payment_status")
+      .eq("shop_id", shop.id);
 
-    if (Array.isArray(orderItemRows)) {
-      const orderIds = Array.from(new Set(orderItemRows.map((row) => row.order_id)));
-      orderCount = orderIds.length;
-
-      const { data: newOrderRows } = await supabase
-        .from("orders")
-        .select("id")
-        .in("id", orderIds)
-        .eq("vendor_status", "new");
-
-      newOrderCount = Array.isArray(newOrderRows) ? newOrderRows.length : 0;
+    if (Array.isArray(orderRows)) {
+      const visibleOrders = orderRows.filter(
+        (row) => !["requires_payment", "expired"].includes(row.payment_status ?? ""),
+      );
+      orderCount = visibleOrders.length;
+      newOrderCount = visibleOrders.filter((row) => row.vendor_status === "new").length;
     }
   }
 

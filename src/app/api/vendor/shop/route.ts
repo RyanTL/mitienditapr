@@ -14,6 +14,7 @@ import {
   ensureVendorRole,
   ensureVendorShopForProfile,
   getShopPoliciesByShopId,
+  maybeAutoPublishDraftShop,
   getVendorPublishChecks,
   getVendorRequestContext,
   getVendorShopByProfileId,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/supabase/vendor-server";
 import {
   buildVendorPolicyCompletion,
+  ensureDefaultShopPolicies,
   getCurrentShopPolicyVersions,
   getRequiredPolicyIds,
 } from "@/lib/supabase/vendor-policy-server";
@@ -88,6 +90,8 @@ export async function GET() {
     // Secret key is optional in development.
   }
 
+  await maybeAutoPublishDraftShop(dataClient, context.userId);
+
   const shop = await getVendorShopByProfileId(dataClient, context.userId);
   if (!shop) {
     return NextResponse.json({
@@ -100,6 +104,12 @@ export async function GET() {
       },
     });
   }
+
+  await ensureDefaultShopPolicies({
+    supabase: dataClient,
+    shopId: shop.id,
+    publishedBy: shop.vendor_profile_id,
+  });
 
   const [policies, subscription, checks] = await Promise.all([
     getShopPoliciesByShopId(dataClient, shop.id),
@@ -276,6 +286,13 @@ export async function PATCH(request: Request) {
     }
 
     const nextShop = await getVendorShopByProfileId(dataClient, profile.id);
+    if (nextShop) {
+      await ensureDefaultShopPolicies({
+        supabase: dataClient,
+        shopId: nextShop.id,
+        publishedBy: nextShop.vendor_profile_id,
+      });
+    }
     const nextPolicies = nextShop
       ? await getShopPoliciesByShopId(dataClient, nextShop.id)
       : null;

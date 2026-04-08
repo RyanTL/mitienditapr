@@ -372,6 +372,28 @@ export function ExternalLinkIcon({ className = "h-4 w-4", ...props }: IconProps)
   );
 }
 
+export function ShieldCheckIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3Zm-1.5 14.5l-3.5-3.5 1.41-1.41L10.5 13.67l5.59-5.59L17.5 9.5l-7 7Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+export function PencilIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
+      <path
+        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25ZM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export function GoogleIcon({ className = "h-5 w-5", ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>

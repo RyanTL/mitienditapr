@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   badRequestResponse,
@@ -14,30 +15,19 @@ import {
   getVendorPublishChecks,
   getVendorRequestContext,
   getVendorStatusSnapshot,
-  getShopPoliciesByShopId,
-  type VendorRequestContext,
 } from "@/lib/supabase/vendor-server";
+import { ensureDefaultShopPolicies } from "@/lib/supabase/vendor-policy-server";
 
 async function ensureVendorPoliciesAndSubscription(
-  context: VendorRequestContext,
+  supabase: SupabaseClient,
   shopId: string,
+  profileId: string,
 ) {
-  const { supabase } = context;
-
-  const existingPolicies = await getShopPoliciesByShopId(supabase, shopId);
-  if (!existingPolicies) {
-    const { error: policyInsertError } = await supabase.from("shop_policies").insert({
-      shop_id: shopId,
-      refund_policy: "No se aceptan devoluciones después de 7 días.",
-      shipping_policy: "Envíos de 1 a 3 días laborables.",
-      privacy_policy: "Tus datos se usan solo para procesar órdenes.",
-      terms: "Al comprar aceptas los términos de la tienda.",
-    });
-
-    if (policyInsertError) {
-      throw new Error(policyInsertError.message);
-    }
-  }
+  await ensureDefaultShopPolicies({
+    supabase,
+    shopId,
+    publishedBy: profileId,
+  });
 
   const { data: existingSubscription, error: existingSubscriptionError } = await supabase
     .from("vendor_subscriptions")
@@ -91,12 +81,9 @@ export async function POST() {
     const onboarding = await ensureVendorOnboardingRecord(dataClient, profile.id);
 
     await ensureVendorPoliciesAndSubscription(
-      {
-        ...requestContext,
-        supabase: dataClient,
-        profile,
-      },
+      dataClient,
       shop.id,
+      profile.id,
     );
 
     const checks = await getVendorPublishChecks(dataClient, profile.id);

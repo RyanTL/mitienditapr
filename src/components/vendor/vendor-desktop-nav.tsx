@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { ExternalLinkIcon } from "@/components/icons";
+import { fetchVendorStatus } from "@/lib/vendor/client";
 
 const NAV_LINKS = [
   { href: "/vendedor/panel", label: "Inicio" },
   { href: "/vendedor/pedidos", label: "Pedidos" },
   { href: "/vendedor/productos", label: "Productos" },
-  { href: "/vendedor/tienda", label: "Tienda" },
+  { href: "/vendedor/tienda", label: "Configuración" },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -18,6 +20,25 @@ function isActivePath(pathname: string, href: string) {
 
 export function VendorDesktopNav() {
   const pathname = usePathname();
+  const [shopHref, setShopHref] = useState("/");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchVendorStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setShopHref(status.shop?.slug ? `/${status.shop.slug}` : "/");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShopHref("/");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <nav className="sticky top-0 z-40 hidden border-b border-[var(--vendor-nav-border)] bg-[var(--vendor-nav-bg)]/95 backdrop-blur-md md:block">
@@ -54,7 +75,7 @@ export function VendorDesktopNav() {
 
         <div className="ml-auto">
           <Link
-            href="/"
+            href={shopHref}
             target="_blank"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--vendor-nav-accent)] transition-opacity hover:opacity-80"
           >
