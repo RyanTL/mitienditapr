@@ -76,8 +76,8 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
   const [reportFeedback, setReportFeedback] = useState<string | null>(null);
   const contactEmail = getContactEmail(shop.slug);
   const instagramHandle = `@${shop.slug.replaceAll("-", "")}`;
+  const facebookHandle = `@${shop.slug.replaceAll("-", "")}`;
   const whatsappNumber = "+1 (939) 555-0192";
-  const supportHours = "Lunes a Viernes, 9:00 AM - 5:00 PM";
   const closeShopMenu = useCallback(() => {
     setIsShopMenuOpen(false);
     setIsPoliciesExpanded(false);
@@ -223,9 +223,11 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
 
         <section className="mb-20 text-center md:mb-14">
           <h1 className="text-5xl font-extrabold tracking-tight">{shop.vendorName}</h1>
-          <p className="mx-auto mt-6 max-w-[32ch] text-lg leading-6 text-[var(--color-carbon)]">
-            {shop.description}
-          </p>
+          {shop.description.trim().length > 0 ? (
+            <p className="mx-auto mt-6 max-w-[32ch] text-lg leading-6 text-[var(--color-carbon)]">
+              {shop.description}
+            </p>
+          ) : null}
           {shop.athMovilPhone ? (
             <div className="mt-5 flex justify-center">
               <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-2 text-sm font-semibold text-[var(--color-carbon)] shadow-[0_4px_12px_var(--shadow-black-008)]">
@@ -469,9 +471,9 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                   </div>
                   <div className="rounded-xl px-1 py-2.5">
                     <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                      Horario
+                      Facebook
                     </p>
-                    <p className="text-sm text-[var(--color-carbon)]">{supportHours}</p>
+                    <p className="text-sm text-[var(--color-carbon)]">{facebookHandle}</p>
                   </div>
                   {shop.athMovilPhone ? (
                     <div className="rounded-xl px-1 py-2.5">

@@ -17,20 +17,16 @@ import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { FloatingSearchButton } from "@/components/navigation/floating-search-button";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
+import { ProfileMenu } from "@/components/profile/profile-menu";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { useAuthUser, getUserInitial } from "@/hooks/use-auth-user";
 import {
   filterMarketplaceShopsByQuery,
   normalizeMarketplaceSearchText,
 } from "@/lib/marketplace/search";
+import { formatUsd } from "@/lib/formatters";
 import type { MarketplaceSearchShop } from "@/lib/supabase/public-shop-data-shared";
 import type { MarketplaceShopCard } from "@/lib/supabase/shop-types";
-
-const ProfileMenu = dynamic(
-  () =>
-    import("@/components/profile/profile-menu").then((mod) => mod.ProfileMenu),
-  { ssr: false },
-);
 
 const HomeSearchOverlay = dynamic(
   () =>
@@ -46,12 +42,158 @@ type HomePageClientProps = {
   shopsError?: string | null;
 };
 
+type ShopCardProduct = MarketplaceShopCard["products"][number];
+
+function ShopPreviewImage({
+  product,
+  className,
+  sizes,
+}: {
+  product: ShopCardProduct;
+  className: string;
+  sizes: string;
+}) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-[1.5rem] bg-[var(--color-gray)] ${className}`}
+    >
+      <Image
+        src={product.imageUrl}
+        alt={product.alt}
+        fill
+        className="object-cover"
+        sizes={sizes}
+      />
+    </div>
+  );
+}
+
+function ShopProductPreview({
+  products,
+}: {
+  products: MarketplaceShopCard["products"];
+}) {
+  if (products.length === 0) {
+    return (
+      <div className="mb-4 rounded-[1.75rem] border border-dashed border-[var(--color-gray-200)] bg-[var(--color-gray-100)] px-4 py-8 text-center">
+        <p className="text-sm font-semibold text-[var(--color-carbon)]">
+          Esta tienda pronto tendrá productos publicados.
+        </p>
+      </div>
+    );
+  }
+
+  if (products.length === 1) {
+    const [product] = products;
+
+    return (
+      <div className="mb-4 grid grid-cols-[minmax(132px,0.92fr)_minmax(0,1.08fr)] gap-2 lg:h-[220px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1fr)]">
+        <ShopPreviewImage
+          product={product}
+          className="aspect-square lg:h-full lg:aspect-auto"
+          sizes="(min-width: 1024px) 240px, 42vw"
+        />
+        <div className="flex min-h-[132px] flex-col justify-center px-4 py-4 lg:h-full lg:min-h-0 lg:px-5">
+          <p className="mt-2 text-lg leading-tight font-extrabold text-[var(--color-carbon)] md:text-xl">
+            {product.name}
+          </p>
+          <p className="mt-3 text-base leading-none font-bold text-[var(--color-carbon)] md:text-lg">
+            {formatUsd(product.priceUsd)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (products.length === 2) {
+    return (
+      <div className="mb-4 grid grid-cols-2 gap-2 lg:h-[220px] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <ShopPreviewImage
+          product={products[0]}
+          className="aspect-[4/5] lg:h-full lg:aspect-auto"
+          sizes="(min-width: 1024px) 280px, 50vw"
+        />
+        <ShopPreviewImage
+          product={products[1]}
+          className="aspect-[4/5] lg:h-full lg:aspect-auto"
+          sizes="(min-width: 1024px) 220px, 50vw"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="mb-4 grid grid-cols-3 gap-2 lg:hidden">
+        {products.map((product) => (
+          <ShopPreviewImage
+            key={product.id}
+            product={product}
+            className="h-[120px] md:h-[130px]"
+            sizes="33vw"
+          />
+        ))}
+      </div>
+
+      <div className="mb-4 hidden lg:grid lg:h-[220px] lg:grid-cols-5 lg:grid-rows-2 lg:gap-2">
+        <ShopPreviewImage
+          product={products[0]}
+          className="col-span-3 row-span-2"
+          sizes="280px"
+        />
+        <ShopPreviewImage
+          product={products[1]}
+          className="col-span-2"
+          sizes="170px"
+        />
+        <ShopPreviewImage
+          product={products[2]}
+          className="col-span-2"
+          sizes="170px"
+        />
+      </div>
+    </>
+  );
+}
+
+function DefaultShopCard({ shop }: { shop: MarketplaceShopCard }) {
+  return (
+    <Link
+      href={`/${shop.id}`}
+      className="block rounded-3xl bg-[var(--color-white)] px-4 py-4 shadow-[0_1px_3px_var(--shadow-black-008),0_8px_24px_var(--shadow-black-008)] transition-shadow hover:shadow-[0_14px_30px_var(--shadow-black-012)] md:px-5 md:py-5"
+    >
+      <div className="mb-3 flex items-center gap-2.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
+          {shop.name.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <h2 className="text-base font-extrabold leading-tight text-[var(--color-carbon)] lg:text-lg">
+            {shop.name}
+          </h2>
+          <ShopRating rating={shop.rating} reviewCount={shop.reviewCount} />
+        </div>
+      </div>
+
+      <ShopProductPreview products={shop.products} />
+
+      <div className="flex items-center justify-between">
+        <p className="text-[1.75rem] leading-none font-extrabold text-[var(--color-carbon)] md:text-[2rem]">
+          Ver más
+        </p>
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray-200)] bg-[var(--color-gray-100)] text-[var(--color-carbon)]">
+          <ChevronIcon className="h-5 w-5" />
+        </span>
+      </div>
+    </Link>
+  );
+}
+
 export function HomePageClient({
   initialSearchShops,
   initialShopCards,
   shopsError = null,
 }: HomePageClientProps) {
-  const { user } = useAuthUser();
+  const { user, isLoading } = useAuthUser();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
@@ -175,82 +317,7 @@ export function HomePageClient({
         {!shopsError && filteredShopCards.length > 0 ? (
           <section className="space-y-3 md:grid md:grid-cols-2 md:gap-5 md:space-y-0 lg:gap-6">
             {filteredShopCards.map((shop) => (
-              <Link
-                key={shop.id}
-                href={`/${shop.id}`}
-                className="block rounded-3xl bg-[var(--color-white)] px-4 py-4 shadow-[0_1px_3px_var(--shadow-black-008),0_8px_24px_var(--shadow-black-008)] transition-shadow hover:shadow-[0_14px_30px_var(--shadow-black-012)] md:px-5 md:py-5"
-              >
-                <div className="mb-3 flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
-                    {shop.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h2 className="text-base font-extrabold leading-tight text-[var(--color-carbon)] lg:text-lg">
-                      {shop.name}
-                    </h2>
-                    <ShopRating
-                      rating={shop.rating}
-                      reviewCount={shop.reviewCount}
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-4 grid grid-cols-3 gap-2 lg:hidden">
-                  {shop.products.map((product) => (
-                    <div
-                      key={product.id}
-                      className="relative h-[120px] overflow-hidden rounded-2xl bg-[var(--color-gray)] md:h-[130px]"
-                    >
-                      <Image
-                        src={product.imageUrl}
-                        alt={product.alt}
-                        fill
-                        className="object-cover"
-                        sizes="33vw"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mb-4 hidden lg:grid lg:h-[220px] lg:grid-cols-5 lg:grid-rows-2 lg:gap-2">
-                  <div className="relative col-span-3 row-span-2 overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-                    <Image
-                      src={shop.products[0].imageUrl}
-                      alt={shop.products[0].alt}
-                      fill
-                      className="object-cover"
-                      sizes="280px"
-                    />
-                  </div>
-                  <div className="relative col-span-2 overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-                    <Image
-                      src={shop.products[1].imageUrl}
-                      alt={shop.products[1].alt}
-                      fill
-                      className="object-cover"
-                      sizes="170px"
-                    />
-                  </div>
-                  <div className="relative col-span-2 overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-                    <Image
-                      src={shop.products[2].imageUrl}
-                      alt={shop.products[2].alt}
-                      fill
-                      className="object-cover"
-                      sizes="170px"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-[1.75rem] leading-none font-extrabold text-[var(--color-carbon)] md:text-[2rem]">
-                    Ver más
-                  </p>
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray-200)] bg-[var(--color-gray-100)] text-[var(--color-carbon)]">
-                    <ChevronIcon className="h-5 w-5" />
-                  </span>
-                </div>
-              </Link>
+              <DefaultShopCard key={shop.id} shop={shop} />
             ))}
           </section>
         ) : null}
@@ -278,12 +345,12 @@ export function HomePageClient({
       <FloatingSearchButton onClick={() => setIsSearchOpen(true)} hasCart={!!user} />
       {user ? <FloatingCartLink href="/carrito" resolveFromCart /> : null}
 
-      {isProfileMenuOpen ? (
-        <ProfileMenu
-          isOpen={isProfileMenuOpen}
-          onClose={() => setIsProfileMenuOpen(false)}
-        />
-      ) : null}
+      <ProfileMenu
+        user={user}
+        isAuthLoading={isLoading}
+        isOpen={isProfileMenuOpen}
+        onClose={() => setIsProfileMenuOpen(false)}
+      />
 
       {isSearchOpen ? (
         <HomeSearchOverlay

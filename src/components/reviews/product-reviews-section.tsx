@@ -97,6 +97,7 @@ export function ProductReviewsSection({
       setFeedbackMessage(
         reviewsData?.myReview ? "Review actualizada." : "Review publicada.",
       );
+      setCommentDraft("");
       setReviewsData((current) =>
         current
           ? {

@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ChevronDownIcon, SettingsIcon } from "@/components/icons";
-import { useAuthUser, getUserInitial } from "@/hooks/use-auth-user";
+import { getUserInitial } from "@/hooks/use-auth-user";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
+import { fetchVendorStatus } from "@/lib/vendor/client";
 import { cn } from "@/lib/utils";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchFollowedShops,
   SHOP_FOLLOWS_CHANGED_EVENT,
@@ -16,47 +17,21 @@ import {
 } from "@/lib/supabase/follows";
 
 async function fetchVendorMenuEntry(): Promise<VendorMenuEntry | null> {
-  const supabase = createSupabaseBrowserClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return null;
+  try {
+    const status = await fetchVendorStatus();
+    if (status.hasShop) {
+      return { href: "/vendedor", label: "Maneja tu tienda" };
+    }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-  if (!profile) return null;
-
-  const isVendor = profile.role === "vendor" || profile.role === "admin";
-  if (!isVendor) {
     return { href: "/vendedor/onboarding", label: "Conviértete en vendedor" };
+  } catch {
+    return null;
   }
-
-  const { data: shop } = await supabase
-    .from("shops")
-    .select("id")
-    .eq("vendor_profile_id", session.user.id)
-    .maybeSingle();
-
-  if (!shop) {
-    return { href: "/vendedor/onboarding", label: "Conviértete en vendedor" };
-  }
-
-  const { data: onboarding } = await supabase
-    .from("vendor_onboarding")
-    .select("status")
-    .eq("vendor_profile_id", session.user.id)
-    .maybeSingle();
-
-  if (onboarding?.status === "completed") {
-    return { href: "/vendedor/panel", label: "Panel de vendedor" };
-  }
-
-  return { href: "/vendedor/onboarding", label: "Completa tu tienda" };
 }
 
 type ProfileMenuProps = {
+  user: User | null;
+  isAuthLoading: boolean;
   isOpen: boolean;
   onClose: () => void;
   desktopPosition?: "sidebar";
@@ -255,9 +230,13 @@ function AuthMenuContent({
 
 // ─── Main ProfileMenu ───────────────────────────────────────────────────────
 
-export function ProfileMenu({ isOpen, onClose, desktopPosition }: ProfileMenuProps) {
-  const { user, isLoading } = useAuthUser();
-
+export function ProfileMenu({
+  user,
+  isAuthLoading,
+  isOpen,
+  onClose,
+  desktopPosition,
+}: ProfileMenuProps) {
   useBodyScrollLock(isOpen);
   useEscapeKey(isOpen, onClose);
 
@@ -298,7 +277,7 @@ export function ProfileMenu({ isOpen, onClose, desktopPosition }: ProfileMenuPro
             : "top-4 left-4 md:top-6 md:left-6 md:w-[min(46vw,360px)]",
         )}
       >
-        {isLoading ? (
+        {isAuthLoading ? (
           <div className="py-4 text-center text-sm text-[var(--color-gray-500)]">Cargando...</div>
         ) : user ? (
           <AuthMenuContent

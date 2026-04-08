@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -12,6 +11,7 @@ import {
   OrdersIcon,
   UserIcon,
 } from "@/components/icons";
+import { ProfileMenu } from "@/components/profile/profile-menu";
 import { useAuthUser, getUserInitial } from "@/hooks/use-auth-user";
 import {
   CART_CHANGED_EVENT,
@@ -19,12 +19,6 @@ import {
 } from "@/lib/supabase/cart";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-
-const ProfileMenu = dynamic(
-  () =>
-    import("@/components/profile/profile-menu").then((mod) => mod.ProfileMenu),
-  { ssr: false },
-);
 
 type NavItem = {
   href: string;
@@ -176,13 +170,13 @@ export function DesktopSidebar() {
         ) : null}
       </div>
 
-      {isProfileMenuOpen ? (
-        <ProfileMenu
-          isOpen={isProfileMenuOpen}
-          onClose={() => setIsProfileMenuOpen(false)}
-          desktopPosition="sidebar"
-        />
-      ) : null}
+      <ProfileMenu
+        user={user}
+        isAuthLoading={isLoading}
+        isOpen={isProfileMenuOpen}
+        onClose={() => setIsProfileMenuOpen(false)}
+        desktopPosition="sidebar"
+      />
     </aside>
   );
 }

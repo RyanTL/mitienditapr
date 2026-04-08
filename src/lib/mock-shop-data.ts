@@ -83,6 +83,9 @@ export const mockShopDetails: ShopDetail[] = [
       },
     ],
     athMovilPhone: null,
+    shippingFlatFeeUsd: 0,
+    offersPickup: false,
+    acceptsStripePayments: false,
   },
   {
     slug: "estilo-boutique",
@@ -166,6 +169,9 @@ export const mockShopDetails: ShopDetail[] = [
       },
     ],
     athMovilPhone: null,
+    shippingFlatFeeUsd: 0,
+    offersPickup: false,
+    acceptsStripePayments: false,
   },
   {
     slug: "hecho-a-mano-pr",
@@ -249,5 +255,8 @@ export const mockShopDetails: ShopDetail[] = [
       },
     ],
     athMovilPhone: null,
+    shippingFlatFeeUsd: 0,
+    offersPickup: false,
+    acceptsStripePayments: false,
   },
 ];
