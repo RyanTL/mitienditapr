@@ -16,20 +16,15 @@ export type CartItem = {
     shopSlug: string;
     shopName: string;
     shopAthMovilPhone: string | null;
+    shopShippingFlatFeeUsd: number;
+    shopOffersPickup: boolean;
+    shopAcceptsStripePayments: boolean;
     productId: string;
     name: string;
     priceUsd: number;
     imageUrl: string;
     alt: string;
   };
-};
-
-export type CheckoutPolicyAcceptanceInput = {
-  shopId: string;
-  termsVersionId: string;
-  shippingVersionId: string;
-  acceptedAt: string;
-  acceptanceText: string;
 };
 
 type CartItemRow = {
@@ -50,20 +45,11 @@ type ShopRow = {
   id: string;
   slug: string;
   vendor_name: string;
+  shipping_flat_fee_usd: number;
+  offers_pickup: boolean;
+  stripe_connect_account_id: string | null;
   ath_movil_phone: string | null;
 };
-
-type ProductVariantRow = {
-  id: string;
-  product_id: string;
-};
-
-type SupabaseErrorLike = {
-  message?: string;
-  details?: string;
-  hint?: string;
-  code?: string;
-} | null;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -78,66 +64,6 @@ function notifyCartChanged(detail: CartChangedEventDetail = { fullRefresh: true 
   }
 
   window.dispatchEvent(new CustomEvent<CartChangedEventDetail>(CART_CHANGED_EVENT, { detail }));
-}
-
-function isMissingProductVariantsTableError(error: SupabaseErrorLike) {
-  if (!error) {
-    return false;
-  }
-
-  const content = [
-    error.message ?? "",
-    error.details ?? "",
-    error.hint ?? "",
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return (
-    error.code === "PGRST205" &&
-    content.includes("product_variants") &&
-    content.includes("schema cache")
-  );
-}
-
-async function cleanupOrderAfterCheckoutFailure(
-  profileId: string,
-  orderId: string,
-  fallbackMessage: string,
-) {
-  const supabase = createSupabaseBrowserClient();
-  const { error } = await supabase
-    .from("orders")
-    .delete()
-    .eq("id", orderId)
-    .eq("profile_id", profileId);
-
-  if (!error) {
-    throw new Error(fallbackMessage);
-  }
-
-  throw new Error(`${fallbackMessage} (Rollback fallido: ${error.message})`);
-}
-
-async function createOrderPolicySnapshot(input: {
-  orderId: string;
-  policyAcceptance: CheckoutPolicyAcceptanceInput;
-}) {
-  const supabase = createSupabaseBrowserClient();
-  const { orderId, policyAcceptance } = input;
-
-  const { error } = await supabase.from("order_policy_snapshots").insert({
-    order_id: orderId,
-    shop_id: policyAcceptance.shopId,
-    terms_version_id: policyAcceptance.termsVersionId,
-    shipping_version_id: policyAcceptance.shippingVersionId,
-    accepted_at: policyAcceptance.acceptedAt,
-    acceptance_text: policyAcceptance.acceptanceText,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
 }
 
 export async function fetchCartQuantityTotal() {
@@ -201,7 +127,9 @@ export async function fetchCartItems() {
 
   const { data: shopRows, error: shopsError } = await supabase
     .from("shops")
-    .select("id,slug,vendor_name,ath_movil_phone")
+    .select(
+      "id,slug,vendor_name,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone",
+    )
     .in("id", shopIds);
 
   if (shopsError || !shopRows) {
@@ -234,6 +162,9 @@ export async function fetchCartItems() {
           shopSlug: shop.slug,
           shopName: shop.vendor_name,
           shopAthMovilPhone: shop.ath_movil_phone ?? null,
+          shopShippingFlatFeeUsd: Number(shop.shipping_flat_fee_usd ?? 0),
+          shopOffersPickup: Boolean(shop.offers_pickup),
+          shopAcceptsStripePayments: Boolean(shop.stripe_connect_account_id),
           productId: product.id,
           name: product.name,
           priceUsd: Number(product.price_usd),
@@ -411,129 +342,4 @@ export async function removeCartItem(cartItemId: string) {
   notifyCartChanged();
 
   return { ok: true as const, unauthorized: false as const };
-}
-
-export async function checkoutCartByShop(
-  shopSlug: string,
-  policyAcceptance: CheckoutPolicyAcceptanceInput,
-) {
-  const profileId = await getCurrentProfileId();
-  if (!profileId) {
-    return { ok: false as const, unauthorized: true as const, empty: false as const };
-  }
-
-  const cartItems = await fetchCartItems();
-  const shopCartItems = cartItems.filter((item) => item.product.shopSlug === shopSlug);
-
-  if (shopCartItems.length === 0) {
-    return { ok: false as const, unauthorized: false as const, empty: true as const };
-  }
-
-  const subtotal = shopCartItems.reduce(
-    (total, item) => total + item.product.priceUsd * item.quantity,
-    0,
-  );
-
-  const supabase = createSupabaseBrowserClient();
-  const productIds = Array.from(
-    new Set(shopCartItems.map((item) => item.product.databaseId)),
-  );
-  let firstVariantIdByProductId = new Map<string, string>();
-
-  if (productIds.length > 0) {
-    const { data: variantRows, error: variantsError } = await supabase
-      .from("product_variants")
-      .select("id,product_id")
-      .in("product_id", productIds)
-      .eq("is_active", true)
-      .order("created_at", { ascending: true });
-
-    if (variantsError && !isMissingProductVariantsTableError(variantsError)) {
-      throw new Error(variantsError.message);
-    }
-
-    if (variantRows && !variantsError) {
-      firstVariantIdByProductId = (variantRows as ProductVariantRow[]).reduce(
-        (map, row) => {
-          if (!map.has(row.product_id)) {
-            map.set(row.product_id, row.id);
-          }
-          return map;
-        },
-        new Map<string, string>(),
-      );
-    }
-  }
-
-  const { data: orderRow, error: createOrderError } = await supabase
-    .from("orders")
-    .insert({
-      profile_id: profileId,
-      status: "pending",
-      subtotal_usd: subtotal,
-      total_usd: subtotal,
-    })
-    .select("id")
-    .single();
-
-  if (createOrderError || !orderRow) {
-    throw new Error(createOrderError?.message ?? "No se pudo crear la orden.");
-  }
-
-  const { error: createOrderItemsError } = await supabase.from("order_items").insert(
-    shopCartItems.map((item) => ({
-      order_id: orderRow.id,
-      product_id: item.product.databaseId,
-      product_variant_id: firstVariantIdByProductId.get(item.product.databaseId) ?? null,
-      quantity: item.quantity,
-      unit_price_usd: item.product.priceUsd,
-    })),
-  );
-
-  if (createOrderItemsError) {
-    await cleanupOrderAfterCheckoutFailure(
-      profileId,
-      orderRow.id,
-      `No se pudo crear los items de la orden: ${createOrderItemsError.message}`,
-    );
-  }
-
-  try {
-    await createOrderPolicySnapshot({
-      orderId: orderRow.id,
-      policyAcceptance,
-    });
-  } catch (error) {
-    await cleanupOrderAfterCheckoutFailure(
-      profileId,
-      orderRow.id,
-      `No se pudo guardar el consentimiento de políticas: ${
-        error instanceof Error ? error.message : "Error desconocido"
-      }`,
-    );
-  }
-
-  const cartItemIds = shopCartItems.map((item) => item.id);
-  const { error: clearCartError } = await supabase
-    .from("cart_items")
-    .delete()
-    .eq("profile_id", profileId)
-    .in("id", cartItemIds);
-
-  if (clearCartError) {
-    await cleanupOrderAfterCheckoutFailure(
-      profileId,
-      orderRow.id,
-      `No se pudo limpiar el carrito: ${clearCartError.message}`,
-    );
-  }
-
-  notifyCartChanged();
-
-  return {
-    ok: true as const,
-    unauthorized: false as const,
-    empty: false as const,
-    orderId: orderRow.id,
-  };
 }

@@ -16,12 +16,18 @@ import { useFavoriteProducts } from "@/hooks/use-favorite-products";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
+import { fetchAccountSnapshot } from "@/lib/account/client";
 import { formatUsd } from "@/lib/formatters";
+import {
+  createAthMovilCheckout,
+  createStripeCheckoutSession,
+  type CheckoutBuyerInput,
+  type CheckoutFulfillmentInput,
+} from "@/lib/orders/client";
 import { fetchPublicShopPolicies } from "@/lib/policies/client";
 import type { PublicShopPoliciesResponse, PolicyType } from "@/lib/policies/types";
 import type { ShopDetail } from "@/lib/supabase/shop-types";
 import {
-  checkoutCartByShop,
   fetchCartItems,
   removeCartItem,
   setCartItemQuantity,
@@ -39,11 +45,23 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [activeCheckoutMethod, setActiveCheckoutMethod] = useState<"stripe" | "ath_movil" | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [policiesData, setPoliciesData] = useState<PublicShopPoliciesResponse | null>(null);
   const [isLoadingPolicies, setIsLoadingPolicies] = useState(false);
   const [policiesError, setPoliciesError] = useState<string | null>(null);
   const [hasAcceptedRequiredPolicies, setHasAcceptedRequiredPolicies] = useState(false);
+  const [buyerInput, setBuyerInput] = useState<CheckoutBuyerInput>({
+    fullName: "",
+    email: "",
+    phone: "",
+  });
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<"shipping" | "pickup">("shipping");
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [shippingZipCode, setShippingZipCode] = useState("");
+  const [pickupNotes, setPickupNotes] = useState("");
+  const [athReceiptFile, setAthReceiptFile] = useState<File | null>(null);
+  const [athReceiptNote, setAthReceiptNote] = useState("");
   const [activePolicyModalType, setActivePolicyModalType] = useState<PolicyType | null>(null);
   const { addFavorite } = useFavoriteProducts();
 
@@ -80,6 +98,8 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
       ),
     [cartItems],
   );
+  const shippingFeeUsd = fulfillmentMethod === "shipping" ? shop.shippingFlatFeeUsd : 0;
+  const totalUsd = subtotal + shippingFeeUsd;
 
   const activeMenuItem = useMemo(
     () => cartItems.find((item) => item.id === menuItemId) ?? null,
@@ -91,6 +111,9 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
       hasAcceptedRequiredPolicies &&
       !isLoadingPolicies,
   );
+  const supportsStripe = shop.acceptsStripePayments;
+  const supportsAthMovil = Boolean(shop.athMovilPhone);
+  const hasAnyPaymentMethod = supportsStripe || supportsAthMovil;
   const activePolicyModal =
     activePolicyModalType && policiesData?.policies
       ? policiesData.policies[activePolicyModalType] ?? null
@@ -138,6 +161,35 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   useEffect(() => {
     void loadPolicies();
   }, [loadPolicies]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBuyerSnapshot() {
+      try {
+        const snapshot = await fetchAccountSnapshot();
+        if (cancelled) {
+          return;
+        }
+
+        setBuyerInput({
+          fullName: snapshot.fullName,
+          email: snapshot.email,
+          phone: snapshot.phone,
+        });
+        setShippingAddress(snapshot.address);
+        setShippingZipCode(snapshot.zipCode);
+      } catch {
+        // The checkout APIs still validate auth and required fields.
+      }
+    }
+
+    void loadBuyerSnapshot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const removeLineItem = useCallback(
     async (lineItemId: string) => {
@@ -243,56 +295,126 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
     }
   }, [activeMenuItem, addFavorite, cartItems]);
 
-  const handleCheckout = useCallback(async () => {
+  const buildCheckoutPayload = useCallback(() => {
     if (!policiesData?.requiredPolicyVersionIds) {
-      setCheckoutError(
+      throw new Error(
         "La tienda no tiene Términos y Política de envío publicados. No se puede continuar.",
       );
-      return;
     }
 
     if (!hasAcceptedRequiredPolicies) {
-      setCheckoutError("Debes aceptar Términos y Política de envío para continuar.");
-      return;
+      throw new Error("Debes aceptar Términos y Política de envío para continuar.");
     }
 
-    setIsCheckingOut(true);
-    setCheckoutError(null);
+    if (!hasAnyPaymentMethod) {
+      throw new Error("Esta tienda todavía no configuró un método de pago.");
+    }
 
-    try {
-      const result = await checkoutCartByShop(shop.slug, {
+    const trimmedPhone = buyerInput.phone?.trim() ?? "";
+    if (!trimmedPhone) {
+      throw new Error("Debes escribir un teléfono para continuar.");
+    }
+
+    const fulfillment: CheckoutFulfillmentInput =
+      fulfillmentMethod === "pickup"
+        ? {
+            method: "pickup",
+            pickupNotes: pickupNotes.trim() || null,
+          }
+        : {
+            method: "shipping",
+            shippingAddress: shippingAddress.trim(),
+            shippingZipCode: shippingZipCode.trim(),
+          };
+
+    return {
+      shopSlug: shop.slug,
+      buyer: {
+        fullName: buyerInput.fullName?.trim() || null,
+        email: buyerInput.email?.trim() || null,
+        phone: trimmedPhone,
+      },
+      fulfillment,
+      policyAcceptance: {
         shopId: policiesData.shopId,
         termsVersionId: policiesData.requiredPolicyVersionIds.terms,
         shippingVersionId: policiesData.requiredPolicyVersionIds.shipping,
         acceptedAt: new Date().toISOString(),
         acceptanceText: "Acepto Términos y Política de envío de esta tienda.",
-      });
+      },
+    };
+  }, [
+    buyerInput.email,
+    buyerInput.fullName,
+    buyerInput.phone,
+    fulfillmentMethod,
+    hasAcceptedRequiredPolicies,
+    hasAnyPaymentMethod,
+    pickupNotes,
+    policiesData,
+    shippingAddress,
+    shippingZipCode,
+    shop.slug,
+  ]);
 
-      if (result.unauthorized) {
+  const handleStripeCheckout = useCallback(async () => {
+    setIsCheckingOut(true);
+    setActiveCheckoutMethod("stripe");
+    setCheckoutError(null);
+
+    try {
+      const payload = buildCheckoutPayload();
+      const result = await createStripeCheckoutSession(payload);
+      window.location.assign(result.url);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo abrir el pago con tarjeta.";
+      setCheckoutError(message);
+      if (message.toLowerCase().includes("no autenticado")) {
         router.push(`/sign-in?next=${encodeURIComponent(`/${shop.slug}/carrito`)}`);
-        return;
+      }
+    } finally {
+      setIsCheckingOut(false);
+      setActiveCheckoutMethod(null);
+    }
+  }, [buildCheckoutPayload, router, shop.slug]);
+
+  const handleAthMovilCheckout = useCallback(async () => {
+    setIsCheckingOut(true);
+    setActiveCheckoutMethod("ath_movil");
+    setCheckoutError(null);
+
+    try {
+      if (!athReceiptFile) {
+        throw new Error("Debes subir el recibo de ATH Móvil para enviar la orden.");
       }
 
-      if (result.empty) {
-        setCheckoutError("Tu carrito no tiene productos para procesar.");
-        return;
-      }
+      const payload = buildCheckoutPayload();
+      await createAthMovilCheckout({
+        payload,
+        receipt: athReceiptFile,
+        receiptNote: athReceiptNote.trim() || null,
+      });
 
       await loadShopCartItems();
       router.push("/ordenes");
       router.refresh();
     } catch (error) {
-      console.error("No se pudo completar la orden:", error);
-      setCheckoutError(
-        error instanceof Error ? error.message : "No se pudo completar la orden.",
-      );
+      const message =
+        error instanceof Error ? error.message : "No se pudo completar la orden.";
+      setCheckoutError(message);
+      if (message.toLowerCase().includes("no autenticado")) {
+        router.push(`/sign-in?next=${encodeURIComponent(`/${shop.slug}/carrito`)}`);
+      }
     } finally {
       setIsCheckingOut(false);
+      setActiveCheckoutMethod(null);
     }
   }, [
-    hasAcceptedRequiredPolicies,
+    athReceiptFile,
+    athReceiptNote,
+    buildCheckoutPayload,
     loadShopCartItems,
-    policiesData,
     router,
     shop.slug,
   ]);
@@ -396,6 +518,117 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                 </p>
               </div>
 
+              <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4">
+                <p className="text-xs font-semibold text-[var(--color-gray-500)]">
+                  Contacto del comprador
+                </p>
+                <div className="mt-3 grid gap-3">
+                  <input
+                    type="text"
+                    value={buyerInput.fullName ?? ""}
+                    onChange={(event) =>
+                      setBuyerInput((current) => ({
+                        ...current,
+                        fullName: event.target.value,
+                      }))
+                    }
+                    placeholder="Nombre"
+                    className="rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
+                  />
+                  <input
+                    type="email"
+                    value={buyerInput.email ?? ""}
+                    onChange={(event) =>
+                      setBuyerInput((current) => ({
+                        ...current,
+                        email: event.target.value,
+                      }))
+                    }
+                    placeholder="Correo electrónico"
+                    className="rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
+                  />
+                  <input
+                    type="tel"
+                    value={buyerInput.phone ?? ""}
+                    onChange={(event) =>
+                      setBuyerInput((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
+                    }
+                    placeholder="Teléfono"
+                    className="rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4">
+                <p className="text-xs font-semibold text-[var(--color-gray-500)]">
+                  Entrega
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFulfillmentMethod("shipping")}
+                    className={[
+                      "rounded-full px-4 py-2 text-sm font-semibold transition-colors",
+                      fulfillmentMethod === "shipping"
+                        ? "bg-[var(--color-carbon)] text-[var(--color-white)]"
+                        : "border border-[var(--color-gray)] text-[var(--color-carbon)]",
+                    ].join(" ")}
+                  >
+                    Envío
+                  </button>
+                  {shop.offersPickup ? (
+                    <button
+                      type="button"
+                      onClick={() => setFulfillmentMethod("pickup")}
+                      className={[
+                        "rounded-full px-4 py-2 text-sm font-semibold transition-colors",
+                        fulfillmentMethod === "pickup"
+                          ? "bg-[var(--color-carbon)] text-[var(--color-white)]"
+                          : "border border-[var(--color-gray)] text-[var(--color-carbon)]",
+                      ].join(" ")}
+                    >
+                      Recogido
+                    </button>
+                  ) : null}
+                </div>
+
+                {fulfillmentMethod === "shipping" ? (
+                  <div className="mt-3 grid gap-3">
+                    <textarea
+                      rows={3}
+                      value={shippingAddress}
+                      onChange={(event) => setShippingAddress(event.target.value)}
+                      placeholder="Dirección completa"
+                      className="rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
+                    />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={5}
+                      value={shippingZipCode}
+                      onChange={(event) =>
+                        setShippingZipCode(event.target.value.replace(/\D/g, "").slice(0, 5))
+                      }
+                      placeholder="Código postal"
+                      className="rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <textarea
+                      rows={2}
+                      value={pickupNotes}
+                      onChange={(event) => setPickupNotes(event.target.value)}
+                      placeholder="Notas para coordinar el recogido (opcional)"
+                      className="w-full rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3">
                 <p className="text-xs font-semibold text-[var(--color-gray-500)]">
                   Políticas requeridas
@@ -441,20 +674,85 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                 )}
               </div>
 
+              <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-4">
+                <div className="flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                  <span>Subtotal</span>
+                  <span className="font-semibold">{formatUsd(subtotal)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                  <span>Envío</span>
+                  <span className="font-semibold">
+                    {fulfillmentMethod === "shipping"
+                      ? formatUsd(shippingFeeUsd)
+                      : "Gratis"}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-[var(--color-gray-border)] pt-3 text-base text-[var(--color-carbon)]">
+                  <span className="font-semibold">Total</span>
+                  <span className="font-bold">{formatUsd(totalUsd)}</span>
+                </div>
+              </div>
+
               {checkoutError ? (
                 <p className="mb-3 rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-3 py-2 text-xs text-[var(--color-danger)]">
                   {checkoutError}
                 </p>
               ) : null}
 
-              <button
-                type="button"
-                disabled={isCheckingOut || !canCheckout}
-                className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-base font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)] disabled:opacity-70"
-                onClick={() => void handleCheckout()}
-              >
-                {isCheckingOut ? "Procesando..." : "Continuar al pago"}
-              </button>
+              {supportsStripe ? (
+                <button
+                  type="button"
+                  disabled={isCheckingOut || !canCheckout}
+                  className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-base font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)] disabled:opacity-70"
+                  onClick={() => void handleStripeCheckout()}
+                >
+                  {isCheckingOut && activeCheckoutMethod === "stripe"
+                    ? "Abriendo Stripe..."
+                    : "Pagar con tarjeta"}
+                </button>
+              ) : null}
+
+              {supportsAthMovil ? (
+                <div className="mt-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4">
+                  <p className="text-sm font-semibold text-[var(--color-carbon)]">
+                    Pagar con ATH Móvil
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--color-gray-500)]">
+                    Sube el recibo del pago enviado al {shop.athMovilPhone}.
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) =>
+                      setAthReceiptFile(event.target.files?.[0] ?? null)
+                    }
+                    className="mt-3 block w-full text-sm"
+                  />
+                  <textarea
+                    rows={2}
+                    value={athReceiptNote}
+                    onChange={(event) => setAthReceiptNote(event.target.value)}
+                    placeholder="Nota opcional para la tienda"
+                    className="mt-3 w-full rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={isCheckingOut || !canCheckout}
+                    className="mt-3 w-full rounded-3xl border border-[var(--color-carbon)] px-6 py-3.5 text-base font-semibold text-[var(--color-carbon)] disabled:opacity-70"
+                    onClick={() => void handleAthMovilCheckout()}
+                  >
+                    {isCheckingOut && activeCheckoutMethod === "ath_movil"
+                      ? "Enviando comprobante..."
+                      : "Enviar comprobante ATH Móvil"}
+                  </button>
+                </div>
+              ) : null}
+
+              {!supportsStripe && !supportsAthMovil ? (
+                <div className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-danger)]">
+                  Esta tienda aún no configuró un método de pago.
+                </div>
+              ) : null}
             </>
           )}
         </section>

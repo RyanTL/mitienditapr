@@ -11,6 +11,9 @@ export type ShopRow = {
   review_count: number;
   description: string;
   is_active: boolean;
+  shipping_flat_fee_usd: number;
+  offers_pickup: boolean;
+  stripe_connect_account_id: string | null;
   ath_movil_phone: string | null;
 };
 
@@ -29,6 +32,9 @@ export type ProductRow = {
 export type MarketplaceSearchProduct = {
   id: string;
   name: string;
+  priceUsd: number;
+  rating?: string;
+  reviewCount?: number;
   imageUrl: string;
   alt: string;
 };
@@ -88,6 +94,9 @@ export function buildMarketplaceSearchShop(
     products: products.map((product) => ({
       id: product.id,
       name: product.name,
+      priceUsd: Number(product.price_usd ?? 0),
+      rating: formatRating(product.rating),
+      reviewCount: Number(product.review_count ?? 0),
       imageUrl: getProductImageUrl(product.image_url),
       alt: product.name,
     })),
@@ -116,6 +125,9 @@ export function buildShopDetail(shop: ShopRow, products: ProductRow[]): ShopDeta
     description: shop.description ?? "",
     products: shopProducts,
     athMovilPhone: shop.ath_movil_phone ?? null,
+    shippingFlatFeeUsd: Number(shop.shipping_flat_fee_usd ?? 0),
+    offersPickup: Boolean(shop.offers_pickup),
+    acceptsStripePayments: Boolean(shop.stripe_connect_account_id),
   };
 }
 
@@ -125,17 +137,13 @@ export function buildMarketplaceShopCards(
   return searchShops.map((shop) => {
     const previewProducts = shop.products.slice(0, 3).map((product) => ({
       id: product.id,
+      name: product.name,
+      priceUsd: product.priceUsd,
+      rating: product.rating,
+      reviewCount: product.reviewCount,
       imageUrl: getProductImageUrl(product.imageUrl),
       alt: product.alt,
     }));
-
-    while (previewProducts.length < 3) {
-      previewProducts.push({
-        id: `${shop.slug}-placeholder-${previewProducts.length + 1}`,
-        imageUrl: FALLBACK_IMAGE_URL,
-        alt: shop.name,
-      });
-    }
 
     return {
       id: shop.slug,

@@ -4,16 +4,27 @@ import {
   readStripeWebhookSecret,
   readStripeSubscription,
   type StripeInvoiceEventObject,
+  type StripeCheckoutSessionResponse,
   type StripeSubscriptionEventObject,
   type StripeWebhookEvent,
   verifyStripeWebhookSignature,
 } from "@/lib/vendor/stripe";
+import {
+  clearPurchasedCartItems,
+  findOrderPaymentByCheckoutSessionId,
+  releaseOrderInventory,
+  updateOrderPaymentState,
+} from "@/lib/orders/server";
 import {
   activateVendorStripeSubscription,
   isActiveVendorSubscriptionStatus,
   normalizeStripeSubscriptionStatus,
 } from "@/lib/vendor/subscription-activation";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import {
+  sendBuyerOrderConfirmationEmail,
+  sendVendorNewOrderEmail,
+} from "@/lib/email/resend";
 
 type VendorSubscriptionRow = {
   id: string;
@@ -40,8 +51,203 @@ type StripeCheckoutSessionEventObject = {
   id: string;
   customer?: string;
   subscription?: string;
+  payment_status?: string;
+  payment_intent?: string;
+  client_reference_id?: string | null;
   metadata?: Record<string, string>;
 };
+
+type OrderNotificationRow = {
+  id: string;
+  profile_id: string;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  total_usd: number;
+  shop_id: string;
+  shops: Array<{
+    id: string;
+    slug: string;
+    vendor_name: string;
+    vendor_profile_id: string;
+  }> | null;
+};
+
+type OrderItemNotificationRow = {
+  order_id: string;
+  quantity: number;
+  unit_price_usd: number;
+  products: Array<{
+    name: string;
+  }> | null;
+};
+
+type VendorProfileRow = {
+  email: string | null;
+};
+
+async function fetchStripeOrderNotificationContext(orderId: string) {
+  const admin = createSupabaseAdminClient();
+  const [{ data: orderData, error: orderError }, { data: itemData, error: itemError }] =
+    await Promise.all([
+      admin
+        .from("orders")
+        .select(
+          "id,profile_id,buyer_name,buyer_email,total_usd,shop_id,shops(id,slug,vendor_name,vendor_profile_id)",
+        )
+        .eq("id", orderId)
+        .maybeSingle(),
+      admin
+        .from("order_items")
+        .select("order_id,quantity,unit_price_usd,products(name)")
+        .eq("order_id", orderId),
+    ]);
+
+  if (orderError) {
+    throw new Error(orderError.message);
+  }
+
+  if (itemError) {
+    throw new Error(itemError.message);
+  }
+
+  const order = orderData as OrderNotificationRow | null;
+  const shopInfo = order?.shops?.[0] ?? null;
+  if (!order || !shopInfo) {
+    return null;
+  }
+
+  const { data: vendorData, error: vendorError } = await admin
+    .from("profiles")
+    .select("email")
+    .eq("id", shopInfo.vendor_profile_id)
+    .maybeSingle();
+
+  if (vendorError) {
+    throw new Error(vendorError.message);
+  }
+
+  return {
+    order,
+    items: ((itemData ?? []) as unknown as OrderItemNotificationRow[]).map((item) => ({
+      name: item.products?.[0]?.name ?? "Producto",
+      quantity: item.quantity,
+      unitPriceUsd: Number(item.unit_price_usd),
+    })),
+    vendorEmail: (vendorData as VendorProfileRow | null)?.email ?? null,
+  };
+}
+
+async function handleBuyerCheckoutPaid(
+  session: StripeCheckoutSessionEventObject | StripeCheckoutSessionResponse,
+) {
+  const admin = createSupabaseAdminClient();
+  const orderId =
+    session.metadata?.order_id ??
+    (typeof session.client_reference_id === "string" ? session.client_reference_id : null);
+  const paymentIntentId =
+    typeof session.payment_intent === "string" ? session.payment_intent : null;
+
+  if (!orderId) {
+    return;
+  }
+
+  const paymentRecord = await findOrderPaymentByCheckoutSessionId(admin, session.id);
+  if (paymentRecord?.status === "paid" || paymentRecord?.status === "refunded") {
+    return;
+  }
+
+  const { data: orderRow, error: orderError } = await admin
+    .from("orders")
+    .select("id,profile_id")
+    .eq("id", orderId)
+    .maybeSingle<{ id: string; profile_id: string }>();
+
+  if (orderError) {
+    throw new Error(orderError.message);
+  }
+
+  if (!orderRow) {
+    return;
+  }
+
+  await updateOrderPaymentState({
+    admin,
+    orderId,
+    paymentStatus: "paid",
+    orderStatus: "paid",
+    checkoutSessionId: session.id,
+    paymentIntentId,
+  });
+
+  await clearPurchasedCartItems(admin, orderRow.profile_id, orderId);
+
+  const notificationContext = await fetchStripeOrderNotificationContext(orderId);
+  if (!notificationContext) {
+    return;
+  }
+
+  if (notificationContext.vendorEmail) {
+    const shopInfo = notificationContext.order.shops?.[0];
+    if (shopInfo) {
+    void sendVendorNewOrderEmail({
+      to: notificationContext.vendorEmail,
+      vendorName: shopInfo.vendor_name,
+      orderId,
+      buyerEmail: notificationContext.order.buyer_email,
+      buyerName: notificationContext.order.buyer_name,
+      items: notificationContext.items,
+      totalUsd: Number(notificationContext.order.total_usd),
+      paymentMethod: "stripe",
+    });
+    }
+  }
+
+  if (notificationContext.order.buyer_email) {
+    const shopInfo = notificationContext.order.shops?.[0];
+    if (shopInfo) {
+    void sendBuyerOrderConfirmationEmail({
+      to: notificationContext.order.buyer_email,
+      buyerName: notificationContext.order.buyer_name,
+      orderId,
+      shopName: shopInfo.vendor_name,
+      items: notificationContext.items,
+      totalUsd: Number(notificationContext.order.total_usd),
+      paymentMethod: "stripe",
+    });
+    }
+  }
+}
+
+async function handleBuyerCheckoutUnpaid(input: {
+  sessionId: string;
+  status: "failed" | "expired";
+  failedReason: string;
+}) {
+  const admin = createSupabaseAdminClient();
+  const paymentRecord = await findOrderPaymentByCheckoutSessionId(admin, input.sessionId);
+
+  if (!paymentRecord) {
+    return;
+  }
+
+  if (
+    paymentRecord.status === "paid" ||
+    paymentRecord.status === "refunded" ||
+    paymentRecord.status === input.status
+  ) {
+    return;
+  }
+
+  await updateOrderPaymentState({
+    admin,
+    orderId: paymentRecord.order_id,
+    paymentStatus: input.status,
+    checkoutSessionId: input.sessionId,
+    failedReason: input.failedReason,
+  });
+
+  await releaseOrderInventory(admin, paymentRecord.order_id);
+}
 
 function shouldHandleStripeManagedSubscription(
   subscription: VendorSubscriptionRow | null,
@@ -281,6 +487,13 @@ async function handleCheckoutSessionCompleted(
   const vendorProfileId = session.metadata?.vendor_profile_id;
 
   const admin = createSupabaseAdminClient();
+  if (session.metadata?.kind === "buyer_order") {
+    if (session.payment_status === "paid") {
+      await handleBuyerCheckoutPaid(session);
+    }
+    return;
+  }
+
   if (shopId && vendorProfileId) {
     const subscription = subscriptionId
       ? await readStripeSubscription(subscriptionId).catch(() => null)
@@ -303,6 +516,32 @@ async function handleCheckoutSessionCompleted(
       lastInvoiceStatus: "paid",
     });
   }
+}
+
+async function handleCheckoutSessionAsyncPaymentSucceeded(
+  event: StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+) {
+  await handleBuyerCheckoutPaid(event.data.object);
+}
+
+async function handleCheckoutSessionExpired(
+  event: StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+) {
+  await handleBuyerCheckoutUnpaid({
+    sessionId: event.data.object.id,
+    status: "expired",
+    failedReason: "checkout_session_expired",
+  });
+}
+
+async function handleCheckoutSessionAsyncPaymentFailed(
+  event: StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+) {
+  await handleBuyerCheckoutUnpaid({
+    sessionId: event.data.object.id,
+    status: "failed",
+    failedReason: "stripe_async_payment_failed",
+  });
 }
 
 async function handleSubscriptionEvent(
@@ -398,6 +637,18 @@ export async function POST(request: Request) {
       await handleInvoiceEvent(event as StripeWebhookEvent<StripeInvoiceEventObject>);
     } else if (event.type === "checkout.session.completed") {
       await handleCheckoutSessionCompleted(
+        event as StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+      );
+    } else if (event.type === "checkout.session.async_payment_succeeded") {
+      await handleCheckoutSessionAsyncPaymentSucceeded(
+        event as StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+      );
+    } else if (event.type === "checkout.session.async_payment_failed") {
+      await handleCheckoutSessionAsyncPaymentFailed(
+        event as StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+      );
+    } else if (event.type === "checkout.session.expired") {
+      await handleCheckoutSessionExpired(
         event as StripeWebhookEvent<StripeCheckoutSessionEventObject>,
       );
     } else if (

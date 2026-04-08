@@ -80,7 +80,7 @@ export function ProductPurchasePanel({
         return;
       }
 
-      router.push(`/${shopSlug}/carrito`);
+      router.push("/carrito");
     } catch (error) {
       setBuyNowError(
         error instanceof Error ? error.message : "No se pudo procesar. Intenta de nuevo.",

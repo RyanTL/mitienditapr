@@ -6,7 +6,8 @@ import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav"
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { FloatingSearchButton } from "@/components/navigation/floating-search-button";
 import { formatDateEsPr, formatUsd } from "@/lib/formatters";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { type OrderPaymentStatus } from "@/lib/orders/constants";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { CancelOrderButton } from "./cancel-order-button";
 
 /* ------------------------------------------------------------------ */
@@ -15,10 +16,18 @@ import { CancelOrderButton } from "./cancel-order-button";
 
 type OrderRow = {
   id: string;
+  shop_id: string;
   status: "pending" | "paid" | "fulfilled" | "cancelled" | "refunded";
   vendor_status: "new" | "processing" | "shipped" | "delivered" | "canceled";
+  payment_status: OrderPaymentStatus;
+  payment_method: "stripe" | "ath_movil" | null;
   total_usd: number;
   created_at: string;
+  shops: Array<{
+    id: string;
+    vendor_name: string;
+    slug: string;
+  }> | null;
 };
 
 type OrderItemRow = {
@@ -26,19 +35,11 @@ type OrderItemRow = {
   product_id: string;
   quantity: number;
   unit_price_usd: number;
-};
-
-type ProductRow = {
-  id: string;
-  shop_id: string;
-  name: string;
-  image_url: string | null;
-};
-
-type ShopRow = {
-  id: string;
-  vendor_name: string;
-  slug: string;
+  products: Array<{
+    id: string;
+    name: string;
+    image_url: string | null;
+  }> | null;
 };
 
 type DisplayOrder = {
@@ -68,7 +69,16 @@ const IN_PROGRESS_STATUSES = new Set<OrderRow["status"]>(["pending", "paid"]);
 function getStatusDisplay(
   status: OrderRow["status"],
   vendorStatus: OrderRow["vendor_status"],
+  paymentStatus: OrderRow["payment_status"],
 ): { label: string; color: string } {
+  if (paymentStatus === "awaiting_vendor_verification")
+    return { label: "Verificando pago", color: "bg-amber-50 text-amber-700" };
+  if (paymentStatus === "requires_payment")
+    return { label: "Pendiente de pago", color: "bg-amber-50 text-amber-700" };
+  if (paymentStatus === "failed")
+    return { label: "Pago rechazado", color: "bg-red-50 text-red-700" };
+  if (paymentStatus === "expired")
+    return { label: "Pago expirado", color: "bg-gray-100 text-gray-500" };
   if (status === "fulfilled")
     return { label: "Entregada", color: "bg-emerald-50 text-emerald-700" };
   if (status === "cancelled")
@@ -98,46 +108,34 @@ async function loadOrdersForCurrentUser() {
 
   if (!user) return EMPTY;
 
-  const { data: ordersData } = await supabase
+  let dataClient = supabase;
+  try {
+    dataClient = createSupabaseAdminClient();
+  } catch {
+    // Development fallback.
+  }
+
+  const { data: ordersData } = await dataClient
     .from("orders")
-    .select("id,status,vendor_status,total_usd,created_at")
+    .select(
+      "id,shop_id,status,vendor_status,payment_status,payment_method,total_usd,created_at,shops(id,vendor_name,slug)",
+    )
     .eq("profile_id", user.id)
     .order("created_at", { ascending: false });
 
   if (!ordersData?.length) return EMPTY;
 
-  const orders = ordersData as OrderRow[];
+  const orders = ordersData as unknown as OrderRow[];
   const orderIds = orders.map((o) => o.id);
 
-  const { data: orderItemsData } = await supabase
+  const { data: orderItemsData } = await dataClient
     .from("order_items")
-    .select("order_id,product_id,quantity,unit_price_usd")
+    .select("order_id,product_id,quantity,unit_price_usd,products(id,name,image_url)")
     .in("order_id", orderIds);
 
   if (!orderItemsData) return EMPTY;
 
-  const orderItems = orderItemsData as OrderItemRow[];
-  const productIds = [...new Set(orderItems.map((i) => i.product_id))];
-
-  if (!productIds.length) return EMPTY;
-
-  const { data: productsData } = await supabase
-    .from("products")
-    .select("id,shop_id,name,image_url")
-    .in("id", productIds);
-
-  if (!productsData) return EMPTY;
-
-  const products = productsData as ProductRow[];
-  const productById = new Map(products.map((p) => [p.id, p]));
-  const shopIds = [...new Set(products.map((p) => p.shop_id))];
-
-  const { data: shopsData } = await supabase
-    .from("shops")
-    .select("id,vendor_name,slug")
-    .in("id", shopIds);
-
-  const shopById = new Map(((shopsData ?? []) as ShopRow[]).map((s) => [s.id, s]));
+  const orderItems = orderItemsData as unknown as OrderItemRow[];
 
   const itemsByOrder = new Map<string, OrderItemRow[]>();
   for (const item of orderItems) {
@@ -148,11 +146,21 @@ async function loadOrdersForCurrentUser() {
 
   const allOrders: DisplayOrder[] = orders.flatMap((order) => {
     const items = itemsByOrder.get(order.id) ?? [];
-    const firstProduct = items[0] ? productById.get(items[0].product_id) : null;
-    if (!firstProduct) return [];
+    const shopInfo = order.shops?.[0] ?? null;
+    if (!shopInfo) return [];
 
-    const shop = shopById.get(firstProduct.shop_id);
-    const { label, color } = getStatusDisplay(order.status, order.vendor_status);
+    const { label, color } = getStatusDisplay(
+      order.status,
+      order.vendor_status,
+      order.payment_status,
+    );
+    const canCancel =
+      order.vendor_status === "new" &&
+      (
+        order.payment_status === "requires_payment" ||
+        order.payment_status === "awaiting_vendor_verification" ||
+        (order.payment_status === "paid" && order.payment_method === "stripe")
+      );
 
     return [
       {
@@ -161,16 +169,15 @@ async function loadOrdersForCurrentUser() {
         status: order.status,
         statusLabel: label,
         statusColor: color,
-        shopName: shop?.vendor_name ?? "Tienda",
-        shopSlug: shop?.slug ?? "",
+        shopName: shopInfo.vendor_name,
+        shopSlug: shopInfo.slug,
         totalUsd: Number(order.total_usd),
         date: formatDateEsPr(order.created_at, { day: "numeric", month: "short" }),
-        canCancel: order.status === "pending",
+        canCancel,
         items: items.map((item) => {
-          const product = productById.get(item.product_id);
           return {
-            name: product?.name ?? "Producto",
-            imageUrl: product?.image_url ?? null,
+            name: item.products?.[0]?.name ?? "Producto",
+            imageUrl: item.products?.[0]?.image_url ?? null,
             quantity: item.quantity,
           };
         }),
@@ -179,8 +186,18 @@ async function loadOrdersForCurrentUser() {
   });
 
   return {
-    activeOrders: allOrders.filter((o) => IN_PROGRESS_STATUSES.has(o.status)),
-    pastOrders: allOrders.filter((o) => !IN_PROGRESS_STATUSES.has(o.status)),
+    activeOrders: allOrders.filter((order) => {
+      if (!IN_PROGRESS_STATUSES.has(order.status)) {
+        return false;
+      }
+      return order.statusLabel !== "Pago rechazado" && order.statusLabel !== "Pago expirado";
+    }),
+    pastOrders: allOrders.filter((order) => {
+      if (!IN_PROGRESS_STATUSES.has(order.status)) {
+        return true;
+      }
+      return order.statusLabel === "Pago rechazado" || order.statusLabel === "Pago expirado";
+    }),
   };
 }
 

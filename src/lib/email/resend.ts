@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 
 import { formatUsd } from "@/lib/formatters";
+import type { OrderPaymentMethod } from "@/lib/orders/constants";
 import type { VendorOrderStatus } from "@/lib/vendor/constants";
 
 type OrderItem = {
@@ -17,7 +18,8 @@ type VendorNewOrderEmailInput = {
   buyerName: string | null;
   items: OrderItem[];
   totalUsd: number;
-  athMovilPhone: string;
+  paymentMethod: OrderPaymentMethod;
+  athMovilPhone?: string | null;
 };
 
 type WelcomeEmailInput = {
@@ -32,7 +34,8 @@ type BuyerOrderConfirmationEmailInput = {
   shopName: string;
   items: OrderItem[];
   totalUsd: number;
-  athMovilPhone: string;
+  paymentMethod: OrderPaymentMethod;
+  athMovilPhone?: string | null;
 };
 
 type BuyerOrderStatusEmailInput = {
@@ -48,6 +51,14 @@ type VendorOrderCancelledEmailInput = {
   vendorName: string;
   orderId: string;
   buyerName: string | null;
+};
+
+type BuyerPaymentUpdateEmailInput = {
+  to: string;
+  buyerName: string | null;
+  orderId: string;
+  shopName: string;
+  paymentStatus: "paid" | "failed";
 };
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://mitienditapr.com";
@@ -117,10 +128,25 @@ function buildOrderItemsRows(items: OrderItem[]): string {
 // ─── Vendor: New Order ────────────────────────────────────────────────────────
 
 function buildVendorNewOrderHtml(input: VendorNewOrderEmailInput): string {
-  const { vendorName, orderId, buyerEmail, buyerName, items, totalUsd, athMovilPhone } = input;
+  const {
+    vendorName,
+    orderId,
+    buyerEmail,
+    buyerName,
+    items,
+    totalUsd,
+    paymentMethod,
+    athMovilPhone,
+  } = input;
   const buyerDisplay = buyerName ?? "Comprador anónimo";
   const buyerEmailDisplay = buyerEmail ?? "Sin email";
   const shortOrderId = orderId.slice(0, 8).toUpperCase();
+  const paymentLabel =
+    paymentMethod === "stripe"
+      ? "Stripe · Pago confirmado"
+      : athMovilPhone
+        ? `ATH Móvil · ${athMovilPhone}`
+        : "ATH Móvil · Verifica el recibo en el panel";
 
   return emailWrapper(`
     ${emailHeader("Nueva orden recibida", "")}
@@ -133,7 +159,7 @@ function buildVendorNewOrderHtml(input: VendorNewOrderEmailInput): string {
         <p style="margin:0 0 24px;font-family:monospace;font-size:14px;background:#f5f5f5;display:inline-block;padding:6px 12px;border-radius:8px;color:#1a1a1a;">#${shortOrderId}</p>
 
         <p style="margin:0 0 4px;color:#555;font-size:13px;">Pago recibido vía</p>
-        <p style="margin:0 0 24px;color:#1a1a1a;font-size:15px;font-weight:600;">ATH Móvil · ${athMovilPhone}</p>
+        <p style="margin:0 0 24px;color:#1a1a1a;font-size:15px;font-weight:600;">${paymentLabel}</p>
 
         <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;border:1px solid #f0f0f0;border-radius:8px;overflow:hidden;">
           <thead>
@@ -227,9 +253,23 @@ export async function sendWelcomeEmail(input: WelcomeEmailInput): Promise<void> 
 // ─── Buyer: Order Confirmation ────────────────────────────────────────────────
 
 function buildBuyerOrderConfirmationHtml(input: BuyerOrderConfirmationEmailInput): string {
-  const { buyerName, orderId, shopName, items, totalUsd, athMovilPhone } = input;
+  const { buyerName, orderId, shopName, items, totalUsd, paymentMethod, athMovilPhone } = input;
   const shortOrderId = orderId.slice(0, 8).toUpperCase();
   const greeting = buyerName ? `¡Hola, ${buyerName}!` : "¡Hola!";
+  const paymentBlock =
+    paymentMethod === "stripe"
+      ? `
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;margin-bottom:24px;">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#166534;text-transform:uppercase;letter-spacing:0.05em;">Pago</p>
+          <p style="margin:0;font-size:15px;color:#1a1a1a;">Tu pago fue confirmado con Stripe y la tienda ya puede preparar tu orden.</p>
+        </div>
+      `
+      : `
+        <div style="background:#fefce8;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:24px;">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">Pago</p>
+          <p style="margin:0;font-size:15px;color:#1a1a1a;">Recibimos tu comprobante de ATH Móvil${athMovilPhone ? ` enviado al ${athMovilPhone}` : ""}. La tienda lo verificará pronto.</p>
+        </div>
+      `;
 
   return emailWrapper(`
     ${emailHeader("Orden recibida", shopName)}
@@ -256,10 +296,7 @@ function buildBuyerOrderConfirmationHtml(input: BuyerOrderConfirmationEmailInput
           <span style="font-size:18px;font-weight:700;color:#1a1a1a;">Total: ${formatUsd(totalUsd)}</span>
         </div>
 
-        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;margin-bottom:24px;">
-          <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#166534;text-transform:uppercase;letter-spacing:0.05em;">Cómo pagar</p>
-          <p style="margin:0;font-size:15px;color:#1a1a1a;">Envía <strong>${formatUsd(totalUsd)}</strong> por ATH Móvil al número <strong>${athMovilPhone}</strong> para confirmar tu orden.</p>
-        </div>
+        ${paymentBlock}
 
         <a href="${APP_URL}/ordenes"
           style="display:block;text-align:center;background:#1a1a1a;color:#ffffff;padding:14px 24px;border-radius:12px;text-decoration:none;font-size:15px;font-weight:600;">
@@ -286,6 +323,70 @@ export async function sendBuyerOrderConfirmationEmail(
     });
   } catch (error) {
     console.error("[email] Failed to send buyer order confirmation:", error);
+  }
+}
+
+const PAYMENT_STATUS_LABELS: Record<BuyerPaymentUpdateEmailInput["paymentStatus"], string> = {
+  paid: "Pago verificado",
+  failed: "Pago rechazado",
+};
+
+const PAYMENT_STATUS_DESCRIPTIONS: Record<
+  BuyerPaymentUpdateEmailInput["paymentStatus"],
+  string
+> = {
+  paid: "La tienda confirmó tu pago. Ya puede preparar tu pedido.",
+  failed:
+    "La tienda no pudo validar el comprobante. Revisa la orden y vuelve a intentarlo o contacta a la tienda.",
+};
+
+function buildBuyerPaymentUpdateHtml(input: BuyerPaymentUpdateEmailInput): string {
+  const { buyerName, orderId, shopName, paymentStatus } = input;
+  const shortOrderId = orderId.slice(0, 8).toUpperCase();
+  const greeting = buyerName ? `¡Hola, ${buyerName}!` : "¡Hola!";
+  const label = PAYMENT_STATUS_LABELS[paymentStatus];
+  const description = PAYMENT_STATUS_DESCRIPTIONS[paymentStatus];
+
+  return emailWrapper(`
+    ${emailHeader(`Orden #${shortOrderId}: ${label}`, shopName)}
+    <tr>
+      <td style="padding:32px;">
+        <p style="margin:0 0 16px;color:#1a1a1a;font-size:16px;">${greeting}</p>
+        <p style="margin:0 0 24px;color:#555;font-size:15px;line-height:1.6;">${description}</p>
+
+        <div style="background:#f5f5f5;border-radius:12px;padding:16px;margin-bottom:24px;">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Estado del pago</p>
+          <p style="margin:0;font-size:16px;font-weight:700;color:#1a1a1a;">${label}</p>
+          <p style="margin:4px 0 0;font-family:monospace;font-size:13px;color:#555;">#${shortOrderId} · ${shopName}</p>
+        </div>
+
+        <a href="${APP_URL}/ordenes"
+          style="display:block;text-align:center;background:#1a1a1a;color:#ffffff;padding:14px 24px;border-radius:12px;text-decoration:none;font-size:15px;font-weight:600;">
+          Ver mis órdenes
+        </a>
+      </td>
+    </tr>
+  `);
+}
+
+export async function sendBuyerPaymentUpdateEmail(
+  input: BuyerPaymentUpdateEmailInput,
+): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) return;
+
+  const shortOrderId = input.orderId.slice(0, 8).toUpperCase();
+  const label = PAYMENT_STATUS_LABELS[input.paymentStatus];
+
+  try {
+    await resend.emails.send({
+      from: `Mitiendita PR <${getFromEmail()}>`,
+      to: input.to,
+      subject: `Orden #${shortOrderId}: ${label} — Mitiendita PR`,
+      html: buildBuyerPaymentUpdateHtml(input),
+    });
+  } catch (error) {
+    console.error("[email] Failed to send buyer payment update:", error);
   }
 }
 

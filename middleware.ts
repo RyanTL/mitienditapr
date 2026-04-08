@@ -6,6 +6,7 @@ function isPrivatePath(pathname: string) {
   if (
     pathname === "/cuenta" ||
     pathname === "/favoritos" ||
+    pathname === "/carrito" ||
     pathname.startsWith("/vendedor")
   ) {
     return true;
