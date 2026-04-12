@@ -22,12 +22,20 @@ const STATUS_LABELS: Record<VendorOrderStatus, string> = {
   canceled: "Cancelada",
 };
 
-const STATUS_BADGE: Record<VendorOrderStatus, string> = {
-  new: "bg-blue-100 text-blue-700",
-  processing: "bg-yellow-100 text-yellow-700",
-  shipped: "bg-indigo-100 text-indigo-700",
-  delivered: "bg-green-100 text-green-700",
-  canceled: "bg-gray-100 text-gray-500",
+const STATUS_DOT_COLOR: Record<VendorOrderStatus, string> = {
+  new: "bg-[var(--vendor-status-new)]",
+  processing: "bg-[var(--vendor-status-processing)]",
+  shipped: "bg-[var(--vendor-status-shipped)]",
+  delivered: "bg-[var(--vendor-status-delivered)]",
+  canceled: "bg-[var(--vendor-status-canceled)]",
+};
+
+const STATUS_TEXT_COLOR: Record<VendorOrderStatus, string> = {
+  new: "text-[var(--vendor-status-new)]",
+  processing: "text-[var(--vendor-status-processing)]",
+  shipped: "text-[var(--vendor-status-shipped)]",
+  delivered: "text-[var(--vendor-status-delivered)]",
+  canceled: "text-[var(--color-gray-500)]",
 };
 
 const TRANSITION_LABEL: Record<VendorOrderStatus, string> = {
@@ -47,13 +55,13 @@ const PAYMENT_LABELS: Record<string, string> = {
   refunded: "Reembolsada",
 };
 
-const PAYMENT_BADGE: Record<string, string> = {
-  requires_payment: "bg-yellow-100 text-yellow-700",
-  awaiting_vendor_verification: "bg-amber-100 text-amber-700",
-  paid: "bg-green-100 text-green-700",
-  failed: "bg-red-100 text-red-700",
-  expired: "bg-gray-100 text-gray-500",
-  refunded: "bg-gray-100 text-gray-500",
+const PAYMENT_TEXT_COLOR: Record<string, string> = {
+  requires_payment: "text-amber-600",
+  awaiting_vendor_verification: "text-amber-600",
+  paid: "text-[var(--vendor-status-delivered)]",
+  failed: "text-[var(--color-danger)]",
+  expired: "text-[var(--color-gray-500)]",
+  refunded: "text-[var(--color-gray-500)]",
 };
 
 type FilterValue = VendorOrderStatus | "all";
@@ -169,8 +177,8 @@ export function VendorOrdersClient() {
         </div>
       ) : filteredOrders.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white text-[var(--color-carbon)] shadow-sm">
-            <OrdersIcon className="h-9 w-9" />
+          <div className="text-[var(--color-gray-500)]">
+            <OrdersIcon className="h-12 w-12" />
           </div>
           <p className="font-semibold text-[var(--color-carbon)]">
             {activeFilter === "all" ? "Sin pedidos todavía" : `Sin pedidos ${STATUS_LABELS[activeFilter as VendorOrderStatus]?.toLowerCase() ?? ""}`}
@@ -189,7 +197,7 @@ export function VendorOrdersClient() {
                 : [];
             const buyer = order.buyer?.fullName || order.buyer?.email || "Cliente";
             const paymentLabel = PAYMENT_LABELS[order.paymentStatus] ?? order.paymentStatus;
-            const paymentBadge = PAYMENT_BADGE[order.paymentStatus] ?? "bg-gray-100 text-gray-500";
+            const paymentTextColor = PAYMENT_TEXT_COLOR[order.paymentStatus] ?? "text-[var(--color-gray-500)]";
             const needsAthVerification = order.paymentStatus === "awaiting_vendor_verification";
 
             return (
@@ -207,10 +215,11 @@ export function VendorOrdersClient() {
                     <p className="text-xs text-[var(--color-gray-500)]">{formatDateEsPr(order.createdAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[currentStatus]}`}>
+                    <span className={`flex items-center gap-1.5 text-xs font-semibold ${STATUS_TEXT_COLOR[currentStatus]}`}>
+                      <span className={`inline-block h-2 w-2 rounded-full ${STATUS_DOT_COLOR[currentStatus]}`} />
                       {STATUS_LABELS[currentStatus]}
                     </span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${paymentBadge}`}>
+                    <span className={`text-xs font-medium ${paymentTextColor}`}>
                       {paymentLabel}
                     </span>
                   </div>
@@ -255,15 +264,64 @@ export function VendorOrdersClient() {
                   </span>
                 </div>
 
-                {order.payment?.receiptUrl ? (
+                {needsAthVerification && order.payment?.receiptUrl ? (
+                  <div className="mt-3 rounded-2xl border border-[var(--vendor-card-border)] bg-white p-3">
+                    <p className="mb-2 text-xs font-bold text-amber-700">
+                      Verificar pago — ATH Móvil
+                    </p>
+                    <a
+                      href={order.payment.receiptUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block overflow-hidden rounded-xl border border-[var(--vendor-card-border)]"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={order.payment.receiptUrl}
+                        alt="Recibo ATH Móvil"
+                        className="max-h-48 w-full object-contain"
+                        loading="lazy"
+                      />
+                    </a>
+                    {order.payment.receiptNote ? (
+                      <p className="mt-2 text-xs text-[var(--color-gray-500)]">
+                        Nota del cliente: {order.payment.receiptNote}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => void handlePaymentVerification(order.id, "approve")}
+                        className="flex-1 rounded-full bg-green-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-60"
+                      >
+                        Aprobar pago
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => void handlePaymentVerification(order.id, "reject")}
+                        className="flex-1 rounded-full border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition-opacity hover:opacity-80 disabled:opacity-60"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </div>
+                ) : order.payment?.receiptUrl ? (
                   <div className="mt-3">
                     <a
                       href={order.payment.receiptUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs font-semibold text-[var(--color-carbon)] underline underline-offset-2"
+                      className="block overflow-hidden rounded-xl border border-[var(--color-gray-100,#f3f4f6)]"
                     >
-                      Ver recibo
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={order.payment.receiptUrl}
+                        alt="Recibo ATH Móvil"
+                        className="max-h-36 w-full object-contain"
+                        loading="lazy"
+                      />
                     </a>
                     {order.payment.receiptNote ? (
                       <p className="mt-1 text-xs text-[var(--color-gray-500)]">
@@ -271,9 +329,7 @@ export function VendorOrdersClient() {
                       </p>
                     ) : null}
                   </div>
-                ) : null}
-
-                {needsAthVerification ? (
+                ) : needsAthVerification ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"

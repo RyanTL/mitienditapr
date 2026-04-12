@@ -11,11 +11,13 @@ import {
   ChevronDownIcon,
   DocumentIcon,
   ImageIcon,
+  InfoIcon,
   PencilIcon,
   SettingsIcon,
   ShieldCheckIcon,
   StoreIcon,
   TruckIcon,
+  UserIcon,
 } from "@/components/icons";
 import { VendorPageShell } from "@/components/vendor/vendor-page-shell";
 import {
@@ -66,6 +68,10 @@ type ShopSettingsFormState = {
   shippingFlatFeeUsd: string;
   offersPickup: boolean;
   athMovilPhone: string;
+  contactPhone: string;
+  contactInstagram: string;
+  contactFacebook: string;
+  contactWhatsapp: string;
 };
 
 const DEFAULT_FORM_STATE: ShopSettingsFormState = {
@@ -76,16 +82,28 @@ const DEFAULT_FORM_STATE: ShopSettingsFormState = {
   shippingFlatFeeUsd: "0",
   offersPickup: false,
   athMovilPhone: "",
+  contactPhone: "",
+  contactInstagram: "",
+  contactFacebook: "",
+  contactWhatsapp: "",
 };
 
 const POLICY_TYPES: PolicyType[] = ["terms", "shipping", "refund", "privacy"];
 
-const STATUS_BADGE_STYLE: Record<string, string> = {
-  active: "bg-green-100 text-green-700",
-  trialing: "bg-green-100 text-green-700",
-  draft: "bg-yellow-100 text-yellow-700",
-  paused: "bg-gray-100 text-gray-600",
-  unpaid: "bg-red-100 text-red-600",
+const STATUS_DOT_STYLE: Record<string, string> = {
+  active: "bg-green-500",
+  trialing: "bg-green-500",
+  draft: "bg-amber-400",
+  paused: "bg-[var(--color-gray-500)]",
+  unpaid: "bg-[var(--color-danger)]",
+};
+
+const STATUS_TEXT_STYLE: Record<string, string> = {
+  active: "text-green-700",
+  trialing: "text-green-700",
+  draft: "text-amber-700",
+  paused: "text-[var(--color-gray-500)]",
+  unpaid: "text-[var(--color-danger)]",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -105,6 +123,10 @@ function mapFormStateFromResponse(response: ShopResponse): ShopSettingsFormState
     shippingFlatFeeUsd: String(response.shop?.shipping_flat_fee_usd ?? 0),
     offersPickup: response.shop?.offers_pickup ?? false,
     athMovilPhone: response.shop?.ath_movil_phone ?? "",
+    contactPhone: response.shop?.contact_phone ?? "",
+    contactInstagram: response.shop?.contact_instagram ?? "",
+    contactFacebook: response.shop?.contact_facebook ?? "",
+    contactWhatsapp: response.shop?.contact_whatsapp ?? "",
   };
 }
 
@@ -215,7 +237,7 @@ function Section({
   return (
     <div className="rounded-[28px] border border-[var(--color-gray)] bg-white p-5 shadow-[0_8px_24px_var(--shadow-black-003)]">
       <div className="mb-5 flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-carbon)] text-white">
+        <div className="shrink-0 text-[var(--color-carbon)]">
           <Icon className="h-5 w-5" />
         </div>
         <div className="min-w-0">
@@ -315,6 +337,10 @@ export function VendorShopSettingsClient({
         shippingFlatFeeUsd: Math.max(0, toNumber(formState.shippingFlatFeeUsd, 0)),
         offersPickup: formState.offersPickup,
         athMovilPhone: formState.athMovilPhone.trim() || null,
+        contactPhone: formState.contactPhone.trim() || null,
+        contactInstagram: formState.contactInstagram.trim() || null,
+        contactFacebook: formState.contactFacebook.trim() || null,
+        contactWhatsapp: formState.contactWhatsapp.trim() || null,
       });
       setStatusData((current) =>
         current ? { ...current, shop: response.shop, checks: response.checks } : current,
@@ -607,12 +633,16 @@ export function VendorShopSettingsClient({
                   </div>
                   <span
                     className={[
-                      "rounded-full px-3 py-1 text-xs font-semibold",
+                      "flex items-center gap-1.5 text-xs font-semibold",
                       stripeConfigured
-                        ? "bg-green-100 text-green-700"
-                        : "bg-yellow-100 text-yellow-700",
+                        ? "text-green-700"
+                        : "text-amber-600",
                     ].join(" ")}
                   >
+                    <span className={[
+                      "inline-block h-2 w-2 rounded-full",
+                      stripeConfigured ? "bg-green-500" : "bg-amber-400",
+                    ].join(" ")} />
                     {stripeConfigured ? "Conectado" : "Pendiente"}
                   </span>
                 </div>
@@ -642,12 +672,16 @@ export function VendorShopSettingsClient({
                   </div>
                   <span
                     className={[
-                      "rounded-full px-3 py-1 text-xs font-semibold",
+                      "flex items-center gap-1.5 text-xs font-semibold",
                       athConfigured
-                        ? "bg-green-100 text-green-700"
-                        : "bg-yellow-100 text-yellow-700",
+                        ? "text-green-700"
+                        : "text-amber-600",
                     ].join(" ")}
                   >
+                    <span className={[
+                      "inline-block h-2 w-2 rounded-full",
+                      athConfigured ? "bg-green-500" : "bg-amber-400",
+                    ].join(" ")} />
                     {athConfigured ? "Activo" : "Pendiente"}
                   </span>
                 </div>
@@ -688,6 +722,86 @@ export function VendorShopSettingsClient({
             </button>
           </Section>
 
+          {/* ── Contacto para compradores ── */}
+          <Section
+            label="Contacto para compradores"
+            description="Tus clientes verán estos datos durante el checkout con ATH Móvil para coordinar contigo."
+            Icon={UserIcon}
+          >
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                  Teléfono de contacto
+                </span>
+                <input
+                  type="tel"
+                  value={formState.contactPhone}
+                  placeholder="787-000-0000"
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, contactPhone: e.target.value }))
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                  WhatsApp
+                </span>
+                <input
+                  type="tel"
+                  value={formState.contactWhatsapp}
+                  placeholder="787-000-0000"
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, contactWhatsapp: e.target.value }))
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                  Instagram
+                </span>
+                <div className="relative mt-1.5">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--color-gray-500)]">@</span>
+                  <input
+                    type="text"
+                    value={formState.contactInstagram}
+                    placeholder="tu_tienda"
+                    onChange={(e) =>
+                      setFormState((s) => ({ ...s, contactInstagram: e.target.value.replace(/^@/, "") }))
+                    }
+                    className="w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white py-3 pl-8 pr-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  />
+                </div>
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                  Facebook
+                </span>
+                <input
+                  type="text"
+                  value={formState.contactFacebook}
+                  placeholder="Nombre o enlace de página"
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, contactFacebook: e.target.value }))
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+              </label>
+              <p className="text-xs leading-5 text-[var(--color-gray-500)]">
+                Deja en blanco los campos que no uses. Solo se mostrarán los que completes.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => void handleSave()}
+              className="mt-4 w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
+            >
+              {isSaving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </Section>
+
           {/* ── Políticas ── */}
           <Section
             label="Políticas opcionales"
@@ -695,15 +809,15 @@ export function VendorShopSettingsClient({
             Icon={ShieldCheckIcon}
           >
             {/* Reassurance banner */}
-            <div className="mb-5 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-100">
-                <ShieldCheckIcon className="h-5 w-5 text-green-600" />
+            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[var(--vendor-card-border)] bg-white px-4 py-3.5">
+              <div className="shrink-0 text-green-600">
+                <ShieldCheckIcon className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-green-800">
+                <p className="text-sm font-semibold text-[var(--color-carbon)]">
                   Políticas por defecto activas
                 </p>
-                <p className="mt-0.5 text-xs leading-4 text-green-600">
+                <p className="mt-0.5 text-xs leading-4 text-[var(--color-gray-500)]">
                   Tus clientes ya pueden ver estas políticas en tu tienda y durante el checkout.
                 </p>
               </div>
@@ -715,7 +829,7 @@ export function VendorShopSettingsClient({
               className="flex w-full items-center justify-between rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-4 py-3 text-left transition hover:bg-[var(--color-gray-100,#f9fafb)]"
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-gray-100,#f3f4f6)] text-[var(--color-carbon)]">
+                <span className="shrink-0 text-[var(--color-gray-500)]">
                   <DocumentIcon className="h-5 w-5" />
                 </span>
                 <div>
@@ -775,7 +889,7 @@ export function VendorShopSettingsClient({
                                 {POLICY_TYPE_LABELS[policyType]}
                               </span>
                               {isPublished && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700">
                                   <CheckIcon className="h-2.5 w-2.5" />
                                   {version > 1 ? `v${version}` : "Activa"}
                                 </span>
@@ -785,14 +899,12 @@ export function VendorShopSettingsClient({
                               {POLICY_TYPE_DESCRIPTIONS[policyType]}
                             </p>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-gray-100,#f3f4f6)] text-[var(--color-gray-500)]">
-                              {isExpanded ? (
-                                <ChevronDownIcon className="h-4 w-4 rotate-180 transition-transform" />
-                              ) : (
-                                <PencilIcon className="h-3.5 w-3.5" />
-                              )}
-                            </span>
+                          <div className="shrink-0 text-[var(--color-gray-500)]">
+                            {isExpanded ? (
+                              <ChevronDownIcon className="h-4 w-4 rotate-180 transition-transform" />
+                            ) : (
+                              <PencilIcon className="h-3.5 w-3.5" />
+                            )}
                           </div>
                         </button>
 
@@ -966,8 +1078,8 @@ export function VendorShopSettingsClient({
             {/* Current status badge */}
             <div className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] px-4 py-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[var(--color-carbon)]">
-                  <StoreIcon className="h-5 w-5" />
+                <div className="shrink-0 text-[var(--color-carbon)]">
+                  <InfoIcon className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[var(--color-carbon)]">Estado actual</p>
@@ -978,23 +1090,27 @@ export function VendorShopSettingsClient({
               </div>
               <span
                 className={[
-                  "rounded-full px-3 py-1 text-sm font-semibold",
-                  STATUS_BADGE_STYLE[shopStatus ?? ""] ?? "bg-gray-100 text-gray-600",
+                  "flex items-center gap-1.5 text-sm font-semibold",
+                  STATUS_TEXT_STYLE[shopStatus ?? ""] ?? "text-[var(--color-gray-500)]",
                 ].join(" ")}
               >
+                <span className={[
+                  "inline-block h-2 w-2 rounded-full",
+                  STATUS_DOT_STYLE[shopStatus ?? ""] ?? "bg-[var(--color-gray-500)]",
+                ].join(" ")} />
                 {STATUS_LABELS[shopStatus ?? ""] ?? shopStatus ?? "—"}
               </span>
             </div>
 
             {/* Blocking reasons checklist */}
             {blockingReasons.length > 0 && (
-              <div className="mb-4 rounded-2xl bg-red-50 p-4">
-                <p className="mb-2 text-sm font-semibold text-red-700">
+              <div className="mb-4 rounded-2xl border border-[var(--vendor-card-border)] border-l-[3px] border-l-[var(--color-danger)] bg-white p-4">
+                <p className="mb-2 text-sm font-semibold text-[var(--color-danger)]">
                   Para activarla automáticamente:
                 </p>
                 <ul className="space-y-2">
                   {blockingReasons.map((reason) => (
-                    <li key={reason} className="flex items-start gap-2 text-sm leading-5 text-red-600">
+                    <li key={reason} className="flex items-start gap-2 text-sm leading-5 text-[var(--color-danger)]">
                       <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
                       <span>{reason}</span>
                     </li>

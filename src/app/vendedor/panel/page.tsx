@@ -135,9 +135,9 @@ export default async function VendorPanelPage({ searchParams }: VendorPanelPageP
       {newOrderCount > 0 && (
         <Link
           href="/vendedor/pedidos"
-          className="group flex items-center gap-3 rounded-2xl border border-[var(--vendor-card-border)] border-l-4 border-l-[var(--vendor-status-new)] bg-white p-4 shadow-[var(--vendor-card-shadow)] transition-shadow hover:shadow-[var(--vendor-card-shadow-hover)]"
+          className="group flex items-center gap-3 rounded-2xl border border-[var(--vendor-card-border)] bg-white p-4 shadow-[var(--vendor-card-shadow)] transition-shadow hover:shadow-[var(--vendor-card-shadow-hover)]"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--vendor-status-new)]/10 text-[var(--vendor-status-new)]">
+          <span className="shrink-0 text-[var(--color-gray-500)]">
             <OrdersIcon className="h-5 w-5" />
           </span>
           <span className="flex-1">
@@ -227,7 +227,7 @@ export default async function VendorPanelPage({ searchParams }: VendorPanelPageP
               href={href}
               className="flex items-center gap-3 rounded-xl border border-[var(--vendor-card-border)] bg-white px-4 py-3.5 text-[var(--color-carbon)] transition-colors hover:bg-[var(--vendor-page-bg)]"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--vendor-page-bg)]">
+              <span className="shrink-0 text-[var(--color-gray-500)]">
                 <Icon className="h-[18px] w-[18px]" />
               </span>
               <span className="text-sm font-medium">{label}</span>
