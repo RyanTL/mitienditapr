@@ -363,22 +363,23 @@ async function updateShopVisibilityFromSubscription(input: {
   }
 }
 
-async function upsertWebhookEvent(event: StripeWebhookEvent) {
+async function isWebhookEventAlreadyProcessed(eventId: string) {
   const admin = createSupabaseAdminClient();
   const { data: existingEvent, error: existingEventError } = await admin
     .from("stripe_webhook_events")
     .select("id")
-    .eq("id", event.id)
+    .eq("id", eventId)
     .maybeSingle();
 
   if (existingEventError) {
     throw new Error(existingEventError.message);
   }
 
-  if (existingEvent) {
-    return false;
-  }
+  return !!existingEvent;
+}
 
+async function markWebhookEventProcessed(event: StripeWebhookEvent) {
+  const admin = createSupabaseAdminClient();
   const { error: insertError } = await admin.from("stripe_webhook_events").insert({
     id: event.id,
     type: event.type,
@@ -389,8 +390,6 @@ async function upsertWebhookEvent(event: StripeWebhookEvent) {
   if (insertError) {
     throw new Error(insertError.message);
   }
-
-  return true;
 }
 
 async function handleInvoiceEvent(event: StripeWebhookEvent<StripeInvoiceEventObject>) {
@@ -628,8 +627,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const isFirstTimeProcessing = await upsertWebhookEvent(event);
-    if (!isFirstTimeProcessing) {
+    const alreadyProcessed = await isWebhookEventAlreadyProcessed(event.id);
+    if (alreadyProcessed) {
       return NextResponse.json({ received: true, duplicate: true });
     }
 
@@ -661,6 +660,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await markWebhookEventProcessed(event);
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error("[stripe/webhook] Failed to process event:", error);

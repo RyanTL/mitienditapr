@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { checkRateLimit } from "@/lib/rate-limit";
+import { hasValidImageMagicBytes } from "@/lib/image-validation";
 import {
   badRequestResponse,
   serverErrorResponse,
@@ -96,6 +97,10 @@ export async function POST(request: Request) {
     const safeFileName = sanitizeFileName(maybeFile.name);
     const objectPath = `${profile.id}/${Date.now()}-${randomUUID()}-${safeFileName}`;
     const fileBuffer = Buffer.from(await maybeFile.arrayBuffer());
+
+    if (!hasValidImageMagicBytes(fileBuffer)) {
+      return badRequestResponse("El archivo no es una imagen válida.");
+    }
 
     const { error: uploadError } = await admin.storage
       .from(bucketName)

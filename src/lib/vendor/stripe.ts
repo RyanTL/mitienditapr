@@ -321,6 +321,12 @@ export function verifyStripeWebhookSignature(input: {
     return false;
   }
 
+  const WEBHOOK_TOLERANCE_SECONDS = 300;
+  const timestampAge = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(timestampAge) || timestampAge > WEBHOOK_TOLERANCE_SECONDS) {
+    return false;
+  }
+
   const signedPayload = `${timestamp}.${rawBody}`;
   const expected = crypto
     .createHmac("sha256", webhookSecret)

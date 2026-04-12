@@ -164,7 +164,7 @@ export async function PATCH(
 
     const priceUsd = getNumeric(body.priceUsd);
     if (priceUsd !== null) {
-      updates.price_usd = Math.max(0, priceUsd);
+      updates.price_usd = Math.min(99999.99, Math.max(0, priceUsd));
     }
 
     const stockQty = getNumeric(body.stockQty);

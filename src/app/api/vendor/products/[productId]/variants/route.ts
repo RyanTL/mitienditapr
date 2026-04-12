@@ -109,7 +109,7 @@ export async function POST(
       ? body.title.trim()
       : "Nueva variante";
   const sku = typeof body.sku === "string" ? body.sku.trim() : "";
-  const priceUsd = Math.max(0, getNumeric(body.priceUsd, 0));
+  const priceUsd = Math.min(99999.99, Math.max(0, getNumeric(body.priceUsd, 0)));
   const stockQty = Math.max(0, Math.trunc(getNumeric(body.stockQty, 0)));
   const isActive = body.isActive ?? true;
   const attributes = isRecord(body.attributes) ? body.attributes : {};

@@ -38,7 +38,8 @@ export async function POST() {
     .maybeSingle<{ role: "buyer" | "vendor" | "admin" }>();
 
   if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
+    console.error("[catalog/seed] Profile lookup failed:", profileError);
+    return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
   }
 
   if (!profile || profile.role !== "admin") {

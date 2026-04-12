@@ -1,4 +1,5 @@
 export function formatUsd(priceUsd: number) {
+  if (!Number.isFinite(priceUsd)) return "$0.00";
   return `$${priceUsd.toFixed(2)}`;
 }
 

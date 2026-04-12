@@ -102,15 +102,18 @@ export async function GET(
     ]);
 
   if (orderError) {
-    return NextResponse.json({ error: orderError.message }, { status: 500 });
+    console.error("[orders] Failed to load order:", orderError);
+    return NextResponse.json({ error: "No se pudo cargar la orden." }, { status: 500 });
   }
 
   if (paymentError) {
-    return NextResponse.json({ error: paymentError.message }, { status: 500 });
+    console.error("[orders] Failed to load payment:", paymentError);
+    return NextResponse.json({ error: "No se pudo cargar la orden." }, { status: 500 });
   }
 
   if (itemError) {
-    return NextResponse.json({ error: itemError.message }, { status: 500 });
+    console.error("[orders] Failed to load items:", itemError);
+    return NextResponse.json({ error: "No se pudo cargar la orden." }, { status: 500 });
   }
 
   const order = orderData as OrderRow | null;

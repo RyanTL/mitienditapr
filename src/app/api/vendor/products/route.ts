@@ -282,7 +282,7 @@ export async function POST(request: Request) {
 
   const variantTitle = readText(rawVariant.title) || "Default";
   const variantSku = readText(rawVariant.sku);
-  const variantPrice = Math.max(0, readNumeric(rawVariant.priceUsd, 0));
+  const variantPrice = Math.min(99999.99, Math.max(0, readNumeric(rawVariant.priceUsd, 0)));
   const rawStock = rawVariant.stockQty;
   const variantStock =
     rawStock === null || rawStock === undefined || rawStock === ""

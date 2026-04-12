@@ -128,7 +128,7 @@ export async function PATCH(
 
     const nextPrice = getNumeric(body.priceUsd);
     if (nextPrice !== null) {
-      updates.price_usd = Math.max(0, nextPrice);
+      updates.price_usd = Math.min(99999.99, Math.max(0, nextPrice));
     }
 
     if (Object.keys(updates).length > 0) {
@@ -159,7 +159,7 @@ export async function PATCH(
       if (firstVariant) {
         const { error: variantUpdateError } = await dataClient
           .from("product_variants")
-          .update({ price_usd: Math.max(0, nextPrice) })
+          .update({ price_usd: Math.min(99999.99, Math.max(0, nextPrice)) })
           .eq("id", firstVariant.id)
           .eq("product_id", product.id);
 

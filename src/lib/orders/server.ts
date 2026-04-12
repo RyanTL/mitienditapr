@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { hasValidImageMagicBytes } from "@/lib/image-validation";
 import {
   type OrderFulfillmentMethod,
   type OrderPaymentMethod,
@@ -232,6 +233,10 @@ export async function uploadAthReceipt(
   const safeName = sanitizeFileName(file.name);
   const objectPath = `${buyerProfileId}/${Date.now()}-${randomUUID()}-${safeName}`;
   const fileBuffer = Buffer.from(await file.arrayBuffer());
+
+  if (!hasValidImageMagicBytes(fileBuffer)) {
+    throw new Error("El recibo no es una imagen válida.");
+  }
 
   const { error: uploadError } = await admin.storage
     .from(bucketName)
