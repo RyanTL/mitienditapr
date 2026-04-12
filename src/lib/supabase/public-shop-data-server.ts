@@ -19,7 +19,7 @@ export async function fetchMarketplaceHomeDataServer(): Promise<{
   const supabase = await createSupabaseServerClient();
   const { data: shopsData, error: shopsError } = await supabase
     .from("shops")
-    .select("id,slug,vendor_name,rating,review_count,description,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone")
+    .select("id,slug,vendor_name,rating,review_count,description,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,contact_phone,contact_instagram,contact_facebook,contact_whatsapp")
     .eq("is_active", true)
     .order("created_at", { ascending: false })
     .limit(40);
@@ -65,7 +65,7 @@ export async function fetchShopDetailBySlugServer(shopSlug: string) {
   const supabase = await createSupabaseServerClient();
   const { data: shopData, error: shopError } = await supabase
     .from("shops")
-    .select("id,slug,vendor_name,rating,review_count,description,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone")
+    .select("id,slug,vendor_name,rating,review_count,description,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,contact_phone,contact_instagram,contact_facebook,contact_whatsapp")
     .eq("slug", shopSlug)
     .maybeSingle();
 

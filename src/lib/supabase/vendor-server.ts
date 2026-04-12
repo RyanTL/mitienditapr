@@ -53,6 +53,10 @@ export type VendorShopRow = {
   offers_pickup: boolean;
   stripe_connect_account_id: string | null;
   ath_movil_phone: string | null;
+  contact_phone: string | null;
+  contact_instagram: string | null;
+  contact_facebook: string | null;
+  contact_whatsapp: string | null;
   published_at: string | null;
   unpublished_at: string | null;
   unpublished_reason: string | null;
@@ -214,7 +218,7 @@ export async function getVendorShopByProfileId(
   const { data, error } = await supabase
     .from("shops")
     .select(
-      "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,published_at,unpublished_at,unpublished_reason",
+      "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,contact_phone,contact_instagram,contact_facebook,contact_whatsapp,published_at,unpublished_at,unpublished_reason",
     )
     .eq("vendor_profile_id", profileId)
     .order("created_at", { ascending: true })
@@ -335,7 +339,7 @@ export async function ensureVendorShopForProfile(
         is_active: false,
       })
       .select(
-        "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,published_at,unpublished_at,unpublished_reason",
+        "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,contact_phone,contact_instagram,contact_facebook,contact_whatsapp,published_at,unpublished_at,unpublished_reason",
       )
       .maybeSingle();
 

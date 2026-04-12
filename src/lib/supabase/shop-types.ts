@@ -1,3 +1,10 @@
+export type VendorContactInfo = {
+  phone: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  whatsapp: string | null;
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -17,6 +24,10 @@ export type ShopDetail = {
   description: string;
   products: Product[];
   athMovilPhone: string | null;
+  contactPhone: string | null;
+  contactInstagram: string | null;
+  contactFacebook: string | null;
+  contactWhatsapp: string | null;
   shippingFlatFeeUsd: number;
   offersPickup: boolean;
   acceptsStripePayments: boolean;

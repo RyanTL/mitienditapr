@@ -274,7 +274,7 @@ export async function createReceiptSignedUrl(
 export async function fetchBuyerProfile(admin: SupabaseClient, profileId: string) {
   const { data, error } = await admin
     .from("profiles")
-    .select("id,email,full_name,phone,address,zip_code")
+    .select("*")
     .eq("id", profileId)
     .maybeSingle();
 
@@ -282,7 +282,15 @@ export async function fetchBuyerProfile(admin: SupabaseClient, profileId: string
     throw new Error(error?.message ?? "No se pudo cargar tu perfil.");
   }
 
-  return data as BuyerProfileRow;
+  const row = data as Record<string, unknown>;
+  return {
+    id: String(row.id),
+    email: (row.email as string | null) ?? null,
+    full_name: (row.full_name as string | null) ?? null,
+    phone: (row.phone as string | null) ?? null,
+    address: (row.address as string | null) ?? null,
+    zip_code: typeof row.zip_code === "string" ? row.zip_code : null,
+  } satisfies BuyerProfileRow;
 }
 
 export async function fetchCheckoutShopBySlug(

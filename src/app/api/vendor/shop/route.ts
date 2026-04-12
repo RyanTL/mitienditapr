@@ -36,6 +36,10 @@ type ShopPatchPayload = {
   shippingFlatFeeUsd?: number;
   offersPickup?: boolean;
   athMovilPhone?: string | null;
+  contactPhone?: string | null;
+  contactInstagram?: string | null;
+  contactFacebook?: string | null;
+  contactWhatsapp?: string | null;
   status?: VendorShopStatus;
   policies?: {
     refundPolicy?: string;
@@ -209,6 +213,19 @@ export async function PATCH(request: Request) {
       const raw = body.athMovilPhone;
       updates.ath_movil_phone =
         typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+    }
+
+    for (const [payloadKey, dbKey] of [
+      ["contactPhone", "contact_phone"],
+      ["contactInstagram", "contact_instagram"],
+      ["contactFacebook", "contact_facebook"],
+      ["contactWhatsapp", "contact_whatsapp"],
+    ] as const) {
+      if (Object.prototype.hasOwnProperty.call(body, payloadKey)) {
+        const raw = (body as Record<string, unknown>)[payloadKey];
+        updates[dbKey] =
+          typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+      }
     }
 
     if (typeof body.status === "string") {

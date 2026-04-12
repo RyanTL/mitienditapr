@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   ensureDefaultShopPolicies,
   getActiveShopBySlug,
@@ -25,8 +25,15 @@ export async function GET(_request: Request, { params }: RouteParams) {
       );
     }
 
+    let adminClient: ReturnType<typeof createSupabaseAdminClient> | null = null;
+    try {
+      adminClient = createSupabaseAdminClient();
+    } catch {
+      // Secret key may not exist in development.
+    }
+
     await ensureDefaultShopPolicies({
-      supabase,
+      supabase: adminClient ?? supabase,
       shopId: shop.id,
       publishedBy: shop.vendor_profile_id,
     });

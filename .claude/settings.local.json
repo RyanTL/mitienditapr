@@ -43,7 +43,10 @@
       "Bash(PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\" npm run build)",
       "Bash(PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\" npm run lint)",
       "Bash(xargs kill:*)",
-      "Bash(rm -f /Users/ryan/mitienditapr/.next/dev/lock)"
+      "Bash(rm -f /Users/ryan/mitienditapr/.next/dev/lock)",
+      "Bash(find /Users/ryan/mitienditapr/supabase/migrations -type f -name \"*.sql\" -exec grep -l \"shops\" {} \\\\;)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(grep -l \"ath_movil_phone\\\\|payment\\\\|contact\" /Users/ryan/mitienditapr/supabase/migrations/*.sql)"
     ]
   }
 }

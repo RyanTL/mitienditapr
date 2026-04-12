@@ -66,6 +66,10 @@ export function updateVendorShopSettings(payload: {
   shippingFlatFeeUsd?: number;
   offersPickup?: boolean;
   athMovilPhone?: string | null;
+  contactPhone?: string | null;
+  contactInstagram?: string | null;
+  contactFacebook?: string | null;
+  contactWhatsapp?: string | null;
   status?: VendorShopStatus;
   policies?: {
     refundPolicy?: string;

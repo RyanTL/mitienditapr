@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 
 import { BackIcon, CloseIcon } from "@/components/icons";
 import {
+  ONBOARDING_STEP_ANIMATIONS_CSS,
+  OnboardingSegmentedBar,
+} from "@/components/onboarding/onboarding-step-primitives";
+import {
   saveVendorOnboardingStep,
   startVendorOnboarding,
   uploadVendorImage,
@@ -51,21 +55,6 @@ function done(s: VendorStatusResponse) {
 
 /* ── Sub-components ─────────────────────────────────── */
 
-function Bar({ step, total }: { step: number; total: number }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      {Array.from({ length: total }, (_, i) => (
-        <div
-          key={i}
-          className={`flex-1 rounded-full transition-all duration-500 ease-out ${
-            i < step ? "h-[3px] bg-black" : "h-[2px] bg-[#e5e5ea]"
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
-
 function Cam() {
   return (
     <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7 text-[#c7c7cc]">
@@ -86,22 +75,6 @@ function Spinner({ className = "h-5 w-5" }: { className?: string }) {
     />
   );
 }
-
-/* ── CSS ────────────────────────────────────────────── */
-
-const CSS = `
-@keyframes onb-slide{from{opacity:0;transform:translateX(var(--dx,50px))}to{opacity:1;transform:translateX(0)}}
-@keyframes onb-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-@keyframes onb-hero{from{opacity:0;transform:translateY(32px)}to{opacity:1;transform:translateY(0)}}
-.onb-in{animation:onb-slide .5s cubic-bezier(.16,1,.3,1) both}
-.ob1{animation:onb-up .55s cubic-bezier(.16,1,.3,1) .05s both}
-.ob2{animation:onb-up .55s cubic-bezier(.16,1,.3,1) .1s both}
-.ob3{animation:onb-up .55s cubic-bezier(.16,1,.3,1) .16s both}
-.ob4{animation:onb-up .55s cubic-bezier(.16,1,.3,1) .22s both}
-.obh{animation:onb-hero .7s cubic-bezier(.16,1,.3,1) both}
-.obh1{animation:onb-hero .7s cubic-bezier(.16,1,.3,1) .08s both}
-.obh2{animation:onb-hero .7s cubic-bezier(.16,1,.3,1) .16s both}
-`;
 
 /* ── Constants ──────────────────────────────────────── */
 
@@ -251,7 +224,7 @@ export function VendorOnboardingClient() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-white">
-      <style>{CSS}</style>
+      <style>{ONBOARDING_STEP_ANIMATIONS_CSS}</style>
 
       {/* header */}
       <header className="relative z-10 flex h-14 shrink-0 items-center justify-center px-6">
@@ -269,7 +242,7 @@ export function VendorOnboardingClient() {
         </button>
         {step > 0 && (
           <div className="w-[140px]">
-            <Bar step={step} total={SEGMENTS} />
+            <OnboardingSegmentedBar step={step} total={SEGMENTS} />
           </div>
         )}
       </header>

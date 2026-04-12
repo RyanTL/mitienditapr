@@ -327,15 +327,23 @@ export async function ensureDefaultShopPolicies(input: {
       continue;
     }
 
-    await publishShopPolicyVersion({
-      supabase,
-      shopId,
-      policyType,
-      title: DEFAULT_POLICY_TITLES[policyType],
-      body: DEFAULT_POLICY_BODIES[policyType],
-      publishedBy,
-    });
-    defaultedPolicyTypes.push(policyType);
+    try {
+      await publishShopPolicyVersion({
+        supabase,
+        shopId,
+        policyType,
+        title: DEFAULT_POLICY_TITLES[policyType],
+        body: DEFAULT_POLICY_BODIES[policyType],
+        publishedBy,
+      });
+      defaultedPolicyTypes.push(policyType);
+    } catch (err) {
+      // Duplicate key means a concurrent request already created this version — safe to ignore.
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.includes("duplicate key")) {
+        throw err;
+      }
+    }
   }
 
   if (defaultedPolicyTypes.length > 0) {

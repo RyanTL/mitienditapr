@@ -15,6 +15,10 @@ export type ShopRow = {
   offers_pickup: boolean;
   stripe_connect_account_id: string | null;
   ath_movil_phone: string | null;
+  contact_phone: string | null;
+  contact_instagram: string | null;
+  contact_facebook: string | null;
+  contact_whatsapp: string | null;
 };
 
 export type ProductRow = {
@@ -125,6 +129,10 @@ export function buildShopDetail(shop: ShopRow, products: ProductRow[]): ShopDeta
     description: shop.description ?? "",
     products: shopProducts,
     athMovilPhone: shop.ath_movil_phone ?? null,
+    contactPhone: shop.contact_phone ?? null,
+    contactInstagram: shop.contact_instagram ?? null,
+    contactFacebook: shop.contact_facebook ?? null,
+    contactWhatsapp: shop.contact_whatsapp ?? null,
     shippingFlatFeeUsd: Number(shop.shipping_flat_fee_usd ?? 0),
     offersPickup: Boolean(shop.offers_pickup),
     acceptsStripePayments: Boolean(shop.stripe_connect_account_id),

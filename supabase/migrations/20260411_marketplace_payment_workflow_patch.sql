@@ -1,8 +1,9 @@
--- Marketplace buyer payment workflow:
--- - one order per shop
--- - payment state separated from fulfillment state
--- - durable buyer/fulfillment snapshots on orders
--- - one payment record per order
+-- Patch for databases that never ran 20260406_marketplace_payment_workflow.sql
+-- (fixes PostgREST: "Could not find the 'buyer_email' column of 'orders'").
+-- Safe to run if 20260406 already applied (IF NOT EXISTS / NOT EXISTS guards).
+
+alter table public.orders
+  add column if not exists payment_method text;
 
 do $$
 begin

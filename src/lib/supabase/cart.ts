@@ -16,6 +16,10 @@ export type CartItem = {
     shopSlug: string;
     shopName: string;
     shopAthMovilPhone: string | null;
+    shopContactPhone: string | null;
+    shopContactInstagram: string | null;
+    shopContactFacebook: string | null;
+    shopContactWhatsapp: string | null;
     shopShippingFlatFeeUsd: number;
     shopOffersPickup: boolean;
     shopAcceptsStripePayments: boolean;
@@ -49,6 +53,10 @@ type ShopRow = {
   offers_pickup: boolean;
   stripe_connect_account_id: string | null;
   ath_movil_phone: string | null;
+  contact_phone: string | null;
+  contact_instagram: string | null;
+  contact_facebook: string | null;
+  contact_whatsapp: string | null;
 };
 
 const UUID_PATTERN =
@@ -128,7 +136,7 @@ export async function fetchCartItems() {
   const { data: shopRows, error: shopsError } = await supabase
     .from("shops")
     .select(
-      "id,slug,vendor_name,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone",
+      "id,slug,vendor_name,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,contact_phone,contact_instagram,contact_facebook,contact_whatsapp",
     )
     .in("id", shopIds);
 
@@ -162,6 +170,10 @@ export async function fetchCartItems() {
           shopSlug: shop.slug,
           shopName: shop.vendor_name,
           shopAthMovilPhone: shop.ath_movil_phone ?? null,
+          shopContactPhone: shop.contact_phone ?? null,
+          shopContactInstagram: shop.contact_instagram ?? null,
+          shopContactFacebook: shop.contact_facebook ?? null,
+          shopContactWhatsapp: shop.contact_whatsapp ?? null,
           shopShippingFlatFeeUsd: Number(shop.shipping_flat_fee_usd ?? 0),
           shopOffersPickup: Boolean(shop.offers_pickup),
           shopAcceptsStripePayments: Boolean(shop.stripe_connect_account_id),

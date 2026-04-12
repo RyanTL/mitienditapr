@@ -1,17 +1,20 @@
 "use client";
-
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { CloseIcon } from "@/components/icons";
+import {
+  AthMovilCheckoutWizard,
+  type VendorContactInfo,
+} from "@/components/cart/ath-movil-checkout-wizard";
+import { StripeCheckoutWizard } from "@/components/cart/stripe-checkout-wizard";
+import { AthMovilIcon, CloseIcon } from "@/components/icons";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
-import type { AccountSnapshot } from "@/lib/account/client";
+import { saveCheckoutProfile, type AccountSnapshot } from "@/lib/account/client";
 import { formatUsd } from "@/lib/formatters";
 import {
-  createAthMovilCheckout,
   createStripeCheckoutSession,
   type CheckoutFulfillmentInput,
+  type CheckoutRequestPayload,
 } from "@/lib/orders/client";
 import { fetchPublicShopPolicies } from "@/lib/policies/client";
 import type { PublicShopPoliciesResponse, PolicyType } from "@/lib/policies/types";
@@ -25,7 +28,8 @@ type ShopCheckoutSheetProps = {
   shopShippingFlatFeeUsd: number;
   shopAcceptsStripe: boolean;
   shopAthMovilPhone: string | null;
-  profile: AccountSnapshot;
+  vendorContact: VendorContactInfo;
+  profile: AccountSnapshot | null;
   onSuccess: () => void;
   onClose: () => void;
 };
@@ -38,31 +42,45 @@ export function ShopCheckoutSheet({
   shopShippingFlatFeeUsd,
   shopAcceptsStripe,
   shopAthMovilPhone,
+  vendorContact,
   profile,
   onSuccess,
   onClose,
 }: ShopCheckoutSheetProps) {
   const router = useRouter();
-  const [fulfillmentMethod, setFulfillmentMethod] = useState<"shipping" | "pickup">("shipping");
-  const [pickupNotes, setPickupNotes] = useState("");
-  const [hasAcceptedRequiredPolicies, setHasAcceptedRequiredPolicies] = useState(false);
+  const [hasAcceptedRequiredPolicies, setHasAcceptedRequiredPolicies] = useState(true);
   const [policiesData, setPoliciesData] = useState<PublicShopPoliciesResponse | null>(null);
   const [isLoadingPolicies, setIsLoadingPolicies] = useState(false);
   const [policiesError, setPoliciesError] = useState<string | null>(null);
   const [activePolicyModalType, setActivePolicyModalType] = useState<PolicyType | null>(null);
-  const [athReceiptFile, setAthReceiptFile] = useState<File | null>(null);
-  const [athReceiptNote, setAthReceiptNote] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [activeCheckoutMethod, setActiveCheckoutMethod] = useState<"stripe" | "ath_movil" | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutPhase, setCheckoutPhase] = useState<"form" | "success">("form");
+  const [completedOrderId, setCompletedOrderId] = useState<string | null>(null);
+  const [buyerFullName, setBuyerFullName] = useState(profile?.fullName ?? "");
+  const [buyerEmail, setBuyerEmail] = useState(profile?.email ?? "");
+  const [buyerPhone, setBuyerPhone] = useState(profile?.phone ?? "");
+  const [shippingAddress, setShippingAddress] = useState(profile?.address ?? "");
+  const [shippingZipCode, setShippingZipCode] = useState(profile?.zipCode ?? "");
+  const [athWizardOpen, setAthWizardOpen] = useState(false);
+  const [stripeWizardOpen, setStripeWizardOpen] = useState(false);
 
   const handleEscapeKey = useCallback(() => {
+    if (stripeWizardOpen) {
+      setStripeWizardOpen(false);
+      return;
+    }
+    if (athWizardOpen) {
+      setAthWizardOpen(false);
+      return;
+    }
     if (activePolicyModalType) {
       setActivePolicyModalType(null);
     } else {
       onClose();
     }
-  }, [activePolicyModalType, onClose]);
+  }, [activePolicyModalType, athWizardOpen, stripeWizardOpen, onClose]);
 
   useBodyScrollLock(true);
   useEscapeKey(true, handleEscapeKey);
@@ -96,21 +114,12 @@ export function ShopCheckoutSheet({
     (total, item) => total + item.product.priceUsd * item.quantity,
     0,
   );
-  const shippingFeeUsd = fulfillmentMethod === "shipping" ? shopShippingFlatFeeUsd : 0;
-  const totalUsd = subtotal + shippingFeeUsd;
+  const summaryShippingFeeUsd = shopOffersPickup ? null : shopShippingFlatFeeUsd;
+  const summaryTotalUsd = subtotal + (summaryShippingFeeUsd ?? 0);
 
   const canCheckout = Boolean(
     policiesData?.requiredPolicyVersionIds && hasAcceptedRequiredPolicies && !isLoadingPolicies,
   );
-
-  const profileBlockers: string[] = [];
-  if (!profile.phone.trim()) {
-    profileBlockers.push("Tu perfil no tiene teléfono.");
-  }
-  if (fulfillmentMethod === "shipping") {
-    if (!profile.address.trim()) profileBlockers.push("Tu perfil no tiene dirección.");
-    if (!profile.zipCode.trim()) profileBlockers.push("Tu perfil no tiene código postal.");
-  }
 
   const activePolicyModal =
     activePolicyModalType && policiesData?.policies
@@ -124,53 +133,74 @@ export function ShopCheckoutSheet({
         ? "Política de envío"
         : "";
 
-  const buildCheckoutPayload = useCallback(() => {
-    if (!policiesData?.requiredPolicyVersionIds) {
-      throw new Error(
-        "La tienda no tiene Términos y Política de envío publicados. No se puede continuar.",
-      );
-    }
-    if (!hasAcceptedRequiredPolicies) {
-      throw new Error("Debes aceptar Términos y Política de envío para continuar.");
-    }
-    if (!shopAcceptsStripe && !shopAthMovilPhone) {
-      throw new Error("Esta tienda todavía no configuró un método de pago.");
-    }
+  const buildCheckoutPayloadWith = useCallback(
+    (
+      buyer: { fullName: string | null; email: string | null; phone: string | null },
+      fulfillment: CheckoutFulfillmentInput,
+    ) => {
+      if (!policiesData?.requiredPolicyVersionIds) {
+        throw new Error(
+          "La tienda no tiene Términos y Política de envío publicados. No se puede continuar.",
+        );
+      }
+      if (!hasAcceptedRequiredPolicies) {
+        throw new Error("Debes aceptar Términos y Política de envío para continuar.");
+      }
+      if (!shopAcceptsStripe && !shopAthMovilPhone) {
+        throw new Error("Esta tienda todavía no configuró un método de pago.");
+      }
 
-    const fulfillment: CheckoutFulfillmentInput =
-      fulfillmentMethod === "pickup"
-        ? { method: "pickup", pickupNotes: pickupNotes.trim() || null }
-        : { method: "shipping" };
+      return {
+        shopSlug,
+        buyer: {
+          fullName: buyer.fullName?.trim() || null,
+          email: buyer.email?.trim() || null,
+          phone: buyer.phone?.trim() || null,
+        },
+        fulfillment,
+        policyAcceptance: {
+          shopId: policiesData.shopId,
+          termsVersionId: policiesData.requiredPolicyVersionIds.terms,
+          shippingVersionId: policiesData.requiredPolicyVersionIds.shipping,
+          acceptedAt: new Date().toISOString(),
+          acceptanceText: "Acepto Términos y Política de envío de esta tienda.",
+        },
+      };
+    },
+    [hasAcceptedRequiredPolicies, policiesData, shopAcceptsStripe, shopAthMovilPhone, shopSlug],
+  );
 
-    return {
-      shopSlug,
-      buyer: {},
-      fulfillment,
-      policyAcceptance: {
-        shopId: policiesData.shopId,
-        termsVersionId: policiesData.requiredPolicyVersionIds.terms,
-        shippingVersionId: policiesData.requiredPolicyVersionIds.shipping,
-        acceptedAt: new Date().toISOString(),
-        acceptanceText: "Acepto Términos y Política de envío de esta tienda.",
-      },
-    };
-  }, [
-    fulfillmentMethod,
-    hasAcceptedRequiredPolicies,
-    pickupNotes,
-    policiesData,
-    shopAcceptsStripe,
-    shopAthMovilPhone,
-    shopSlug,
-  ]);
-
-  const handleStripeCheckout = useCallback(async () => {
+  const handleStripeCheckout = useCallback(async (payload: CheckoutRequestPayload) => {
     setIsCheckingOut(true);
     setActiveCheckoutMethod("stripe");
     setCheckoutError(null);
 
     try {
-      const payload = buildCheckoutPayload();
+      try {
+        await saveCheckoutProfile({
+          fullName: payload.buyer.fullName ?? "",
+          email: payload.buyer.email ?? "",
+          phone: payload.buyer.phone ?? "",
+          address:
+            payload.fulfillment.method === "shipping"
+              ? (payload.fulfillment.shippingAddress ?? "")
+              : undefined,
+          zipCode:
+            payload.fulfillment.method === "shipping"
+              ? (payload.fulfillment.shippingZipCode ?? "")
+              : undefined,
+        });
+      } catch (profileError) {
+        console.error("No se pudo guardar la info del comprador en su cuenta:", profileError);
+      }
+
+      setBuyerFullName(payload.buyer.fullName ?? "");
+      setBuyerEmail(payload.buyer.email ?? "");
+      setBuyerPhone(payload.buyer.phone ?? "");
+      if (payload.fulfillment.method === "shipping") {
+        setShippingAddress(payload.fulfillment.shippingAddress ?? "");
+        setShippingZipCode(payload.fulfillment.shippingZipCode ?? "");
+      }
       const result = await createStripeCheckoutSession(payload);
       window.location.assign(result.url);
     } catch (error) {
@@ -180,40 +210,38 @@ export function ShopCheckoutSheet({
       if (message.toLowerCase().includes("no autenticado")) {
         router.push("/sign-in?next=/carrito");
       }
+      throw error instanceof Error ? error : new Error(message);
     } finally {
       setIsCheckingOut(false);
       setActiveCheckoutMethod(null);
     }
-  }, [buildCheckoutPayload, router]);
+  }, [router]);
 
-  const handleAthMovilCheckout = useCallback(async () => {
-    setIsCheckingOut(true);
-    setActiveCheckoutMethod("ath_movil");
-    setCheckoutError(null);
+  const athCartLines = useMemo(
+    () =>
+      shopItems.map((item) => ({
+        id: item.id,
+        name: item.product.name,
+        quantity: item.quantity,
+        lineTotalUsd: item.product.priceUsd * item.quantity,
+      })),
+    [shopItems],
+  );
 
-    try {
-      if (!athReceiptFile) {
-        throw new Error("Debes subir el recibo de ATH Móvil para enviar la orden.");
-      }
-      const payload = buildCheckoutPayload();
-      await createAthMovilCheckout({
-        payload,
-        receipt: athReceiptFile,
-        receiptNote: athReceiptNote.trim() || null,
-      });
-      onSuccess();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo completar la orden.";
-      setCheckoutError(message);
+  const handleAthWizardSuccess = useCallback((orderId: string) => {
+    setAthWizardOpen(false);
+    setCompletedOrderId(orderId);
+    setCheckoutPhase("success");
+  }, []);
+
+  const handleAthWizardCheckoutError = useCallback(
+    (message: string) => {
       if (message.toLowerCase().includes("no autenticado")) {
         router.push("/sign-in?next=/carrito");
       }
-    } finally {
-      setIsCheckingOut(false);
-      setActiveCheckoutMethod(null);
-    }
-  }, [athReceiptFile, athReceiptNote, buildCheckoutPayload, onSuccess, router]);
+    },
+    [router],
+  );
 
   return (
     <div className="fixed inset-0 z-50">
@@ -245,118 +273,109 @@ export function ShopCheckoutSheet({
           </button>
         </div>
 
-        <div className="space-y-3 px-5 pb-6">
-          {/* Profile info */}
-          <div className="rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-[var(--color-gray-500)]">Tu información</p>
-              <Link
-                href="/cuenta"
-                className="text-xs font-semibold text-[var(--color-brand)] underline underline-offset-2"
-              >
-                Editar
-              </Link>
+        {checkoutPhase === "success" ? (
+          <div className="flex flex-col items-center gap-4 px-5 pb-8 pt-4 text-center">
+            <style>{`
+              @keyframes ath-circle-in {
+                0% { transform: scale(0); opacity: 0; }
+                60% { transform: scale(1.1); }
+                100% { transform: scale(1); opacity: 1; }
+              }
+              @keyframes ath-check-draw {
+                0% { stroke-dashoffset: 24; }
+                100% { stroke-dashoffset: 0; }
+              }
+              .ath-success-circle {
+                animation: ath-circle-in 0.5s ease-out forwards;
+              }
+              .ath-success-check {
+                stroke-dasharray: 24;
+                stroke-dashoffset: 24;
+                animation: ath-check-draw 0.4s ease-out 0.35s forwards;
+              }
+            `}</style>
+            <div className="ath-success-circle flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-brand)]">
+              <svg viewBox="0 0 24 24" fill="none" className="h-10 w-10 text-[var(--color-white)]">
+                <path
+                  className="ath-success-check"
+                  d="m5 12 5 5L19 8"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
-            <div className="mt-2 space-y-1 text-sm text-[var(--color-carbon)]">
-              {profile.fullName ? (
-                <p className="font-medium">{profile.fullName}</p>
-              ) : null}
-              {profile.phone ? (
-                <p>{profile.phone}</p>
-              ) : (
-                <p className="text-[var(--color-danger)]">Sin teléfono</p>
-              )}
-              {profile.address ? (
-                <p className="text-xs text-[var(--color-gray-500)]">{profile.address}</p>
-              ) : null}
-              {profile.zipCode ? (
-                <p className="text-xs text-[var(--color-gray-500)]">CP {profile.zipCode}</p>
-              ) : null}
-            </div>
+
+            <h2 className="text-xl font-bold text-[var(--color-carbon)]">
+              ¡Orden en proceso!
+            </h2>
+
+            {completedOrderId ? (
+              <p className="rounded-xl bg-[var(--color-gray)] px-3 py-1.5 font-mono text-xs text-[var(--color-carbon)]">
+                Orden #{completedOrderId.slice(0, 8).toUpperCase()}
+              </p>
+            ) : null}
+
+            <p className="text-sm leading-relaxed text-[var(--color-gray-500)]">
+              El vendedor fue notificado y verificará tu pago.
+              Te llegará un email con actualizaciones.
+            </p>
+
+            <button
+              type="button"
+              onClick={onSuccess}
+              className="mt-2 w-full rounded-full bg-[var(--color-carbon)] py-3.5 text-sm font-semibold text-[var(--color-white)] transition-opacity hover:opacity-80"
+            >
+              Ver mis órdenes
+            </button>
           </div>
-
-          {/* Profile blockers */}
-          {profileBlockers.length > 0 ? (
-            <div className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] p-3 text-xs text-[var(--color-danger)]">
-              <p className="font-semibold">Completa tu perfil para continuar:</p>
-              <ul className="mt-1 list-disc pl-4">
-                {profileBlockers.map((msg) => (
-                  <li key={msg}>{msg}</li>
-                ))}
-              </ul>
-              <Link
-                href="/cuenta"
-                className="mt-2 block font-semibold underline underline-offset-2"
-              >
-                Ir a mi perfil →
-              </Link>
-            </div>
-          ) : null}
-
-          {/* Fulfillment method */}
+        ) : (
+        <div className="space-y-3 px-5 pb-6">
+          {/* Payment method — first */}
           <div className="rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4">
-            <p className="text-xs font-semibold text-[var(--color-gray-500)]">Entrega</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setFulfillmentMethod("shipping")}
-                className={[
-                  "rounded-full px-4 py-2 text-sm font-semibold transition-colors",
-                  fulfillmentMethod === "shipping"
-                    ? "bg-[var(--color-carbon)] text-[var(--color-white)]"
-                    : "border border-[var(--color-gray)] text-[var(--color-carbon)]",
-                ].join(" ")}
-              >
-                Envío
-              </button>
-              {shopOffersPickup ? (
+            <p className="text-xs font-semibold text-[var(--color-gray-500)]">Método de pago</p>
+            <p className="mt-1 text-sm text-[var(--color-carbon)]">
+              Elige cómo quieres pagar este pedido.
+            </p>
+            <div className="mt-4 flex flex-col gap-3">
+              {shopAcceptsStripe ? (
                 <button
                   type="button"
-                  onClick={() => setFulfillmentMethod("pickup")}
-                  className={[
-                    "rounded-full px-4 py-2 text-sm font-semibold transition-colors",
-                    fulfillmentMethod === "pickup"
-                      ? "bg-[var(--color-carbon)] text-[var(--color-white)]"
-                      : "border border-[var(--color-gray)] text-[var(--color-carbon)]",
-                  ].join(" ")}
+                  disabled={isCheckingOut || !canCheckout}
+                  className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-base font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)] disabled:opacity-70"
+                  onClick={() => {
+                    setCheckoutError(null);
+                    setStripeWizardOpen(true);
+                  }}
                 >
-                  Recogido
+                  {isCheckingOut && activeCheckoutMethod === "stripe"
+                    ? "Abriendo Stripe..."
+                    : "Pagar con tarjeta"}
                 </button>
               ) : null}
-            </div>
 
-            {fulfillmentMethod === "shipping" ? (
-              <div className="mt-3 rounded-2xl bg-[var(--color-gray)] px-4 py-3 text-sm text-[var(--color-carbon)]">
-                {profile.address ? (
-                  <>
-                    <p>{profile.address}</p>
-                    {profile.zipCode ? (
-                      <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">
-                        CP {profile.zipCode}
-                      </p>
-                    ) : null}
-                  </>
-                ) : (
-                  <p className="text-[var(--color-danger)]">
-                    Sin dirección.{" "}
-                    <Link href="/cuenta" className="underline underline-offset-2">
-                      Agrega una en tu perfil
-                    </Link>
-                    .
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="mt-3">
-                <textarea
-                  rows={2}
-                  value={pickupNotes}
-                  onChange={(e) => setPickupNotes(e.target.value)}
-                  placeholder="Notas para coordinar el recogido (opcional)"
-                  className="w-full rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
-                />
-              </div>
-            )}
+              {shopAthMovilPhone ? (
+                <button
+                  type="button"
+                  disabled={!canCheckout}
+                  className="flex w-full items-center justify-center gap-2 rounded-3xl border-2 border-[var(--color-carbon)] bg-[var(--color-white)] px-6 py-3.5 text-base font-semibold text-[var(--color-carbon)] disabled:opacity-50"
+                  onClick={() => {
+                    setCheckoutError(null);
+                    setAthWizardOpen(true);
+                  }}
+                >
+                  <AthMovilIcon className="h-5 w-5" />
+                  Continuar con ATH Móvil
+                </button>
+              ) : null}
+
+              {!shopAcceptsStripe && !shopAthMovilPhone ? (
+                <p className="text-sm text-[var(--color-danger)]">
+                  Esta tienda aún no configuró un método de pago.
+                </p>
+              ) : null}
+            </div>
           </div>
 
           {/* Policies */}
@@ -410,77 +429,71 @@ export function ShopCheckoutSheet({
             <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
               <span>Envío</span>
               <span className="font-semibold">
-                {fulfillmentMethod === "shipping" ? formatUsd(shippingFeeUsd) : "Gratis"}
+                {summaryShippingFeeUsd === null
+                  ? `Gratis o ${formatUsd(shopShippingFlatFeeUsd)}`
+                  : formatUsd(summaryShippingFeeUsd)}
               </span>
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-[var(--color-gray-border)] pt-3 text-base text-[var(--color-carbon)]">
-              <span className="font-semibold">Total</span>
-              <span className="font-bold">{formatUsd(totalUsd)}</span>
+              <span className="font-semibold">
+                {shopOffersPickup ? "Total desde" : "Total"}
+              </span>
+              <span className="font-bold">{formatUsd(summaryTotalUsd)}</span>
             </div>
+            {shopOffersPickup ? (
+              <p className="mt-3 text-xs text-[var(--color-gray-500)]">
+                El total final depende de si eliges envío o recogido.
+              </p>
+            ) : null}
           </div>
 
-          {/* Checkout error */}
           {checkoutError ? (
             <p className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-3 py-2 text-xs text-[var(--color-danger)]">
               {checkoutError}
             </p>
           ) : null}
-
-          {/* Payment buttons */}
-          {shopAcceptsStripe ? (
-            <button
-              type="button"
-              disabled={isCheckingOut || !canCheckout || profileBlockers.length > 0}
-              className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-base font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)] disabled:opacity-70"
-              onClick={() => void handleStripeCheckout()}
-            >
-              {isCheckingOut && activeCheckoutMethod === "stripe"
-                ? "Abriendo Stripe..."
-                : "Pagar con tarjeta"}
-            </button>
-          ) : null}
-
-          {shopAthMovilPhone ? (
-            <div className="rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4">
-              <p className="text-sm font-semibold text-[var(--color-carbon)]">
-                Pagar con ATH Móvil
-              </p>
-              <p className="mt-1 text-xs text-[var(--color-gray-500)]">
-                Sube el recibo del pago enviado al {shopAthMovilPhone}.
-              </p>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setAthReceiptFile(e.target.files?.[0] ?? null)}
-                className="mt-3 block w-full text-sm"
-              />
-              <textarea
-                rows={2}
-                value={athReceiptNote}
-                onChange={(e) => setAthReceiptNote(e.target.value)}
-                placeholder="Nota opcional para la tienda"
-                className="mt-3 w-full rounded-2xl border border-[var(--color-gray)] px-4 py-3 text-sm outline-none"
-              />
-              <button
-                type="button"
-                disabled={isCheckingOut || !canCheckout || profileBlockers.length > 0}
-                className="mt-3 w-full rounded-3xl border border-[var(--color-carbon)] px-6 py-3.5 text-base font-semibold text-[var(--color-carbon)] disabled:opacity-70"
-                onClick={() => void handleAthMovilCheckout()}
-              >
-                {isCheckingOut && activeCheckoutMethod === "ath_movil"
-                  ? "Enviando comprobante..."
-                  : "Enviar comprobante ATH Móvil"}
-              </button>
-            </div>
-          ) : null}
-
-          {!shopAcceptsStripe && !shopAthMovilPhone ? (
-            <div className="rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-danger)]">
-              Esta tienda aún no configuró un método de pago.
-            </div>
-          ) : null}
         </div>
+        )}
       </div>
+
+      {athWizardOpen && shopAthMovilPhone ? (
+        <AthMovilCheckoutWizard
+          shopName={shopName}
+          shopAthMovilPhone={shopAthMovilPhone}
+          fulfillmentDecidedOnSheet={false}
+          shopOffersPickup={shopOffersPickup}
+          fulfillmentMethod="shipping"
+          vendorContact={vendorContact}
+          cartLines={athCartLines}
+          subtotalUsd={subtotal}
+          shopShippingFlatFeeUsd={shopShippingFlatFeeUsd}
+          initialFullName={profile?.fullName ?? buyerFullName}
+          initialEmail={profile?.email ?? buyerEmail}
+          initialPhone={profile?.phone ?? buyerPhone}
+          initialShippingAddress={shippingAddress}
+          initialShippingZipCode={shippingZipCode}
+          buildCheckoutPayload={buildCheckoutPayloadWith}
+          onSuccess={handleAthWizardSuccess}
+          onCheckoutError={handleAthWizardCheckoutError}
+          onClose={() => setAthWizardOpen(false)}
+        />
+      ) : null}
+
+      {stripeWizardOpen && shopAcceptsStripe ? (
+        <StripeCheckoutWizard
+          shopOffersPickup={shopOffersPickup}
+          subtotalUsd={subtotal}
+          shopShippingFlatFeeUsd={shopShippingFlatFeeUsd}
+          initialFullName={buyerFullName}
+          initialEmail={buyerEmail}
+          initialPhone={buyerPhone}
+          initialShippingAddress={shippingAddress}
+          initialShippingZipCode={shippingZipCode}
+          buildCheckoutPayload={buildCheckoutPayloadWith}
+          onSubmit={handleStripeCheckout}
+          onClose={() => setStripeWizardOpen(false)}
+        />
+      ) : null}
 
       {/* Policy modal */}
       {activePolicyModalType ? (

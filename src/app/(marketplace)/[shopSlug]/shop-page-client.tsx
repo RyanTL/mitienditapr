@@ -22,7 +22,12 @@ import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
-import { formatDateEsPr, formatUsd, renderStars } from "@/lib/formatters";
+import {
+  formatDateEsPr,
+  formatPhoneForDisplay,
+  formatUsd,
+  renderStars,
+} from "@/lib/formatters";
 import { POLICY_TYPE_LABELS } from "@/lib/policies/constants";
 import { fetchPublicShopPolicies } from "@/lib/policies/client";
 import type { PolicyType, PublicShopPoliciesResponse } from "@/lib/policies/types";
@@ -75,9 +80,6 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
   const [reportPolicyType, setReportPolicyType] = useState<PolicyType | "">("");
   const [reportFeedback, setReportFeedback] = useState<string | null>(null);
   const contactEmail = getContactEmail(shop.slug);
-  const instagramHandle = `@${shop.slug.replaceAll("-", "")}`;
-  const facebookHandle = `@${shop.slug.replaceAll("-", "")}`;
-  const whatsappNumber = "+1 (939) 555-0192";
   const closeShopMenu = useCallback(() => {
     setIsShopMenuOpen(false);
     setIsPoliciesExpanded(false);
@@ -228,11 +230,15 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
               {shop.description}
             </p>
           ) : null}
-          {shop.athMovilPhone ? (
+          {(shop.athMovilPhone || shop.acceptsStripePayments) ? (
             <div className="mt-5 flex justify-center">
               <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-2 text-sm font-semibold text-[var(--color-carbon)] shadow-[0_4px_12px_var(--shadow-black-008)]">
-                <AthMovilIcon className="h-4 w-4" />
-                Se acepta ATH Móvil
+                {shop.athMovilPhone ? <AthMovilIcon className="h-4 w-4" /> : null}
+                {shop.athMovilPhone && shop.acceptsStripePayments
+                  ? "Se acepta ATH Móvil y tarjetas"
+                  : shop.athMovilPhone
+                    ? "Se acepta ATH Móvil"
+                    : "Se aceptan pagos con tarjetas"}
               </span>
             </div>
           ) : null}
@@ -451,36 +457,52 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                   Contactar
                 </h3>
                 <div className="mt-3 grid gap-2">
-                  <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                      Instagram
-                    </p>
-                    <p className="text-sm text-[var(--color-carbon)]">{instagramHandle}</p>
-                  </div>
-                  <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                      WhatsApp
-                    </p>
-                    <p className="text-sm text-[var(--color-carbon)]">{whatsappNumber}</p>
-                  </div>
+                  {shop.contactInstagram ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        Instagram
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">@{shop.contactInstagram.replace(/^@/, "")}</p>
+                    </div>
+                  ) : null}
+                  {shop.contactWhatsapp ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        WhatsApp
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">{formatPhoneForDisplay(shop.contactWhatsapp)}</p>
+                    </div>
+                  ) : null}
                   <div className="rounded-xl px-1 py-2.5">
                     <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
                       Email
                     </p>
                     <p className="text-sm text-[var(--color-carbon)]">{contactEmail}</p>
                   </div>
-                  <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                      Facebook
-                    </p>
-                    <p className="text-sm text-[var(--color-carbon)]">{facebookHandle}</p>
-                  </div>
+                  {shop.contactFacebook ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        Facebook
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">{shop.contactFacebook}</p>
+                    </div>
+                  ) : null}
+                  {shop.contactPhone ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        Teléfono
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">{formatPhoneForDisplay(shop.contactPhone)}</p>
+                    </div>
+                  ) : null}
                   {shop.athMovilPhone ? (
                     <div className="rounded-xl px-1 py-2.5">
                       <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
                         ATH Móvil
                       </p>
-                      <p className="text-sm text-[var(--color-carbon)]">{shop.athMovilPhone}</p>
+                      <p className="text-sm text-[var(--color-carbon)]">
+                        {formatPhoneForDisplay(shop.athMovilPhone)}
+                      </p>
                     </div>
                   ) : null}
                 </div>

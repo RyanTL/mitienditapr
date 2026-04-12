@@ -23,13 +23,17 @@ type ShopGroup = {
   shopShippingFlatFeeUsd: number;
   shopAcceptsStripe: boolean;
   shopAthMovilPhone: string | null;
+  shopContactPhone: string | null;
+  shopContactInstagram: string | null;
+  shopContactFacebook: string | null;
+  shopContactWhatsapp: string | null;
   items: CartItem[];
   subtotal: number;
 };
 
 type CheckoutFlowState =
   | { phase: "idle" }
-  | { phase: "checking_out"; queuedSlugs: string[]; currentIndex: number }
+  | { phase: "checking_out"; shopSlug: string }
   | { phase: "done"; completedCount: number };
 
 function groupCartItems(cartItems: CartItem[]): ShopGroup[] {
@@ -49,6 +53,10 @@ function groupCartItems(cartItems: CartItem[]): ShopGroup[] {
         shopShippingFlatFeeUsd: item.product.shopShippingFlatFeeUsd,
         shopAcceptsStripe: item.product.shopAcceptsStripePayments,
         shopAthMovilPhone: item.product.shopAthMovilPhone,
+        shopContactPhone: item.product.shopContactPhone,
+        shopContactInstagram: item.product.shopContactInstagram,
+        shopContactFacebook: item.product.shopContactFacebook,
+        shopContactWhatsapp: item.product.shopContactWhatsapp,
         items: [item],
         subtotal: item.product.priceUsd * item.quantity,
       });
@@ -65,7 +73,7 @@ export function GlobalCartPageClient() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [profile, setProfile] = useState<AccountSnapshot | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const [selectedShopSlugs, setSelectedShopSlugs] = useState<Set<string>>(new Set());
+  const [selectedShopSlug, setSelectedShopSlug] = useState<string | null>(null);
   const [checkoutFlow, setCheckoutFlow] = useState<CheckoutFlowState>({ phase: "idle" });
 
   const loadCartItems = useCallback(async () => {
@@ -75,12 +83,13 @@ export function GlobalCartPageClient() {
     try {
       const items = await fetchCartItems();
       setCartItems(items);
-      // Auto-select all shops
-      const slugs = new Set<string>();
-      for (const item of items) {
-        slugs.add(item.product.shopSlug);
-      }
-      setSelectedShopSlugs(slugs);
+      const firstShopSlug = items[0]?.product.shopSlug ?? null;
+      setSelectedShopSlug((current) => {
+        if (current && items.some((item) => item.product.shopSlug === current)) {
+          return current;
+        }
+        return firstShopSlug;
+      });
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "No se pudo cargar el carrito.",
@@ -95,21 +104,20 @@ export function GlobalCartPageClient() {
   }, [loadCartItems]);
 
   const loadProfile = useCallback(async () => {
-    try {
-      const snapshot = await fetchAccountSnapshot();
-      setProfile(snapshot);
-      setProfileLoaded(true);
-    } catch {
-      // Retry once — Supabase auth can race on initial page load
+    // Supabase auth can race on initial page load — retry with back-off
+    const delays = [0, 600, 1500];
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
       try {
-        await new Promise((r) => setTimeout(r, 500));
         const snapshot = await fetchAccountSnapshot();
         setProfile(snapshot);
+        setProfileLoaded(true);
+        return;
       } catch {
-        // Profile truly unavailable
+        // Try next attempt
       }
-      setProfileLoaded(true);
     }
+    setProfileLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -118,26 +126,18 @@ export function GlobalCartPageClient() {
 
   const shopGroups = useMemo(() => groupCartItems(cartItems), [cartItems]);
 
-  const selectedGroups = useMemo(
-    () => shopGroups.filter((g) => selectedShopSlugs.has(g.shopSlug)),
-    [shopGroups, selectedShopSlugs],
+  const selectedGroup = useMemo(
+    () => shopGroups.find((g) => g.shopSlug === selectedShopSlug) ?? null,
+    [shopGroups, selectedShopSlug],
   );
 
   const selectedTotal = useMemo(
-    () => selectedGroups.reduce((sum, g) => sum + g.subtotal, 0),
-    [selectedGroups],
+    () => selectedGroup?.subtotal ?? 0,
+    [selectedGroup],
   );
 
   const toggleShop = useCallback((slug: string) => {
-    setSelectedShopSlugs((prev) => {
-      const next = new Set(prev);
-      if (next.has(slug)) {
-        next.delete(slug);
-      } else {
-        next.add(slug);
-      }
-      return next;
-    });
+    setSelectedShopSlug((current) => (current === slug ? null : slug));
   }, []);
 
   const handleIncrease = useCallback(
@@ -209,29 +209,16 @@ export function GlobalCartPageClient() {
   );
 
   const handleStartCheckout = useCallback(() => {
-    const queuedSlugs = shopGroups
-      .filter((g) => selectedShopSlugs.has(g.shopSlug))
-      .map((g) => g.shopSlug);
-
-    if (queuedSlugs.length === 0) return;
-
-    setCheckoutFlow({ phase: "checking_out", queuedSlugs, currentIndex: 0 });
-  }, [shopGroups, selectedShopSlugs]);
+    if (!selectedShopSlug) return;
+    setCheckoutFlow({ phase: "checking_out", shopSlug: selectedShopSlug });
+  }, [selectedShopSlug]);
 
   const handleSheetSuccess = useCallback(async () => {
     if (checkoutFlow.phase !== "checking_out") return;
-
-    const nextIndex = checkoutFlow.currentIndex + 1;
-
-    if (nextIndex < checkoutFlow.queuedSlugs.length) {
-      setCheckoutFlow({ ...checkoutFlow, currentIndex: nextIndex });
-    } else {
-      const completedCount = checkoutFlow.queuedSlugs.length;
-      setCheckoutFlow({ phase: "done", completedCount });
-      await loadCartItems();
-      router.push("/ordenes");
-      router.refresh();
-    }
+    setCheckoutFlow({ phase: "done", completedCount: 1 });
+    await loadCartItems();
+    router.push("/ordenes");
+    router.refresh();
   }, [checkoutFlow, loadCartItems, router]);
 
   const handleSheetClose = useCallback(() => {
@@ -240,35 +227,27 @@ export function GlobalCartPageClient() {
 
   const activeShopGroup = useMemo(() => {
     if (checkoutFlow.phase !== "checking_out") return null;
-    const slug = checkoutFlow.queuedSlugs[checkoutFlow.currentIndex];
-    return shopGroups.find((g) => g.shopSlug === slug) ?? null;
+    return shopGroups.find((g) => g.shopSlug === checkoutFlow.shopSlug) ?? null;
   }, [checkoutFlow, shopGroups]);
-
-  const profileMissingPhone = profile !== null && !profile.phone.trim();
 
   const profileLoadFailed = profileLoaded && !profile;
 
   const checkoutButtonLabel = useMemo(() => {
     if (!profileLoaded) return "Cargando...";
     if (profileLoadFailed && cartItems.length === 0) return "Inicia sesión para continuar";
-    if (profileLoadFailed) return "Error cargando perfil. Toca para reintentar.";
-    if (selectedGroups.length === 0) return "Selecciona al menos una tienda";
-    if (profileMissingPhone) return "Completa tu perfil para continuar";
+    if (!selectedGroup) return "Selecciona una tienda";
     return `Finalizar compra · ${formatUsd(selectedTotal)}`;
-  }, [profileLoaded, profileLoadFailed, cartItems.length, selectedGroups.length, profileMissingPhone, selectedTotal]);
+  }, [profileLoaded, profileLoadFailed, cartItems.length, selectedGroup, selectedTotal]);
 
-  const checkoutButtonDisabled = profileLoadFailed
-    ? !profileLoaded
-    : !profileLoaded || !profile || selectedGroups.length === 0 || profileMissingPhone;
+  const checkoutButtonDisabled = !profileLoaded || !selectedGroup;
 
   const handleCheckoutButtonClick = useCallback(() => {
     if (profileLoadFailed) {
-      setProfileLoaded(false);
-      void loadProfile();
+      handleStartCheckout();
       return;
     }
     handleStartCheckout();
-  }, [profileLoadFailed, loadProfile, handleStartCheckout]);
+  }, [profileLoadFailed, handleStartCheckout]);
 
   return (
     <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
@@ -280,18 +259,15 @@ export function GlobalCartPageClient() {
               <h1 className="text-2xl font-bold leading-none text-[var(--color-carbon)]">
                 Carrito
               </h1>
+              <p className="mt-2 text-sm text-[var(--color-gray-500)]">
+                Selecciona una sola tienda por compra. Si quieres comprar en varias,
+                completa cada pedido por separado.
+              </p>
             </header>
 
-            {/* Profile incomplete banner */}
-            {profileMissingPhone ? (
-              <div className="mb-4 rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-danger)]">
-                <p className="font-semibold">Tu perfil está incompleto.</p>
-                <p className="mt-0.5 text-xs">
-                  Se requiere teléfono para completar tu compra.{" "}
-                  <Link href="/cuenta" className="underline underline-offset-2">
-                    Completar perfil →
-                  </Link>
-                </p>
+            {profileLoadFailed ? (
+              <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-carbon)]">
+                No pudimos precargar tu perfil. Puedes completar teléfono y dirección dentro del checkout.
               </div>
             ) : null}
 
@@ -322,7 +298,7 @@ export function GlobalCartPageClient() {
                     <label className="mb-4 flex cursor-pointer items-center gap-3">
                       <input
                         type="checkbox"
-                        checked={selectedShopSlugs.has(group.shopSlug)}
+                        checked={selectedShopSlug === group.shopSlug}
                         onChange={() => toggleShop(group.shopSlug)}
                         className="h-5 w-5 rounded accent-[var(--color-carbon)]"
                       />
@@ -415,14 +391,6 @@ export function GlobalCartPageClient() {
 
                 {/* Mobile checkout bar */}
                 <div className="lg:hidden">
-                  <div className="mb-3 flex items-center justify-between rounded-2xl bg-[var(--color-white)] px-4 py-3 shadow-[0_4px_16px_var(--shadow-black-008)]">
-                    <p className="text-sm font-semibold text-[var(--color-carbon)]">
-                      Total seleccionado
-                    </p>
-                    <p className="text-sm font-bold text-[var(--color-carbon)]">
-                      {formatUsd(selectedTotal)}
-                    </p>
-                  </div>
                   <button
                     type="button"
                     disabled={checkoutButtonDisabled}
@@ -450,7 +418,7 @@ export function GlobalCartPageClient() {
                       key={group.shopSlug}
                       className={[
                         "flex items-center justify-between rounded-2xl px-4 py-3 text-sm",
-                        selectedShopSlugs.has(group.shopSlug)
+                        selectedShopSlug === group.shopSlug
                           ? "bg-[var(--color-gray)]"
                           : "bg-[var(--color-white)] opacity-40",
                       ].join(" ")}
@@ -460,15 +428,6 @@ export function GlobalCartPageClient() {
                     </div>
                   ))}
                 </div>
-
-                {selectedGroups.length > 0 ? (
-                  <div className="flex items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3 mb-3">
-                    <p className="text-sm font-semibold text-[var(--color-carbon)]">Total seleccionado</p>
-                    <p className="text-sm font-bold text-[var(--color-carbon)]">
-                      {formatUsd(selectedTotal)}
-                    </p>
-                  </div>
-                ) : null}
 
                 <p className="mb-4 text-xs text-[var(--color-gray-500)]">
                   Los impuestos y el envío se calculan al finalizar la compra.
@@ -491,7 +450,7 @@ export function GlobalCartPageClient() {
       <BackHomeBottomNav />
 
       {/* Checkout sheet */}
-      {checkoutFlow.phase === "checking_out" && activeShopGroup && profile ? (
+      {checkoutFlow.phase === "checking_out" && activeShopGroup ? (
         <ShopCheckoutSheet
           key={activeShopGroup.shopSlug}
           shopSlug={activeShopGroup.shopSlug}
@@ -501,6 +460,12 @@ export function GlobalCartPageClient() {
           shopShippingFlatFeeUsd={activeShopGroup.shopShippingFlatFeeUsd}
           shopAcceptsStripe={activeShopGroup.shopAcceptsStripe}
           shopAthMovilPhone={activeShopGroup.shopAthMovilPhone}
+          vendorContact={{
+            phone: activeShopGroup.shopContactPhone,
+            instagram: activeShopGroup.shopContactInstagram,
+            facebook: activeShopGroup.shopContactFacebook,
+            whatsapp: activeShopGroup.shopContactWhatsapp,
+          }}
           profile={profile}
           onSuccess={() => void handleSheetSuccess()}
           onClose={handleSheetClose}

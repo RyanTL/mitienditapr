@@ -42,16 +42,16 @@ export function ProductPurchasePanel({
 
       const { data } = await supabase
         .from("profiles")
-        .select("zip_code,address")
+        .select("*")
         .eq("id", session.user.id)
         .maybeSingle();
 
       if (cancelled) return;
 
-      const row = data as { zip_code: string | null; address: string | null } | null;
+      const row = data as Record<string, unknown> | null;
       setShipping({
-        zipCode: row?.zip_code ?? "",
-        address: row?.address ?? "",
+        zipCode: typeof row?.zip_code === "string" ? row.zip_code : "",
+        address: typeof row?.address === "string" ? row.address : "",
       });
     }
 

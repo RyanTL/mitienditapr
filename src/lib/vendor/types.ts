@@ -25,6 +25,10 @@ export type VendorStatusResponse = {
     offers_pickup: boolean;
     stripe_connect_account_id: string | null;
     ath_movil_phone: string | null;
+    contact_phone: string | null;
+    contact_instagram: string | null;
+    contact_facebook: string | null;
+    contact_whatsapp: string | null;
     published_at: string | null;
     unpublished_at: string | null;
     unpublished_reason: string | null;
