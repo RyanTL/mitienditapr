@@ -104,6 +104,8 @@ export type VendorProductsResponse = {
   products: VendorProduct[];
   productLimit: number | null;
   productCount: number;
+  maxImagesPerProduct: number;
+  variantsEnabled: boolean;
 };
 
 export type VendorShopActivationResponse = {
@@ -125,6 +127,7 @@ export type VendorShopSettingsResponse = {
     shipping: string;
   } | null;
   checks: VendorStatusResponse["checks"];
+  subscription: VendorStatusResponse["subscription"] | null;
 };
 
 export type VendorPolicyTemplatesResponse = {

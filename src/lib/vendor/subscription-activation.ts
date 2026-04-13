@@ -4,6 +4,12 @@ import {
   ensureVendorOnboardingRecord,
   upsertVendorOnboardingStep,
 } from "@/lib/supabase/vendor-server";
+import { isActiveVendorSubscriptionStatus } from "@/lib/vendor/vendor-subscription-gates";
+
+export {
+  isActiveVendorSubscriptionStatus,
+  vendorHasPremiumProductFeatures,
+} from "@/lib/vendor/vendor-subscription-gates";
 
 type StripeActivationInput = {
   supabase: SupabaseClient;
@@ -18,10 +24,6 @@ type StripeActivationInput = {
   lastInvoiceStatus?: string | null;
   checkoutSessionId?: string | null;
 };
-
-export function isActiveVendorSubscriptionStatus(status: string | null | undefined) {
-  return status === "active" || status === "trialing";
-}
 
 export function normalizeStripeSubscriptionStatus(status: string | undefined) {
   if (!status) {

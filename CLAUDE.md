@@ -57,27 +57,30 @@ docs/                       Production runbook, test checklist
 
 ### Core Tables
 
-| Table | Purpose |
-|-------|---------|
-| `profiles` | User accounts with role (buyer/vendor/admin) |
-| `shops` | Vendor shops (slug, status, share_code, branding) |
-| `products` | Products with cached rating/review_count |
-| `product_variants` | SKU, price, stock, attributes (JSON) |
-| `product_images` | Multiple images per product with sort order |
-| `product_reviews` | 1-5 star reviews with optional comment |
-| `cart_items` | User cart (product + variant + quantity) |
-| `orders` | Order headers (status, totals) |
-| `order_items` | Line items with price snapshot |
-| `favorites` | Saved products |
-| `shop_follows` | Users following shops |
-| `vendor_onboarding` | 8-step onboarding progress (JSON data per step) |
-| `vendor_subscriptions` | Stripe subscription status tracking |
-| `vendor_access_codes` | Admin-issued free tier codes |
-| `shop_policy_versions` | Immutable, versioned policy records |
-| `policy_templates` | Admin-managed Spanish policy templates |
-| `stripe_webhook_events` | Webhook event log |
+
+| Table                   | Purpose                                           |
+| ----------------------- | ------------------------------------------------- |
+| `profiles`              | User accounts with role (buyer/vendor/admin)      |
+| `shops`                 | Vendor shops (slug, status, share_code, branding) |
+| `products`              | Products with cached rating/review_count          |
+| `product_variants`      | SKU, price, stock, attributes (JSON)              |
+| `product_images`        | Multiple images per product with sort order       |
+| `product_reviews`       | 1-5 star reviews with optional comment            |
+| `cart_items`            | User cart (product + variant + quantity)          |
+| `orders`                | Order headers (status, totals)                    |
+| `order_items`           | Line items with price snapshot                    |
+| `favorites`             | Saved products                                    |
+| `shop_follows`          | Users following shops                             |
+| `vendor_onboarding`     | 8-step onboarding progress (JSON data per step)   |
+| `vendor_subscriptions`  | Stripe subscription status tracking               |
+| `vendor_access_codes`   | Admin-issued free tier codes                      |
+| `shop_policy_versions`  | Immutable, versioned policy records               |
+| `policy_templates`      | Admin-managed Spanish policy templates            |
+| `stripe_webhook_events` | Webhook event log                                 |
+
 
 ### Key Relationships
+
 - `shops.vendor_profile_id` → `profiles.id`
 - `products.shop_id` → `shops.id`
 - `product_variants.product_id` → `products.id`
@@ -86,7 +89,9 @@ docs/                       Production runbook, test checklist
 - Reviews trigger auto-refresh of product and shop rating aggregates
 
 ### RLS Policies
+
 Every table has Row Level Security enabled. Key rules:
+
 - Public: active shops, products in active shops, reviews, policy templates
 - Buyers: own profile, cart, orders, favorites, follows
 - Vendors: own shop and related products/orders/subscriptions
@@ -94,11 +99,13 @@ Every table has Row Level Security enabled. Key rules:
 - Reviews blocked if reviewer owns the shop
 
 ### Migrations
+
 Run in order from `supabase/migrations/`. See `supabase/SETUP.md` for instructions.
 
 ## Supabase Client Patterns
 
 Three client types in `src/lib/supabase/`:
+
 - **Browser client** (`client.ts`) — singleton for client components
 - **Server client** (`server.ts` → `createServerClient()`) — cookie-based, for Server Components and API routes
 - **Admin client** (`server.ts` → `createAdminClient()`) — service role key, bypasses RLS
@@ -108,6 +115,7 @@ Auth is handled via Supabase middleware in `middleware.ts` which refreshes sessi
 ## Stripe Integration
 
 ### Subscription Flow
+
 1. Vendor starts onboarding → reaches billing step
 2. App creates Stripe Checkout session via `/api/stripe/subscription/checkout`
 3. User pays on Stripe-hosted page → redirected back
@@ -115,12 +123,14 @@ Auth is handled via Supabase middleware in `middleware.ts` which refreshes sessi
 5. `vendor_subscriptions` table updated, shop status set to active
 
 ### Feature Flags
+
 - `ENABLE_VENDOR_MODE` — enables vendor routes and features
 - `ENABLE_STRICT_DB_MODE` — enforces real DB queries (vs. mock fallbacks)
 - `ENABLE_CATALOG_SEED` — enables dev seeding endpoint
 - `BILLING_BYPASS` — skips Stripe for local development
 
 ### Stripe Connect
+
 Account linking via `/api/stripe/connect/account-link` for future vendor payouts.
 
 ## Conventions
@@ -138,6 +148,7 @@ Account linking via `/api/stripe/connect/account-link` for future vendor payouts
 ## Environment Variables
 
 Required in `.env.local`:
+
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
@@ -155,24 +166,28 @@ ENABLE_STRICT_DB_MODE=true
 These are known gaps and final touches still needed:
 
 ### Critical (must-have for launch)
-- [ ] Real checkout flow for buyers (order placement currently creates order but no payment collection from buyers)
-- [ ] Buyer order confirmation / receipt page
-- [x] Email notifications (order placed, order status updates, welcome email) — Resend integration; welcome on signup confirmation, buyer order confirmation + vendor new order on ATH Móvil checkout, buyer status updates when vendor changes order status, vendor notification when buyer cancels
-- [ ] Stripe Connect payout flow for vendors (account linking exists but no payout triggers)
-- [x] Error boundaries and user-friendly error pages (404, 500) — `notFound()` wired into shop/product pages; custom `not-found.tsx` and `error.tsx` added at app root
-- [x] SEO metadata per page (page titles, descriptions, Open Graph) — shop and product pages have generateMetadata; home covered by root layout
+
+- Real checkout flow for buyers (order placement currently creates order but no payment collection from buyers)
+- Buyer order confirmation / receipt page
+- Email notifications (order placed, order status updates, welcome email) — Resend integration; welcome on signup confirmation, buyer order confirmation + vendor new order on ATH Móvil checkout, buyer status updates when vendor changes order status, vendor notification when buyer cancels
+- Stripe Connect payout flow for vendors (account linking exists but no payout triggers)
+- Error boundaries and user-friendly error pages (404, 500) — `notFound()` wired into shop/product pages; custom `not-found.tsx` and `error.tsx` added at app root
+- SEO metadata per page (page titles, descriptions, Open Graph) — shop and product pages have generateMetadata; home covered by root layout
 
 ### Important (should-have)
-- [x] Product search / filtering on marketplace home — inline search bar filters shops by name or product name; no-results empty state; overlay kept for deep product search with thumbnails
-- [x] Vendor analytics dashboard (sales, views, top products) — `/vendedor/analiticas`; revenue totals, order counts, avg order value, 30-day revenue, top 5 products by revenue, orders by status
-- [x] Order cancellation / refund flow — buyers can cancel their own `pending` orders from `/ordenes`; vendor-side cancel already existed; Stripe refund for `paid` orders is a post-launch gap
-- [x] Image optimization and lazy loading improvements — added AVIF/WebP formats + 24h cache TTL in next.config; `priority` on first 2 shop products; removed spurious `unoptimized` from vendor thumbnails and search overlay
-- [x] Loading states for all pages — `loading.tsx` added for shop, product, favoritos, ordenes, carrito, and cuenta pages
-- [x] Rate limiting on API routes — in-memory per-IP rate limiter applied to review submission (10/15min), image uploads (30/10min), and Stripe checkout (5/10min)
+
+- Product search / filtering on marketplace home — inline search bar filters shops by name or product name; no-results empty state; overlay kept for deep product search with thumbnails
+- Vendor analytics dashboard (sales, views, top products) — `/vendedor/analiticas`; revenue totals, order counts, avg order value, 30-day revenue, top 5 products by revenue, orders by status
+- Order cancellation / refund flow — buyers can cancel their own `pending` orders from `/ordenes`; vendor-side cancel already existed; Stripe refund for `paid` orders is a post-launch gap
+- Image optimization and lazy loading improvements — added AVIF/WebP formats + 24h cache TTL in next.config; `priority` on first 2 shop products; removed spurious `unoptimized` from vendor thumbnails and search overlay
+- Loading states for all pages — `loading.tsx` added for shop, product, favoritos, ordenes, carrito, and cuenta pages
+- Rate limiting on API routes — in-memory per-IP rate limiter applied to review submission (10/15min), image uploads (30/10min), and Stripe checkout (5/10min)
 
 ### Nice-to-have (post-launch)
-- [ ] Push notifications
-- [ ] Vendor promotional tools (discounts, coupons)
-- [x] Native mobile app (React Native)
-- [x] Social login (Google) — Google OAuth on sign-in and sign-up; forgot/reset password flow added
-- [x] Inventory management alerts (low stock) — in-app warning badge per product card + summary banner when any active product has ≤5 units total stock
+
+- Push notifications
+- Vendor promotional tools (discounts, coupons)
+- Native mobile app (React Native)
+- Social login (Google) — Google OAuth on sign-in and sign-up; forgot/reset password flow added
+- Inventory management alerts (low stock) — in-app warning badge per product card + summary banner when any active product has ≤5 units total stock
+

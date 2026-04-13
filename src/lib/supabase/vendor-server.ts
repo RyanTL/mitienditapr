@@ -13,9 +13,11 @@ import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import {
   VENDOR_FREE_TIER_PRODUCT_LIMIT,
   VENDOR_ONBOARDING_STEP_COUNT,
+  getVendorMaxImagesPerProduct,
   type VendorOnboardingStatus,
   type VendorShopStatus,
 } from "@/lib/vendor/constants";
+import { vendorHasPremiumProductFeatures } from "@/lib/vendor/vendor-subscription-gates";
 import { slugifyShopName } from "@/lib/vendor/slug";
 import type {
   PolicyTemplate,
@@ -570,15 +572,18 @@ export async function getVendorProductsData(
 
   const products = productRows as VendorProductRow[];
   const subscription = await getVendorSubscriptionByShopId(supabase, shop.id);
-  const hasActiveSubscription =
-    subscription?.status === "active" || subscription?.status === "trialing";
-  const productLimit = hasActiveSubscription ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
+  const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+  const productLimit = hasPremiumProductFeatures ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
+  const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
+  const variantsEnabled = hasPremiumProductFeatures;
 
   if (products.length === 0) {
     return {
       products: [],
       productLimit,
       productCount: 0,
+      maxImagesPerProduct,
+      variantsEnabled,
     };
   }
 
@@ -615,6 +620,8 @@ export async function getVendorProductsData(
     ),
     productLimit,
     productCount: products.length,
+    maxImagesPerProduct,
+    variantsEnabled,
   };
 }
 
@@ -634,6 +641,7 @@ export async function getVendorShopSettingsData(
         activeVariantCount: 0,
         blockingReasons: ["Debes crear tu tienda."],
       },
+      subscription: null,
     };
   }
 
@@ -643,9 +651,10 @@ export async function getVendorShopSettingsData(
     publishedBy: shop.vendor_profile_id,
   });
 
-  const [policies, checks] = await Promise.all([
+  const [policies, checks, subscription] = await Promise.all([
     getShopPoliciesByShopId(supabase, shop.id),
     getVendorPublishChecks(supabase, profileId),
+    getVendorSubscriptionByShopId(supabase, shop.id),
   ]);
   const currentPolicyVersions = await getCurrentShopPolicyVersions(supabase, shop.id);
 
@@ -655,6 +664,7 @@ export async function getVendorShopSettingsData(
     policyCompletion: buildVendorPolicyCompletion(currentPolicyVersions),
     currentPolicyVersionIds: getRequiredPolicyIds(currentPolicyVersions),
     checks,
+    subscription,
   };
 }
 

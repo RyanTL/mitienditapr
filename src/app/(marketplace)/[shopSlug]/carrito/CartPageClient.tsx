@@ -618,14 +618,23 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                   <span>Subtotal</span>
                   <span className="font-semibold">{formatUsd(subtotal)}</span>
                 </div>
-                <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
-                  <span>Envío</span>
-                  <span className="font-semibold">
-                    {summaryShippingFeeUsd === null
-                      ? `Gratis o ${formatUsd(shop.shippingFlatFeeUsd)}`
-                      : formatUsd(summaryShippingFeeUsd)}
-                  </span>
-                </div>
+                {shop.offersPickup ? (
+                  <>
+                    <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                      <span>Recogido en tienda</span>
+                      <span className="font-semibold">Gratis</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                      <span>Envío a domicilio</span>
+                      <span className="font-semibold">{formatUsd(shop.shippingFlatFeeUsd)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                    <span>Envío</span>
+                    <span className="font-semibold">{formatUsd(shop.shippingFlatFeeUsd)}</span>
+                  </div>
+                )}
                 <div className="mt-3 flex items-center justify-between border-t border-[var(--color-gray-border)] pt-3 text-base text-[var(--color-carbon)]">
                   <span className="font-semibold">
                     {shop.offersPickup ? "Total desde" : "Total"}
@@ -634,7 +643,8 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                 </div>
                 {shop.offersPickup ? (
                   <p className="mt-3 text-xs text-[var(--color-gray-500)]">
-                    El total final depende de si eliges envío o recogido.
+                    Al pagar eliges recogido en tienda (sin costo) o envío a domicilio (se suma el
+                    monto de arriba).
                   </p>
                 ) : null}
               </div>

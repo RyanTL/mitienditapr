@@ -7,8 +7,12 @@ import {
   serverErrorResponse,
   unauthorizedResponse,
 } from "@/lib/vendor/api";
-import { VENDOR_FREE_TIER_PRODUCT_LIMIT } from "@/lib/vendor/constants";
+import {
+  VENDOR_FREE_TIER_PRODUCT_LIMIT,
+  getVendorMaxImagesPerProduct,
+} from "@/lib/vendor/constants";
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
+import { vendorHasPremiumProductFeatures } from "@/lib/vendor/vendor-subscription-gates";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   maybeAutoPublishDraftShop,
@@ -172,12 +176,19 @@ export async function GET() {
   const products = productRows as ProductRow[];
 
   const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
-  const hasActiveSubscription =
-    subscription?.status === "active" || subscription?.status === "trialing";
-  const productLimit = hasActiveSubscription ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
+  const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+  const productLimit = hasPremiumProductFeatures ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
+  const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
+  const variantsEnabled = hasPremiumProductFeatures;
 
   if (products.length === 0) {
-    return NextResponse.json({ products: [], productLimit, productCount: 0 });
+    return NextResponse.json({
+      products: [],
+      productLimit,
+      productCount: 0,
+      maxImagesPerProduct,
+      variantsEnabled,
+    });
   }
 
   const productIds = products.map((row) => row.id);
@@ -214,6 +225,8 @@ export async function GET() {
     ),
     productLimit,
     productCount: products.length,
+    maxImagesPerProduct,
+    variantsEnabled,
   });
 }
 
@@ -318,10 +331,22 @@ export async function POST(request: Request) {
     const shop = await ensureVendorShopForProfile(dataClient, profile);
 
     const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
-    const hasActiveSubscription =
-      subscription?.status === "active" || subscription?.status === "trialing";
+    const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+    const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
 
-    if (!hasActiveSubscription) {
+    if (imagesToInsert.length > maxImagesPerProduct) {
+      return NextResponse.json(
+        {
+          error: hasPremiumProductFeatures
+            ? `Puedes agregar hasta ${maxImagesPerProduct} fotos por producto.`
+            : `El plan gratuito permite hasta ${maxImagesPerProduct} fotos por producto. Suscríbete al Plan Vendedor para hasta ${getVendorMaxImagesPerProduct(true)} fotos.`,
+          upgradeRequired: !hasPremiumProductFeatures,
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!hasPremiumProductFeatures) {
       const { count } = await dataClient
         .from("products")
         .select("id", { count: "exact", head: true })

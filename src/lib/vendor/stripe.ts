@@ -200,6 +200,20 @@ export async function createStripeSubscriptionCheckoutSession(input: {
   });
 }
 
+type StripeBillingPortalSessionResponse = {
+  url: string;
+};
+
+export async function createStripeBillingPortalSession(input: {
+  customerId: string;
+  returnUrl: string;
+}) {
+  return stripeRequest<StripeBillingPortalSessionResponse>("/billing_portal/sessions", {
+    customer: input.customerId,
+    return_url: input.returnUrl,
+  });
+}
+
 export async function createStripeOneTimeCheckoutSession(input: {
   successUrl: string;
   cancelUrl: string;

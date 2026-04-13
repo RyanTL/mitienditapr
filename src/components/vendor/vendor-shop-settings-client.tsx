@@ -13,9 +13,9 @@ import {
   ImageIcon,
   InfoIcon,
   PencilIcon,
+  LinkIcon,
   SettingsIcon,
   ShieldCheckIcon,
-  StoreIcon,
   TruckIcon,
   UserIcon,
 } from "@/components/icons";
@@ -37,15 +37,20 @@ import type {
 } from "@/lib/policies/types";
 import {
   createStripeConnectAccountLink,
+  createVendorBillingPortalSession,
   fetchVendorShopSettings,
   uploadVendorImage,
   updateVendorShopSettings,
 } from "@/lib/vendor/client";
+import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import type { VendorShopStatus } from "@/lib/vendor/constants";
 import { toNumber } from "@/lib/utils";
 import type { VendorShopSettingsResponse } from "@/lib/vendor/types";
 
 type ShopResponse = VendorShopSettingsResponse;
+
+/** Short debounce: fewer round-trips than typing every keystroke, still feels instant. */
+const AUTOSAVE_DEBOUNCE_MS = 450;
 
 type VendorShopSettingsClientProps = {
   initialStatusData?: ShopResponse;
@@ -128,6 +133,26 @@ function mapFormStateFromResponse(response: ShopResponse): ShopSettingsFormState
     contactFacebook: response.shop?.contact_facebook ?? "",
     contactWhatsapp: response.shop?.contact_whatsapp ?? "",
   };
+}
+
+function isShopFormDirty(formState: ShopSettingsFormState, statusData: ShopResponse | null) {
+  if (!statusData?.shop) return false;
+  const saved = mapFormStateFromResponse(statusData);
+  const shipForm = toNumber(formState.shippingFlatFeeUsd, 0);
+  const shipSaved = toNumber(saved.shippingFlatFeeUsd, 0);
+  return (
+    formState.vendorName !== saved.vendorName ||
+    formState.slug !== saved.slug ||
+    formState.description !== saved.description ||
+    formState.logoUrl !== saved.logoUrl ||
+    shipForm !== shipSaved ||
+    formState.offersPickup !== saved.offersPickup ||
+    formState.athMovilPhone !== saved.athMovilPhone ||
+    formState.contactPhone !== saved.contactPhone ||
+    formState.contactInstagram !== saved.contactInstagram ||
+    formState.contactFacebook !== saved.contactFacebook ||
+    formState.contactWhatsapp !== saved.contactWhatsapp
+  );
 }
 
 function createDefaultPolicyDraft() {
@@ -219,11 +244,11 @@ function isPolicyDraftDirty(
   );
 }
 
-// ─── Section wrapper ────────────────────────────────────────────────────────
+// ─── Section wrapper (compact settings card) ─────────────────────────────────
 
 type SectionIconComponent = (props: ComponentPropsWithoutRef<"svg">) => ReactNode;
 
-function Section({
+function SettingsSection({
   label,
   description,
   Icon,
@@ -235,14 +260,14 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-[28px] border border-[var(--color-gray)] bg-white p-5 shadow-[0_8px_24px_var(--shadow-black-003)]">
-      <div className="mb-5 flex items-start gap-3">
+    <div className="rounded-2xl border border-[var(--color-gray)] bg-white p-4 shadow-[0_2px_12px_var(--shadow-black-003)]">
+      <div className="mb-3 flex items-start gap-2.5">
         <div className="shrink-0 text-[var(--color-carbon)]">
-          <Icon className="h-5 w-5" />
+          <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <h2 className="text-base font-bold text-[var(--color-carbon)]">{label}</h2>
-          <p className="mt-1 max-w-[52ch] text-sm leading-5 text-[var(--color-gray-500)]">
+          <h2 className="text-sm font-bold text-[var(--color-carbon)]">{label}</h2>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-[var(--color-gray-500)]">
             {description}
           </p>
         </div>
@@ -251,6 +276,9 @@ function Section({
     </div>
   );
 }
+
+const fieldInputClass =
+  "mt-1 w-full rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]";
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
@@ -279,10 +307,11 @@ export function VendorShopSettingsClient({
     () => buildPolicyDrafts(initialPolicyData ?? null, initialPolicyTemplates),
   );
   const [isLoading, setIsLoading] = useState(!hasInitialData);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isPublishingPolicy, setIsPublishingPolicy] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
@@ -291,6 +320,21 @@ export function VendorShopSettingsClient({
   const templatesByType = useMemo(() => {
     return buildTemplatesByType(policyTemplates);
   }, [policyTemplates]);
+
+  const applyFetchedBundle = useCallback(
+    (
+      shopResponse: ShopResponse,
+      templates: PolicyTemplate[],
+      policiesResponse: VendorShopPoliciesResponse,
+    ) => {
+      setStatusData(shopResponse);
+      setFormState(mapFormStateFromResponse(shopResponse));
+      setPolicyTemplates(templates);
+      setPolicyData(policiesResponse);
+      setPolicyDrafts(buildPolicyDrafts(policiesResponse, templates));
+    },
+    [],
+  );
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
@@ -301,20 +345,13 @@ export function VendorShopSettingsClient({
         fetchVendorPolicyTemplates(),
         fetchVendorShopPolicies(),
       ]);
-
-      setStatusData(shopResponse);
-      setFormState(mapFormStateFromResponse(shopResponse));
-      setPolicyTemplates(templatesResponse.templates);
-      setPolicyData(policiesResponse);
-      setPolicyDrafts(
-        buildPolicyDrafts(policiesResponse, templatesResponse.templates),
-      );
+      applyFetchedBundle(shopResponse, templatesResponse.templates, policiesResponse);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo cargar configuración.");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [applyFetchedBundle]);
 
   useEffect(() => {
     if (hasInitialData) {
@@ -324,12 +361,35 @@ export function VendorShopSettingsClient({
     void loadSettings();
   }, [hasInitialData, loadSettings]);
 
-  const handleSave = useCallback(async () => {
-    setIsSaving(true);
+  const shopFormDirty = useMemo(
+    () => isShopFormDirty(formState, statusData),
+    [formState, statusData],
+  );
+
+  const policySaveTargets = useMemo(() => {
+    return POLICY_TYPES.filter((policyType) => {
+      const draft = policyDrafts[policyType];
+      return isPolicyDraftDirty(policyType, draft, policyData) && draft.accepted;
+    });
+  }, [policyDrafts, policyData]);
+
+  const hasBlockingPolicyEdits = useMemo(() => {
+    return POLICY_TYPES.some((policyType) => {
+      const draft = policyDrafts[policyType];
+      return isPolicyDraftDirty(policyType, draft, policyData) && !draft.accepted;
+    });
+  }, [policyDrafts, policyData]);
+
+  const hasAnythingToSave = shopFormDirty || policySaveTargets.length > 0;
+  const canSaveAll = hasAnythingToSave && !hasBlockingPolicyEdits;
+
+  const handleSaveAll = useCallback(async () => {
+    if (!canSaveAll) return;
+    setIsSavingSettings(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
     try {
-      const response = await updateVendorShopSettings({
+      const shopPayload = {
         vendorName: formState.vendorName,
         slug: formState.slug,
         description: formState.description,
@@ -341,20 +401,87 @@ export function VendorShopSettingsClient({
         contactInstagram: formState.contactInstagram.trim() || null,
         contactFacebook: formState.contactFacebook.trim() || null,
         contactWhatsapp: formState.contactWhatsapp.trim() || null,
-      });
-      setStatusData((current) =>
-        current ? { ...current, shop: response.shop, checks: response.checks } : current,
-      );
+      };
+
+      const saveShop = shopFormDirty
+        ? updateVendorShopSettings(shopPayload).then((response) => {
+            setStatusData((prev) => {
+              if (!prev) return prev;
+              const next: ShopResponse = {
+                ...prev,
+                shop: response.shop,
+                checks: response.checks,
+              };
+              setFormState(mapFormStateFromResponse(next));
+              return next;
+            });
+          })
+        : Promise.resolve();
+
+      const savePolicies =
+        policySaveTargets.length > 0
+          ? Promise.all(
+              policySaveTargets.map((policyType) => {
+                const draft = policyDrafts[policyType];
+                return publishVendorShopPolicy(policyType, {
+                  title: draft.title,
+                  body: draft.body,
+                  templateId: draft.templateId,
+                  acceptanceScope: "update",
+                  acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
+                  accepted: draft.accepted,
+                });
+              }),
+            ).then(async () => {
+              const policiesResponse = await fetchVendorShopPolicies();
+              setPolicyData(policiesResponse);
+              setPolicyDrafts(buildPolicyDrafts(policiesResponse, policyTemplates));
+              setExpandedPolicyCard(null);
+            })
+          : Promise.resolve();
+
+      await Promise.all([saveShop, savePolicies]);
+
       setFeedbackMessage("Cambios guardados.");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "No se pudo guardar la tienda.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "No se pudieron guardar los cambios.",
+      );
     } finally {
-      setIsSaving(false);
+      setIsSavingSettings(false);
     }
-  }, [formState]);
+  }, [
+    canSaveAll,
+    formState,
+    policyDrafts,
+    policySaveTargets,
+    policyTemplates,
+    shopFormDirty,
+  ]);
+
+  const handleSaveAllRef = useRef(handleSaveAll);
+  handleSaveAllRef.current = handleSaveAll;
+
+  useEffect(() => {
+    if (isLoading || !canSaveAll || isSavingSettings || isUpdatingStatus || isUploadingLogo) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      void handleSaveAllRef.current();
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [
+    canSaveAll,
+    formState,
+    policyDrafts,
+    isLoading,
+    isSavingSettings,
+    isUpdatingStatus,
+    isUploadingLogo,
+  ]);
 
   const handleStatusUpdate = useCallback(async (nextStatus: VendorShopStatus) => {
-    setIsSaving(true);
+    setIsUpdatingStatus(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
     try {
@@ -366,7 +493,7 @@ export function VendorShopSettingsClient({
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo actualizar estado.");
     } finally {
-      setIsSaving(false);
+      setIsUpdatingStatus(false);
     }
   }, []);
 
@@ -383,36 +510,6 @@ export function VendorShopSettingsClient({
       setIsUploadingLogo(false);
     }
   }, []);
-
-  const handlePublishPolicy = useCallback(async () => {
-    const draft = policyDrafts[selectedPolicyType];
-    setIsPublishingPolicy(true);
-    setErrorMessage(null);
-    setFeedbackMessage(null);
-    try {
-      const response = await publishVendorShopPolicy(selectedPolicyType, {
-        title: draft.title,
-        body: draft.body,
-        templateId: draft.templateId,
-        acceptanceScope: "update",
-        acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
-        accepted: draft.accepted,
-      });
-      setPolicyData(response);
-      setPolicyDrafts((current) => ({
-        ...current,
-        [selectedPolicyType]: { ...current[selectedPolicyType], accepted: false },
-      }));
-      setExpandedPolicyCard(null);
-      setIsPolicyEditorOpen(false);
-      setFeedbackMessage("Política guardada.");
-      await loadSettings();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "No se pudo publicar la política.");
-    } finally {
-      setIsPublishingPolicy(false);
-    }
-  }, [loadSettings, policyDrafts, selectedPolicyType]);
 
   const shopStatus = statusData?.shop?.status;
   const isActive = shopStatus === "active";
@@ -432,10 +529,26 @@ export function VendorShopSettingsClient({
     }
   }, []);
 
+  const handleOpenBillingPortal = useCallback(async () => {
+    setIsOpeningBillingPortal(true);
+    setErrorMessage(null);
+    try {
+      const response = await createVendorBillingPortalSession();
+      window.location.assign(response.url);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "No se pudo abrir el portal de facturación.",
+      );
+      setIsOpeningBillingPortal(false);
+    }
+  }, []);
+
+  const subscription = statusData?.subscription ?? null;
+
   return (
     <VendorPageShell
       title="Configuración de tienda"
-      subtitle="Organiza la información pública de tu negocio, tus métodos de pago y las opciones avanzadas de tu tienda."
+      subtitle="Perfil público, envíos, cobros y políticas. Los cambios se guardan solos al poco tiempo de dejar de editar."
     >
       {/* Feedback / error banners */}
       {feedbackMessage && (
@@ -446,6 +559,14 @@ export function VendorShopSettingsClient({
       {errorMessage && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{errorMessage}</p>
       )}
+      {!isLoading && hasBlockingPolicyEdits ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-snug text-amber-900">
+          Marca la casilla legal en cada política que editaste para poder guardarla automáticamente.
+        </p>
+      ) : null}
+      {!isLoading && isSavingSettings ? (
+        <p className="text-xs font-medium text-[var(--color-gray-500)]">Guardando…</p>
+      ) : null}
 
       {isLoading ? (
         <div className="space-y-3">
@@ -455,15 +576,100 @@ export function VendorShopSettingsClient({
         </div>
       ) : (
         <>
+          <div className="space-y-4 pb-6 md:pb-10">
+          {/* ── Membresía ── */}
+          <SettingsSection
+            label="Membresía"
+            description="Suscripción al Plan Vendedor: cancelar, renovación automática y facturas."
+            Icon={UserIcon}
+          >
+            {isVendorBillingBypassEnabled ? (
+              <p className="text-xs leading-relaxed text-[var(--color-gray-500)]">
+                En modo prueba la facturación está omitida. El portal de administración de pagos no
+                está disponible.
+              </p>
+            ) : !subscription ? (
+              <div className="space-y-2">
+                <p className="text-xs text-[var(--color-gray-500)]">
+                  Aún no hay una suscripción registrada para esta tienda.
+                </p>
+                <a
+                  href="/vendedor/suscripcion"
+                  className="inline-flex rounded-full bg-black px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Ver planes
+                </a>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs text-[var(--color-gray-500)]">
+                <p>
+                  <span className="font-semibold text-[var(--color-carbon)]">Estado: </span>
+                  {subscription.status}
+                  {subscription.cancel_at_period_end ? (
+                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      Renovación desactivada al fin del periodo
+                    </span>
+                  ) : null}
+                </p>
+                <p>
+                  <span className="font-semibold text-[var(--color-carbon)]">Origen: </span>
+                  {subscription.provider === "stripe"
+                    ? "Stripe (tarjeta)"
+                    : subscription.provider === "manual_code"
+                      ? "Código de acceso"
+                      : subscription.provider}
+                </p>
+                {subscription.current_period_end ? (
+                  <p>
+                    <span className="font-semibold text-[var(--color-carbon)]">
+                      Próxima fecha clave:{" "}
+                    </span>
+                    {new Date(subscription.current_period_end).toLocaleDateString("es-PR", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
+                ) : null}
+                {subscription.provider === "stripe" &&
+                subscription.stripe_customer_id?.startsWith("cus_") ? (
+                  <button
+                    type="button"
+                    disabled={isOpeningBillingPortal}
+                    onClick={() => void handleOpenBillingPortal()}
+                    className="w-full rounded-full bg-[var(--color-carbon)] py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto sm:px-6"
+                  >
+                    {isOpeningBillingPortal
+                      ? "Abriendo portal…"
+                      : "Gestionar facturación y renovación"}
+                  </button>
+                ) : subscription.provider === "manual_code" ? (
+                  <p className="leading-relaxed">
+                    Tu acceso fue otorgado con un código. Para cambios de membresía, contacta a
+                    soporte.
+                  </p>
+                ) : (
+                  <p className="leading-relaxed">
+                    No hay un cliente de Stripe asociado. Suscríbete desde la página de suscripción
+                    para gestionar pagos en línea.
+                  </p>
+                )}
+              </div>
+            )}
+          </SettingsSection>
+
           {/* ── Información de tienda ── */}
-          <div className="rounded-[28px] border border-[var(--color-gray)] bg-white p-5 shadow-[0_8px_24px_var(--shadow-black-003)]">
-            {/* Logo upload — square tap-to-replace thumbnail */}
-            <div className="mb-4 flex items-center gap-4">
+          <SettingsSection
+            label="Tu tienda"
+            description="Nombre, enlace y descripción que ven tus clientes."
+            Icon={LinkIcon}
+          >
+            <div className="mb-3 flex items-center gap-3">
               <button
                 type="button"
                 disabled={isUploadingLogo}
                 onClick={() => logoInputRef.current?.click()}
-                className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--color-gray-100)] text-[var(--color-gray-500)] transition hover:opacity-80"
+                className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--color-gray-100)] text-[var(--color-gray-500)] transition hover:opacity-80"
               >
                 {formState.logoUrl ? (
                   <Image
@@ -474,7 +680,7 @@ export function VendorShopSettingsClient({
                     className="object-cover"
                   />
                 ) : (
-                  <ImageIcon className="h-7 w-7" />
+                  <ImageIcon className="h-6 w-6" />
                 )}
                 {isUploadingLogo && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30">
@@ -493,17 +699,17 @@ export function VendorShopSettingsClient({
                   if (file) void handleUploadLogo(file);
                 }}
               />
-              <div>
-                <p className="text-sm font-semibold text-[var(--color-carbon)]">Logo de tienda</p>
-                <p className="mt-0.5 text-sm leading-5 text-[var(--color-gray-500)]">
-                  Toca para {formState.logoUrl ? "cambiar" : "subir"} una imagen cuadrada con buena resolución.
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[var(--color-carbon)]">Logo</p>
+                <p className="mt-0.5 text-xs leading-snug text-[var(--color-gray-500)]">
+                  Toca para subir o cambiar. El logo se aplica en el guardado automático.
                 </p>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   Nombre de tienda
                 </span>
                 <input
@@ -512,29 +718,23 @@ export function VendorShopSettingsClient({
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, vendorName: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Este nombre aparece como el título principal de tu tienda.
-                </p>
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">URL</span>
-                <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">mitiendita.pr/</p>
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">URL</span>
+                <p className="mt-0.5 text-[11px] text-[var(--color-gray-500)]">mitiendita.pr/</p>
                 <input
                   type="text"
                   value={formState.slug}
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, slug: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Usa un nombre corto y fácil de recordar para compartir tu enlace.
-                </p>
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   Descripción
                 </span>
                 <textarea
@@ -542,28 +742,24 @@ export function VendorShopSettingsClient({
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, description: e.target.value }))
                   }
-                  rows={3}
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  rows={2}
+                  className={`${fieldInputClass} leading-relaxed`}
                 />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Escribe una descripción breve, clara y fácil de leer desde el celular.
-                </p>
               </label>
             </div>
-          </div>
+          </SettingsSection>
 
           {/* ── Envíos y recogida ── */}
-          <Section
+          <SettingsSection
             label="Envíos y recogida"
             description="Configura el costo base de envío y si ofreces recogido en persona."
             Icon={TruckIcon}
           >
-            <div className="space-y-4">
+            <div className="space-y-3">
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   Tarifa fija de envío (USD)
                 </span>
-                <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">$</p>
                 <input
                   type="number"
                   min={0}
@@ -572,10 +768,10 @@ export function VendorShopSettingsClient({
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, shippingFlatFeeUsd: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Este monto se muestra en el checkout como costo base de envío.
+                <p className="mt-1 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                  Se muestra en el checkout como envío base.
                 </p>
               </label>
               <button
@@ -585,14 +781,14 @@ export function VendorShopSettingsClient({
                 onClick={() =>
                   setFormState((s) => ({ ...s, offersPickup: !s.offersPickup }))
                 }
-                className="flex w-full items-start justify-between gap-4 rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-4 py-4 text-left"
+                className="flex w-full items-start justify-between gap-3 rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-left"
               >
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-[var(--color-carbon)]">
-                    Ofrecer recogido en persona
+                  <span className="block text-xs font-semibold text-[var(--color-carbon)]">
+                    Recogido en persona
                   </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-[var(--color-gray-500)]">
-                    Actívalo si permites coordinar entrega o pickup directamente con el cliente.
+                  <span className="mt-0.5 block text-[11px] leading-snug text-[var(--color-gray-500)]">
+                    Permite pickup o entrega coordinada con el cliente.
                   </span>
                 </span>
                 <span
@@ -612,23 +808,23 @@ export function VendorShopSettingsClient({
                 </span>
               </button>
             </div>
-          </Section>
+          </SettingsSection>
 
           {/* ── Métodos de pago ── */}
-          <Section
-            label="Métodos de pago"
-            description="Añade la información de cobro que quieres mostrar dentro de tu tienda."
+          <SettingsSection
+            label="Cobros"
+            description="Tarjeta (Stripe) y ATH Móvil. El número ATH se guarda solo al editar."
             Icon={AthMovilIcon}
           >
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white p-4">
-                <div className="flex items-start justify-between gap-4">
+            <div className="space-y-3">
+              <div className="rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[var(--color-carbon)]">
-                      Stripe Checkout
+                    <p className="text-xs font-semibold text-[var(--color-carbon)]">
+                      Stripe (tarjeta)
                     </p>
-                    <p className="mt-1 text-xs leading-5 text-[var(--color-gray-500)]">
-                      Cobra con tarjeta y deja que Stripe envíe el dinero a tu cuenta conectada.
+                    <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                      Acción inmediata: se abre Stripe para conectar o revisar tu cuenta.
                     </p>
                   </div>
                   <span
@@ -650,7 +846,7 @@ export function VendorShopSettingsClient({
                   type="button"
                   disabled={isConnectingStripe}
                   onClick={() => void handleConnectStripe()}
-                  className="mt-4 rounded-full border border-[var(--color-carbon)] px-4 py-2 text-sm font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100,#f9fafb)] disabled:opacity-60"
+                  className="mt-3 w-full rounded-full border border-[var(--color-carbon)] py-2 text-xs font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100,#f9fafb)] disabled:opacity-60 sm:w-auto sm:px-4"
                 >
                   {isConnectingStripe
                     ? "Abriendo Stripe..."
@@ -660,14 +856,12 @@ export function VendorShopSettingsClient({
                 </button>
               </div>
 
-              <div className="rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white p-4">
-                <div className="flex items-start justify-between gap-4">
+              <div className="rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[var(--color-carbon)]">
-                      ATH Móvil
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-[var(--color-gray-500)]">
-                      Tus clientes enviarán el pago fuera de la app y te compartirán el recibo para verificarlo.
+                    <p className="text-xs font-semibold text-[var(--color-carbon)]">ATH Móvil</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                      El cliente paga fuera de la app y sube el recibo; tú lo verificas.
                     </p>
                   </div>
                   <span
@@ -685,8 +879,8 @@ export function VendorShopSettingsClient({
                     {athConfigured ? "Activo" : "Pendiente"}
                   </span>
                 </div>
-                <label className="mt-4 block">
-                  <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <label className="mt-3 block">
+                  <span className="text-xs font-semibold text-[var(--color-carbon)]">
                     Número ATH Móvil
                   </span>
                   <input
@@ -696,42 +890,32 @@ export function VendorShopSettingsClient({
                     onChange={(e) =>
                       setFormState((s) => ({ ...s, athMovilPhone: e.target.value }))
                     }
-                    className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                    className={fieldInputClass}
                   />
-                  <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                    Déjalo en blanco si no usas ATH Móvil. Cuando lo añadas, tus clientes lo verán en la tienda.
+                  <p className="mt-1 text-[11px] text-[var(--color-gray-500)]">
+                    Opcional. En blanco si no usas ATH.
                   </p>
                 </label>
               </div>
 
               {!stripeConfigured && !athConfigured ? (
-                <div className="rounded-2xl border border-[var(--color-danger)] bg-red-50 px-4 py-3 text-xs leading-5 text-[var(--color-danger)]">
-                  Debes configurar Stripe o ATH Móvil antes de poder publicar y cobrar en tu tienda.
+                <div className="rounded-xl border border-[var(--color-danger)] bg-red-50 px-3 py-2.5 text-[11px] leading-snug text-[var(--color-danger)]">
+                  Configura Stripe o ATH Móvil para publicar y cobrar.
                 </div>
               ) : null}
             </div>
-
-            {/* Save button for settings sections */}
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => void handleSave()}
-              className="mt-4 w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
-            >
-              {isSaving ? "Guardando..." : "Guardar cambios"}
-            </button>
-          </Section>
+          </SettingsSection>
 
           {/* ── Contacto para compradores ── */}
-          <Section
-            label="Contacto para compradores"
-            description="Tus clientes verán estos datos durante el checkout con ATH Móvil para coordinar contigo."
+          <SettingsSection
+            label="Contacto en checkout"
+            description="Datos opcionales que ves en el flujo ATH para coordinar."
             Icon={UserIcon}
           >
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
-                  Teléfono de contacto
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                  Teléfono
                 </span>
                 <input
                   type="tel"
@@ -740,11 +924,11 @@ export function VendorShopSettingsClient({
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, contactPhone: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   WhatsApp
                 </span>
                 <input
@@ -754,15 +938,15 @@ export function VendorShopSettingsClient({
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, contactWhatsapp: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   Instagram
                 </span>
-                <div className="relative mt-1.5">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--color-gray-500)]">@</span>
+                <div className="relative mt-1">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-gray-500)]">@</span>
                   <input
                     type="text"
                     value={formState.contactInstagram}
@@ -770,55 +954,46 @@ export function VendorShopSettingsClient({
                     onChange={(e) =>
                       setFormState((s) => ({ ...s, contactInstagram: e.target.value.replace(/^@/, "") }))
                     }
-                    className="w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white py-3 pl-8 pr-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                    className={`${fieldInputClass} pl-7`}
                   />
                 </div>
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   Facebook
                 </span>
                 <input
                   type="text"
                   value={formState.contactFacebook}
-                  placeholder="Nombre o enlace de página"
+                  placeholder="Página o enlace"
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, contactFacebook: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
               </label>
-              <p className="text-xs leading-5 text-[var(--color-gray-500)]">
-                Deja en blanco los campos que no uses. Solo se mostrarán los que completes.
+              <p className="text-[11px] leading-snug text-[var(--color-gray-500)]">
+                Solo se muestran los campos que llenes.
               </p>
             </div>
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => void handleSave()}
-              className="mt-4 w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
-            >
-              {isSaving ? "Guardando..." : "Guardar cambios"}
-            </button>
-          </Section>
+          </SettingsSection>
 
           {/* ── Políticas ── */}
-          <Section
-            label="Políticas opcionales"
-            description="Tu tienda ya incluye políticas generales activas. Solo entra aquí si necesitas personalizarlas para tu negocio."
+          <SettingsSection
+            label="Políticas"
+            description="Ya tienes textos por defecto. Edita solo si hace falta; se publican solos tras la confirmación legal."
             Icon={ShieldCheckIcon}
           >
-            {/* Reassurance banner */}
-            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[var(--vendor-card-border)] bg-white px-4 py-3.5">
+            <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-[var(--vendor-card-border)] bg-white px-3 py-2.5">
               <div className="shrink-0 text-green-600">
-                <ShieldCheckIcon className="h-5 w-5" />
+                <ShieldCheckIcon className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[var(--color-carbon)]">
+                <p className="text-xs font-semibold text-[var(--color-carbon)]">
                   Políticas por defecto activas
                 </p>
-                <p className="mt-0.5 text-xs leading-4 text-[var(--color-gray-500)]">
-                  Tus clientes ya pueden ver estas políticas en tu tienda y durante el checkout.
+                <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                  Visibles en tu tienda y en el checkout.
                 </p>
               </div>
             </div>
@@ -826,18 +1001,18 @@ export function VendorShopSettingsClient({
             <button
               type="button"
               onClick={() => setIsPolicyEditorOpen((current) => !current)}
-              className="flex w-full items-center justify-between rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-4 py-3 text-left transition hover:bg-[var(--color-gray-100,#f9fafb)]"
+              className="flex w-full items-center justify-between rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-left transition hover:bg-[var(--color-gray-100,#f9fafb)]"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <span className="shrink-0 text-[var(--color-gray-500)]">
-                  <DocumentIcon className="h-5 w-5" />
+                  <DocumentIcon className="h-4 w-4" />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-[var(--color-carbon)]">
-                    Personalizar políticas
+                  <p className="text-xs font-semibold text-[var(--color-carbon)]">
+                    Personalizar textos
                   </p>
-                  <p className="mt-0.5 text-xs leading-4 text-[var(--color-gray-500)]">
-                    Edita el texto solo si tu negocio necesita condiciones distintas.
+                  <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                    Avanzado: plantillas y borradores.
                   </p>
                 </div>
               </div>
@@ -1009,7 +1184,7 @@ export function VendorShopSettingsClient({
 
                               {isDirty ? (
                                 <>
-                                  <label className="flex items-start gap-2.5 rounded-xl bg-white p-3 text-xs text-[var(--color-carbon)]">
+                                  <label className="flex items-start gap-2.5 rounded-xl bg-white p-3 text-[11px] text-[var(--color-carbon)]">
                                     <input
                                       type="checkbox"
                                       checked={draft.accepted}
@@ -1024,28 +1199,19 @@ export function VendorShopSettingsClient({
                                       }
                                       className="mt-0.5 shrink-0"
                                     />
-                                    <span className="leading-4">
+                                    <span className="leading-snug">
                                       Confirmo que esta política es precisa y cumple con las leyes aplicables a mi negocio.
                                     </span>
                                   </label>
-
-                                  <button
-                                    type="button"
-                                    disabled={isPublishingPolicy || !draft.accepted}
-                                    onClick={() => {
-                                      setSelectedPolicyType(policyType);
-                                      void handlePublishPolicy();
-                                    }}
-                                    className="w-full rounded-full bg-[var(--color-carbon)] py-2.5 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-40"
-                                  >
-                                    {isPublishingPolicy && selectedPolicyType === policyType
-                                      ? "Guardando..."
-                                      : "Publicar cambios"}
-                                  </button>
+                                  <p className="rounded-xl bg-white px-3 py-2 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                                    {draft.accepted
+                                      ? "Se publicará automáticamente en unos segundos junto con el resto de los cambios."
+                                      : "Marca la casilla para incluir esta política en el guardado automático."}
+                                  </p>
                                 </>
                               ) : (
-                                <p className="rounded-xl bg-white px-3 py-3 text-xs leading-5 text-[var(--color-gray-500)]">
-                                  Solo necesitas aceptar legalmente cuando cambias el texto de esta política.
+                                <p className="rounded-xl bg-white px-3 py-2.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                                  La confirmación legal solo aplica cuando modificas el texto.
                                 </p>
                               )}
                             </div>
@@ -1067,30 +1233,29 @@ export function VendorShopSettingsClient({
                 )}
               </>
             )}
-          </Section>
+          </SettingsSection>
 
           {/* ── Estado de tienda ── */}
-          <Section
-            label="Estado de tienda"
-            description="Revisa si tu tienda está activa o qué te falta para que se publique automáticamente."
+          <SettingsSection
+            label="Estado y visibilidad"
+            description="Borrador, activa o pausada. Las acciones de pausa aplican al momento."
             Icon={SettingsIcon}
           >
-            {/* Current status badge */}
-            <div className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] px-4 py-3">
-              <div className="flex items-center gap-3">
+            <div className="mb-3 flex items-center justify-between rounded-xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] px-3 py-2.5">
+              <div className="flex items-center gap-2.5">
                 <div className="shrink-0 text-[var(--color-carbon)]">
-                  <InfoIcon className="h-5 w-5" />
+                  <InfoIcon className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[var(--color-carbon)]">Estado actual</p>
-                  <p className="text-xs leading-5 text-[var(--color-gray-500)]">
-                    Controla cuándo tu tienda está visible para compradores.
+                  <p className="text-xs font-semibold text-[var(--color-carbon)]">Estado</p>
+                  <p className="text-[11px] leading-snug text-[var(--color-gray-500)]">
+                    Visible para compradores cuando está activa.
                   </p>
                 </div>
               </div>
               <span
                 className={[
-                  "flex items-center gap-1.5 text-sm font-semibold",
+                  "flex items-center gap-1.5 text-xs font-semibold",
                   STATUS_TEXT_STYLE[shopStatus ?? ""] ?? "text-[var(--color-gray-500)]",
                 ].join(" ")}
               >
@@ -1102,16 +1267,15 @@ export function VendorShopSettingsClient({
               </span>
             </div>
 
-            {/* Blocking reasons checklist */}
             {blockingReasons.length > 0 && (
-              <div className="mb-4 rounded-2xl border border-[var(--vendor-card-border)] border-l-[3px] border-l-[var(--color-danger)] bg-white p-4">
-                <p className="mb-2 text-sm font-semibold text-[var(--color-danger)]">
+              <div className="mb-3 rounded-xl border border-[var(--vendor-card-border)] border-l-[3px] border-l-[var(--color-danger)] bg-white p-3">
+                <p className="mb-1.5 text-xs font-semibold text-[var(--color-danger)]">
                   Para activarla automáticamente:
                 </p>
-                <ul className="space-y-2">
+                <ul className="space-y-1.5">
                   {blockingReasons.map((reason) => (
-                    <li key={reason} className="flex items-start gap-2 text-sm leading-5 text-[var(--color-danger)]">
-                      <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                    <li key={reason} className="flex items-start gap-2 text-xs leading-snug text-[var(--color-danger)]">
+                      <AlertIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>{reason}</span>
                     </li>
                   ))}
@@ -1121,46 +1285,53 @@ export function VendorShopSettingsClient({
 
             {shopStatus === "draft" && (
               blockingReasons.length > 0 ? (
-                <p className="text-sm leading-6 text-[var(--color-gray-500)]">
-                  Completa los puntos de arriba y activaremos tu tienda automáticamente.
+                <p className="text-xs leading-snug text-[var(--color-gray-500)]">
+                  Completa lo anterior y activaremos tu tienda automáticamente.
                 </p>
               ) : (
-                <p className="text-sm leading-6 text-[var(--color-gray-500)]">
-                  Tu tienda ya está lista. La estamos activando ahora mismo.
+                <p className="text-xs leading-snug text-[var(--color-gray-500)]">
+                  Tu tienda está lista; la estamos activando.
                 </p>
               )
             )}
 
             {shopStatus === "paused" && (
-              <p className="mb-4 text-sm leading-6 text-[var(--color-gray-500)]">
-                Tu tienda está pausada por decisión tuya. Reactívala cuando quieras.
+              <p className="mb-3 text-xs leading-snug text-[var(--color-gray-500)]">
+                Pausada por ti. Reactívala cuando quieras.
               </p>
             )}
+
+            {isActive || shopStatus === "paused" ? (
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">
+                Acciones inmediatas
+              </p>
+            ) : null}
 
             {isActive ? (
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
-                  disabled={isSaving}
+                  disabled={isUpdatingStatus || isSavingSettings}
                   onClick={() => void handleStatusUpdate("paused")}
-                  className="flex-1 rounded-full border border-[var(--color-gray-200,#e5e7eb)] py-3 text-sm font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)] disabled:opacity-60"
+                  className="flex-1 rounded-full border border-[var(--color-gray-200,#e5e7eb)] py-2.5 text-xs font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)] disabled:opacity-60"
                 >
-                  Pausar tienda
+                  {isUpdatingStatus ? "Aplicando..." : "Pausar tienda"}
                 </button>
               </div>
             ) : shopStatus === "paused" ? (
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
-                  disabled={isSaving || blockingReasons.length > 0}
+                  disabled={isUpdatingStatus || isSavingSettings || blockingReasons.length > 0}
                   onClick={() => void handleStatusUpdate("active")}
-                  className="flex-1 rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
+                  className="flex-1 rounded-full bg-[var(--color-carbon)] py-2.5 text-xs font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
                 >
-                  Reactivar tienda
+                  {isUpdatingStatus ? "Aplicando..." : "Reactivar tienda"}
                 </button>
               </div>
             ) : null}
-          </Section>
+          </SettingsSection>
+          </div>
         </>
       )}
     </VendorPageShell>

@@ -639,7 +639,11 @@ export function AthMovilCheckoutWizard({
                         <span className="font-semibold">{formatUsd(subtotalUsd)}</span>
                       </div>
                       <div className="mt-1 flex justify-between">
-                        <span>Envío</span>
+                        <span>
+                          {effectiveFulfillment === "shipping"
+                            ? "Envío a domicilio"
+                            : "Recogido en tienda"}
+                        </span>
                         <span className="font-semibold">
                           {effectiveFulfillment === "shipping"
                             ? formatUsd(shippingFeeUsd)

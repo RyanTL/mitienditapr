@@ -172,6 +172,72 @@ export function deleteVendorProductImage(productId: string, imageId: string) {
   );
 }
 
+export function createVendorProductVariant(
+  productId: string,
+  payload: VendorVariantInput,
+) {
+  return fetchJson<{ ok: true } & VendorShopActivationResponse>(
+    `/api/vendor/products/${productId}/variants`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        title: payload.title,
+        sku: payload.sku,
+        priceUsd: payload.priceUsd,
+        stockQty: payload.stockQty ?? 0,
+        isActive: payload.isActive,
+        attributes: payload.attributes,
+      }),
+    },
+  );
+}
+
+export function updateVendorProductVariant(
+  variantId: string,
+  payload: Partial<{
+    title: string;
+    sku: string | null;
+    priceUsd: number;
+    stockQty: number;
+    isActive: boolean;
+    attributes: Record<string, string>;
+  }>,
+) {
+  const body: Record<string, unknown> = {};
+  if (payload.title !== undefined) {
+    body.title = payload.title;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "sku")) {
+    body.sku = payload.sku;
+  }
+  if (payload.priceUsd !== undefined) {
+    body.priceUsd = payload.priceUsd;
+  }
+  if (payload.stockQty !== undefined) {
+    body.stockQty = payload.stockQty;
+  }
+  if (payload.isActive !== undefined) {
+    body.isActive = payload.isActive;
+  }
+  if (payload.attributes !== undefined) {
+    body.attributes = payload.attributes;
+  }
+
+  return fetchJson<{ ok: true } & VendorShopActivationResponse>(
+    `/api/vendor/variants/${variantId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export function createVendorBillingPortalSession() {
+  return fetchJson<{ url: string }>("/api/stripe/billing-portal", {
+    method: "POST",
+  });
+}
+
 export function fetchVendorOrders() {
   return fetchJson<{
     orders: Array<{

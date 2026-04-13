@@ -15,7 +15,9 @@ import {
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
+  getVendorSubscriptionByShopId,
 } from "@/lib/supabase/vendor-server";
+import { vendorHasPremiumProductFeatures } from "@/lib/vendor/vendor-subscription-gates";
 
 type VariantPayload = {
   title?: string;
@@ -138,6 +140,29 @@ export async function POST(
     const product = productRow as ProductRow | null;
     if (!product || product.shop_id !== shop.id) {
       return NextResponse.json({ error: "Producto no encontrado." }, { status: 404 });
+    }
+
+    const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
+    const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+
+    const { count: variantCount, error: variantCountError } = await dataClient
+      .from("product_variants")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", product.id);
+
+    if (variantCountError) {
+      throw new Error(variantCountError.message);
+    }
+
+    if (!hasPremiumProductFeatures && (variantCount ?? 0) >= 1) {
+      return NextResponse.json(
+        {
+          error:
+            "El plan gratuito incluye una sola variante por producto. Suscríbete al Plan Vendedor para variantes ilimitadas.",
+          upgradeRequired: true,
+        },
+        { status: 403 },
+      );
     }
 
     const { error: insertError } = await dataClient.from("product_variants").insert({
