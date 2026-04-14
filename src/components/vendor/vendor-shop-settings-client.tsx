@@ -40,7 +40,6 @@ import {
   createStripeConnectAccountLink,
   createVendorBillingPortalSession,
   fetchVendorShopSettings,
-  publishVendorShop,
   uploadVendorImage,
   updateVendorShopSettings,
 } from "@/lib/vendor/client";
@@ -499,25 +498,6 @@ export function VendorShopSettingsClient({
     }
   }, []);
 
-  const handlePublishShop = useCallback(async () => {
-    setIsPublishing(true);
-    setErrorMessage(null);
-    setFeedbackMessage(null);
-    try {
-      const result = await publishVendorShop();
-      if (result.published) {
-        await loadSettings();
-        setFeedbackMessage("¡Tienda publicada!");
-      } else {
-        setErrorMessage("No se puede publicar: " + result.blockingReasons.join(", "));
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "No se pudo publicar la tienda.");
-    } finally {
-      setIsPublishing(false);
-    }
-  }, [loadSettings]);
-
   const handleUploadLogo = useCallback(async (file: File) => {
     setIsUploadingLogo(true);
     setErrorMessage(null);
@@ -565,10 +545,6 @@ export function VendorShopSettingsClient({
   }, []);
 
   const subscription = statusData?.subscription ?? null;
-
-  const shopStatus = statusData?.shop?.status;
-  const isActive = shopStatus === "active";
-  const blockingReasons = statusData?.checks.blockingReasons ?? [];
 
   return (
     <VendorPageShell

@@ -71,13 +71,6 @@ const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
   ...VENDOR_ORDER_STATUSES.map((s) => ({ value: s as FilterValue, label: STATUS_LABELS[s] })),
 ];
 
-type FilterValue = VendorOrderStatus | "all";
-
-const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
-  { value: "all", label: "Todos" },
-  ...VENDOR_ORDER_STATUSES.map((s) => ({ value: s as FilterValue, label: STATUS_LABELS[s] })),
-];
-
 export function VendorOrdersClient() {
   const [orders, setOrders] = useState<VendorOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);

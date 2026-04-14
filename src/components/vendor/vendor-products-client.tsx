@@ -814,7 +814,7 @@ function ProductSheet({
                 onChange={(e) => setDraft((d) => ({ ...d, priceUsd: e.target.value }))}
                 className="flex-1 bg-transparent py-2.5 pr-3 text-sm font-medium text-[var(--color-carbon)] focus:outline-none"
               />
-            )}
+            </div>
           </div>
 
           {/* Description */}
