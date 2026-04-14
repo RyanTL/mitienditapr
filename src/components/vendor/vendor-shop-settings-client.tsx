@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -593,12 +594,12 @@ export function VendorShopSettingsClient({
                 <p className="text-xs text-[var(--color-gray-500)]">
                   Aún no hay una suscripción registrada para esta tienda.
                 </p>
-                <a
+                <Link
                   href="/vendedor/suscripcion"
                   className="inline-flex rounded-full bg-black px-4 py-2 text-xs font-semibold text-white"
                 >
                   Ver planes
-                </a>
+                </Link>
               </div>
             ) : (
               <div className="space-y-3 text-xs text-[var(--color-gray-500)]">

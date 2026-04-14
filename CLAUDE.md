@@ -5,6 +5,7 @@
 Online marketplace for local vendors in Puerto Rico. Most local sellers don't know how to use technology, so this app makes it dead simple: pay $10/mo, get a shop, share it via QR code or link. Buyers browse the marketplace or visit shops directly.
 
 - **Business model**: $10 USD/month Stripe subscription per vendor
+- **MVP payments**: **Stripe** charges vendors the **$10/mo platform subscription**. Vendors configure **Stripe Connect** (buyer pays with **card** on Stripe Checkout) and/or **ATH Móvil** (buyer pays off-app, receipt flow in-app). Shops can offer **one or both**; buyers see whatever the shop has set up. Launch readiness: subscription billing works, and **both** buyer paths are smoke-tested where enabled.
 - **Target audience**: Local vendors in Puerto Rico (sellers) and their customers (buyers)
 - **MVP**: Web only, mobile-first design
 - **Language rule**: All code (variables, comments, function names) in English. All user-facing copy in Spanish.
@@ -14,7 +15,8 @@ Online marketplace for local vendors in Puerto Rico. Most local sellers don't kn
 - **Next.js 16** (App Router) + **React 19** + **TypeScript**
 - **Tailwind CSS v4** + **Shadcn/UI** components
 - **Supabase** — PostgreSQL, Auth (email/password), Storage (product images), RLS
-- **Stripe** — vendor subscriptions ($10/mo) + Connect (future vendor payouts)
+- **Stripe** — vendor **subscription** ($10/mo) + **Connect** for **buyer card checkout** (connected account checkout sessions); webhooks must be live for develop and production
+- **ATH Móvil** — optional buyer rail per shop: phone on file + receipt upload / vendor verification (see `supabase/MIGRATIONS_ORDER.md`)
 - **Vercel** — hosting and deployment
 - **React Compiler** enabled via `babel-plugin-react-compiler`
 
@@ -100,7 +102,7 @@ Every table has Row Level Security enabled. Key rules:
 
 ### Migrations
 
-Run in order from `supabase/migrations/`. See `supabase/SETUP.md` for instructions.
+Run `supabase/schema.sql`, then every file in `supabase/migrations/` in the order in **`supabase/MIGRATIONS_ORDER.md`**. See `supabase/SETUP.md` for local instructions and `docs/production-launch.md` for prod vs develop projects.
 
 ## Supabase Client Patterns
 
@@ -114,7 +116,7 @@ Auth is handled via Supabase middleware in `middleware.ts` which refreshes sessi
 
 ## Stripe Integration
 
-### Subscription Flow
+### Subscription flow (vendors — MVP)
 
 1. Vendor starts onboarding → reaches billing step
 2. App creates Stripe Checkout session via `/api/stripe/subscription/checkout`
@@ -122,16 +124,23 @@ Auth is handled via Supabase middleware in `middleware.ts` which refreshes sessi
 4. Webhook (`/api/stripe/webhook`) processes `checkout.session.completed` and `invoice.paid`
 5. `vendor_subscriptions` table updated, shop status set to active
 
+### Buyer checkout (MVP — Stripe and/or ATH Móvil)
+
+- **Cards (Stripe Connect):** Buyer Checkout Session via `/api/checkout/stripe/session` when the shop has a linked Connect account (`stripe_connect_account_id`). Uses `StripeCheckoutWizard` in the cart UI.
+- **ATH Móvil:** Buyer flow via `/api/checkout/ath-movil` when the shop has `ath_movil_phone` set. Vendor confirms payment from the vendor orders UI.
+
+A shop must configure **at least one** of Connect or ATH to publish (`vendor-server` publish checks). Smoke-test **both** rails on develop (vendor with both enabled), then production, plus emails (Resend).
+
 ### Feature Flags
 
 - `ENABLE_VENDOR_MODE` — enables vendor routes and features
 - `ENABLE_STRICT_DB_MODE` — enforces real DB queries (vs. mock fallbacks)
 - `ENABLE_CATALOG_SEED` — enables dev seeding endpoint
-- `BILLING_BYPASS` — skips Stripe for local development
+- `ENABLE_VENDOR_BILLING_BYPASS` — when `true`, skips Stripe vendor subscription requirements; defaults to on in development when unset (see `src/lib/vendor/billing-mode.ts`). Use `false` on deployed develop and production for realistic billing.
 
 ### Stripe Connect
 
-Account linking via `/api/stripe/connect/account-link` for future vendor payouts.
+Account linking via `/api/stripe/connect/account-link` — required for **buyer card payments** to the vendor’s connected account. Distinct from the **platform subscription** Checkout used for the $10/mo vendor fee.
 
 ## Conventions
 
@@ -147,18 +156,21 @@ Account linking via `/api/stripe/connect/account-link` for future vendor payouts
 
 ## Environment Variables
 
-Required in `.env.local`:
+Required in `.env.local` (see `.env.example`):
 
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SECRET_KEY
+SUPABASE_VENDOR_IMAGES_BUCKET
 NEXT_PUBLIC_APP_URL
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 STRIPE_VENDOR_PRICE_ID
 ENABLE_VENDOR_MODE=true
 ENABLE_STRICT_DB_MODE=true
+RESEND_API_KEY
+RESEND_FROM_EMAIL
 ```
 
 ## MVP Gaps — What's Missing Before Launch
@@ -167,10 +179,12 @@ These are known gaps and final touches still needed:
 
 ### Critical (must-have for launch)
 
-- Real checkout flow for buyers (order placement currently creates order but no payment collection from buyers)
-- Buyer order confirmation / receipt page
-- Email notifications (order placed, order status updates, welcome email) — Resend integration; welcome on signup confirmation, buyer order confirmation + vendor new order on ATH Móvil checkout, buyer status updates when vendor changes order status, vendor notification when buyer cancels
-- Stripe Connect payout flow for vendors (account linking exists but no payout triggers)
+- **Stripe (platform — vendors)**: subscription Checkout + webhooks on develop and production with `ENABLE_VENDOR_BILLING_BYPASS=false`; shops activate after paid subscription
+- **Stripe Connect (buyers — cards)**: vendor completes Connect onboarding; buyer completes **Stripe** checkout for a cart; webhooks / order payment status correct — smoke-test on develop then production
+- **ATH Móvil (buyers)**: vendor sets ATH phone; buyer completes ATH flow, receipt upload, vendor verification — smoke-test on develop then production
+- Buyer order confirmation / receipt page (verify UX matches emails and support expectations)
+- Email notifications — **Resend** (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`); welcome, order confirmations, status updates, cancellations (both payment rails where applicable)
+- **Connect payout / transfer automation** beyond buyer checkout — confirm what Stripe dashboard settlement gives you; extra automation can be phased after MVP if checkout already works
 - Error boundaries and user-friendly error pages (404, 500) — `notFound()` wired into shop/product pages; custom `not-found.tsx` and `error.tsx` added at app root
 - SEO metadata per page (page titles, descriptions, Open Graph) — shop and product pages have generateMetadata; home covered by root layout
 

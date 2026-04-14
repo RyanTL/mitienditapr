@@ -4,14 +4,16 @@ Mobile-first online marketplace that lets local vendors in Puerto Rico sell thei
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 16 (App Router) |
-| Language | TypeScript |
-| UI | React 19, Tailwind CSS v4, custom UI components |
-| Database | Supabase (PostgreSQL + Auth + Storage) |
-| Payments | Stripe (Subscriptions + Connect via direct API integration) |
-| Hosting | Vercel |
+
+| Layer     | Technology                                                  |
+| --------- | ----------------------------------------------------------- |
+| Framework | Next.js 16 (App Router)                                     |
+| Language  | TypeScript                                                  |
+| UI        | React 19, Tailwind CSS v4, custom UI components             |
+| Database  | Supabase (PostgreSQL + Auth + Storage)                      |
+| Payments  | Stripe (vendor subscription + Connect for buyer cards) + ATH Móvil (buyer option per shop) |
+| Hosting   | Vercel                                                      |
+
 
 ## Getting Started
 
@@ -67,26 +69,30 @@ npm run build
 
 ### Buyer
 
-| Route | Description |
-|-------|-------------|
-| `/` | Marketplace home — browse shops |
-| `/{shopSlug}` | Shop page |
-| `/{shopSlug}/producto/{id}` | Product detail |
-| `/carrito` | Shopping cart |
-| `/ordenes` | Order history |
-| `/favoritos` | Saved products |
-| `/cuenta` | Account settings |
-| `/s/{shareCode}` | Shop shortlink redirect |
+
+| Route                       | Description                     |
+| --------------------------- | ------------------------------- |
+| `/`                         | Marketplace home — browse shops |
+| `/{shopSlug}`               | Shop page                       |
+| `/{shopSlug}/producto/{id}` | Product detail                  |
+| `/carrito`                  | Shopping cart                   |
+| `/ordenes`                  | Order history                   |
+| `/favoritos`                | Saved products                  |
+| `/cuenta`                   | Account settings                |
+| `/s/{shareCode}`            | Shop shortlink redirect         |
+
 
 ### Vendor
 
-| Route | Description |
-|-------|-------------|
-| `/vendedor/onboarding` | 8-step setup wizard |
-| `/vendedor/panel` | Dashboard |
-| `/vendedor/productos` | Product management |
-| `/vendedor/pedidos` | Order management |
-| `/vendedor/tienda` | Shop settings & policies |
+
+| Route                  | Description              |
+| ---------------------- | ------------------------ |
+| `/vendedor/onboarding` | 8-step setup wizard      |
+| `/vendedor/panel`      | Dashboard                |
+| `/vendedor/productos`  | Product management       |
+| `/vendedor/pedidos`    | Order management         |
+| `/vendedor/tienda`     | Shop settings & policies |
+
 
 ### API
 
@@ -122,7 +128,8 @@ src/
     utils.ts            General helpers
 supabase/
   schema.sql            Base schema
-  migrations/           Ordered SQL migrations
+  migrations/           SQL migrations (apply order: MIGRATIONS_ORDER.md)
+  MIGRATIONS_ORDER.md   Canonical migration sequence for every environment
   SETUP.md              Local Supabase setup guide
 docs/
   production-launch.md  Production deployment runbook
@@ -131,6 +138,7 @@ docs/
 
 ## Documentation
 
-- **[Production Launch Runbook](docs/production-launch.md)** — staging/production setup, DNS, Stripe config, release gates
+- **[Production Launch Runbook](docs/production-launch.md)** — `develop` / `main`, two Supabase projects, Vercel env scopes, DNS, Stripe, Resend, release gates
 - **[Live Test Checklist](docs/live-test-checklist.md)** — pre-launch smoke tests and verification
 - **[Supabase Setup](supabase/SETUP.md)** — local development database setup
+
