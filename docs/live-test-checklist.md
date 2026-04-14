@@ -31,7 +31,7 @@
 
 ## 4) Runtime checks
 
-- `npm run verify:release -- https://<YOUR_DEVELOP_APP_URL>` (branch `develop` / Preview). Prefer a stable origin such as `**https://dev.mitiendita.<your-tld>**` once DNS points to Vercel.
+- `npm run verify:release -- https://<YOUR_DEVELOP_APP_URL>` (branch `develop` / Preview). Prefer a stable origin such as `**https://dev.mitiendita.<your-tld>`** once DNS points to Vercel.
 - `npm run verify:release -- https://mitienditapr.com` (or your production URL) before public cutover.
 - `GET /api/healthz` returns `ok: true`.
 - `GET /api/readiness` returns HTTP 200 and `ok: true`.
@@ -71,4 +71,3 @@
 - Daily bug triage time fixed and documented.
 - P0 / P1 hotfix SLA <= 24h.
 - Exit criteria tracked: zero P0, no data corruption, stable funnel for 72h.
-

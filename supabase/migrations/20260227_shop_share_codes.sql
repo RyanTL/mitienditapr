@@ -19,7 +19,7 @@ begin
     -- Use md5-based entropy to avoid environment-specific dependency issues with
     -- gen_random_bytes while still generating collision-resistant short codes.
     candidate := md5(
-      random()::text || clock_timestamp()::text || txid_current()::text,
+      random()::text || clock_timestamp()::text || txid_current()::text
     );
     exit when not exists (
       select 1
