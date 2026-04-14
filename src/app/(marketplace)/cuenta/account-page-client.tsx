@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
 import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
 import {
   changeAccountPassword,
-  fetchAccountSnapshot,
   requestAccountEmailChange,
   updateAccountProfile,
 } from "@/lib/account/client";
@@ -17,6 +16,7 @@ type AccountPageClientProps = {
   initialFullName: string;
   initialPhone: string;
   initialAddress: string;
+  initialZipCode: string;
 };
 
 function getUserInitial(name: string, email: string): string {
@@ -95,11 +95,13 @@ export function AccountPageClient({
   initialFullName,
   initialPhone,
   initialAddress,
+  initialZipCode,
 }: AccountPageClientProps) {
   const [fullName, setFullName] = useState(initialFullName);
   const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState(initialPhone);
   const [address, setAddress] = useState(initialAddress);
+  const [zipCode, setZipCode] = useState(initialZipCode);
   const [currentAuthEmail, setCurrentAuthEmail] = useState(initialEmail);
 
   const [isSavingInfo, setIsSavingInfo] = useState(false);
@@ -122,21 +124,6 @@ export function AccountPageClient({
     [confirmPassword, currentPassword, isSavingPassword, newPassword],
   );
 
-  const refreshSnapshot = useCallback(async () => {
-    try {
-      const snap = await fetchAccountSnapshot();
-      setFullName(snap.fullName);
-      setPhone(snap.phone);
-      setAddress(snap.address);
-      setCurrentAuthEmail(snap.email);
-      setEmail(snap.email);
-    } catch {
-      // keep initial values
-    }
-  }, []);
-
-  useEffect(() => { void refreshSnapshot(); }, [refreshSnapshot]);
-
   const handleSaveInfo = async (e: FormEvent) => {
     e.preventDefault();
     setInfoError(null);
@@ -147,7 +134,7 @@ export function AccountPageClient({
     const currentEmail = currentAuthEmail.trim().toLowerCase();
 
     try {
-      await updateAccountProfile({ fullName, phone, address });
+      await updateAccountProfile({ fullName, phone, address, zipCode });
 
       if (nextEmail !== currentEmail) {
         await requestAccountEmailChange(nextEmail);
@@ -246,6 +233,20 @@ export function AccountPageClient({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="(939) 000-0000"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <FieldLabel htmlFor="zip-code">Código postal</FieldLabel>
+                <input
+                  id="zip-code"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={5}
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                  placeholder="00XXX"
                   className={inputClass}
                 />
               </div>

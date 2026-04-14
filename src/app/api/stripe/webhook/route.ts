@@ -2,16 +2,29 @@ import { NextResponse } from "next/server";
 
 import {
   readStripeWebhookSecret,
+  readStripeSubscription,
   type StripeInvoiceEventObject,
+  type StripeCheckoutSessionResponse,
   type StripeSubscriptionEventObject,
   type StripeWebhookEvent,
   verifyStripeWebhookSignature,
 } from "@/lib/vendor/stripe";
+import {
+  clearPurchasedCartItems,
+  findOrderPaymentByCheckoutSessionId,
+  releaseOrderInventory,
+  updateOrderPaymentState,
+} from "@/lib/orders/server";
+import {
+  activateVendorStripeSubscription,
+  isActiveVendorSubscriptionStatus,
+  normalizeStripeSubscriptionStatus,
+} from "@/lib/vendor/subscription-activation";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
-  ensureVendorOnboardingRecord,
-  upsertVendorOnboardingStep,
-} from "@/lib/supabase/vendor-server";
+  sendBuyerOrderConfirmationEmail,
+  sendVendorNewOrderEmail,
+} from "@/lib/email/resend";
 
 type VendorSubscriptionRow = {
   id: string;
@@ -30,43 +43,210 @@ type ShopRow = {
   published_at: string | null;
 };
 
+type ShopProfileRow = {
+  vendor_profile_id: string;
+};
+
 type StripeCheckoutSessionEventObject = {
   id: string;
   customer?: string;
   subscription?: string;
+  payment_status?: string;
+  payment_intent?: string;
+  client_reference_id?: string | null;
   metadata?: Record<string, string>;
 };
 
-function isActiveStatus(status: string | null | undefined) {
-  if (!status) {
-    return false;
+type OrderNotificationRow = {
+  id: string;
+  profile_id: string;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  total_usd: number;
+  shop_id: string;
+  shops: Array<{
+    id: string;
+    slug: string;
+    vendor_name: string;
+    vendor_profile_id: string;
+  }> | null;
+};
+
+type OrderItemNotificationRow = {
+  order_id: string;
+  quantity: number;
+  unit_price_usd: number;
+  products: Array<{
+    name: string;
+  }> | null;
+};
+
+type VendorProfileRow = {
+  email: string | null;
+};
+
+async function fetchStripeOrderNotificationContext(orderId: string) {
+  const admin = createSupabaseAdminClient();
+  const [{ data: orderData, error: orderError }, { data: itemData, error: itemError }] =
+    await Promise.all([
+      admin
+        .from("orders")
+        .select(
+          "id,profile_id,buyer_name,buyer_email,total_usd,shop_id,shops(id,slug,vendor_name,vendor_profile_id)",
+        )
+        .eq("id", orderId)
+        .maybeSingle(),
+      admin
+        .from("order_items")
+        .select("order_id,quantity,unit_price_usd,products(name)")
+        .eq("order_id", orderId),
+    ]);
+
+  if (orderError) {
+    throw new Error(orderError.message);
   }
 
-  return status === "active" || status === "trialing";
+  if (itemError) {
+    throw new Error(itemError.message);
+  }
+
+  const order = orderData as OrderNotificationRow | null;
+  const shopInfo = order?.shops?.[0] ?? null;
+  if (!order || !shopInfo) {
+    return null;
+  }
+
+  const { data: vendorData, error: vendorError } = await admin
+    .from("profiles")
+    .select("email")
+    .eq("id", shopInfo.vendor_profile_id)
+    .maybeSingle();
+
+  if (vendorError) {
+    throw new Error(vendorError.message);
+  }
+
+  return {
+    order,
+    items: ((itemData ?? []) as unknown as OrderItemNotificationRow[]).map((item) => ({
+      name: item.products?.[0]?.name ?? "Producto",
+      quantity: item.quantity,
+      unitPriceUsd: Number(item.unit_price_usd),
+    })),
+    vendorEmail: (vendorData as VendorProfileRow | null)?.email ?? null,
+  };
 }
 
-function normalizeSubscriptionStatus(status: string | undefined) {
-  if (!status) {
-    return "inactive";
+async function handleBuyerCheckoutPaid(
+  session: StripeCheckoutSessionEventObject | StripeCheckoutSessionResponse,
+) {
+  const admin = createSupabaseAdminClient();
+  const orderId =
+    session.metadata?.order_id ??
+    (typeof session.client_reference_id === "string" ? session.client_reference_id : null);
+  const paymentIntentId =
+    typeof session.payment_intent === "string" ? session.payment_intent : null;
+
+  if (!orderId) {
+    return;
   }
 
-  const validStatuses = new Set([
-    "active",
-    "trialing",
-    "past_due",
-    "unpaid",
-    "canceled",
-    "incomplete",
-    "incomplete_expired",
-    "paused",
-    "inactive",
-  ]);
-
-  if (validStatuses.has(status)) {
-    return status;
+  const paymentRecord = await findOrderPaymentByCheckoutSessionId(admin, session.id);
+  if (paymentRecord?.status === "paid" || paymentRecord?.status === "refunded") {
+    return;
   }
 
-  return "inactive";
+  const { data: orderRow, error: orderError } = await admin
+    .from("orders")
+    .select("id,profile_id")
+    .eq("id", orderId)
+    .maybeSingle<{ id: string; profile_id: string }>();
+
+  if (orderError) {
+    throw new Error(orderError.message);
+  }
+
+  if (!orderRow) {
+    return;
+  }
+
+  await updateOrderPaymentState({
+    admin,
+    orderId,
+    paymentStatus: "paid",
+    orderStatus: "paid",
+    checkoutSessionId: session.id,
+    paymentIntentId,
+  });
+
+  await clearPurchasedCartItems(admin, orderRow.profile_id, orderId);
+
+  const notificationContext = await fetchStripeOrderNotificationContext(orderId);
+  if (!notificationContext) {
+    return;
+  }
+
+  if (notificationContext.vendorEmail) {
+    const shopInfo = notificationContext.order.shops?.[0];
+    if (shopInfo) {
+    void sendVendorNewOrderEmail({
+      to: notificationContext.vendorEmail,
+      vendorName: shopInfo.vendor_name,
+      orderId,
+      buyerEmail: notificationContext.order.buyer_email,
+      buyerName: notificationContext.order.buyer_name,
+      items: notificationContext.items,
+      totalUsd: Number(notificationContext.order.total_usd),
+      paymentMethod: "stripe",
+    });
+    }
+  }
+
+  if (notificationContext.order.buyer_email) {
+    const shopInfo = notificationContext.order.shops?.[0];
+    if (shopInfo) {
+    void sendBuyerOrderConfirmationEmail({
+      to: notificationContext.order.buyer_email,
+      buyerName: notificationContext.order.buyer_name,
+      orderId,
+      shopName: shopInfo.vendor_name,
+      items: notificationContext.items,
+      totalUsd: Number(notificationContext.order.total_usd),
+      paymentMethod: "stripe",
+    });
+    }
+  }
+}
+
+async function handleBuyerCheckoutUnpaid(input: {
+  sessionId: string;
+  status: "failed" | "expired";
+  failedReason: string;
+}) {
+  const admin = createSupabaseAdminClient();
+  const paymentRecord = await findOrderPaymentByCheckoutSessionId(admin, input.sessionId);
+
+  if (!paymentRecord) {
+    return;
+  }
+
+  if (
+    paymentRecord.status === "paid" ||
+    paymentRecord.status === "refunded" ||
+    paymentRecord.status === input.status
+  ) {
+    return;
+  }
+
+  await updateOrderPaymentState({
+    admin,
+    orderId: paymentRecord.order_id,
+    paymentStatus: input.status,
+    checkoutSessionId: input.sessionId,
+    failedReason: input.failedReason,
+  });
+
+  await releaseOrderInventory(admin, paymentRecord.order_id);
 }
 
 function shouldHandleStripeManagedSubscription(
@@ -142,7 +322,7 @@ async function updateShopVisibilityFromSubscription(input: {
     return;
   }
 
-  if (isActiveStatus(input.subscriptionStatus)) {
+  if (isActiveVendorSubscriptionStatus(input.subscriptionStatus)) {
     const { error: restoreError } = await admin
       .from("shops")
       .update({
@@ -183,22 +363,23 @@ async function updateShopVisibilityFromSubscription(input: {
   }
 }
 
-async function upsertWebhookEvent(event: StripeWebhookEvent) {
+async function isWebhookEventAlreadyProcessed(eventId: string) {
   const admin = createSupabaseAdminClient();
   const { data: existingEvent, error: existingEventError } = await admin
     .from("stripe_webhook_events")
     .select("id")
-    .eq("id", event.id)
+    .eq("id", eventId)
     .maybeSingle();
 
   if (existingEventError) {
     throw new Error(existingEventError.message);
   }
 
-  if (existingEvent) {
-    return false;
-  }
+  return !!existingEvent;
+}
 
+async function markWebhookEventProcessed(event: StripeWebhookEvent) {
+  const admin = createSupabaseAdminClient();
   const { error: insertError } = await admin.from("stripe_webhook_events").insert({
     id: event.id,
     type: event.type,
@@ -209,8 +390,6 @@ async function upsertWebhookEvent(event: StripeWebhookEvent) {
   if (insertError) {
     throw new Error(insertError.message);
   }
-
-  return true;
 }
 
 async function handleInvoiceEvent(event: StripeWebhookEvent<StripeInvoiceEventObject>) {
@@ -252,16 +431,40 @@ async function handleInvoiceEvent(event: StripeWebhookEvent<StripeInvoiceEventOb
   }
 
   if (event.type === "invoice.paid") {
-    const { error: updateError } = await admin
-      .from("vendor_subscriptions")
-      .update({
-        status: "active",
-        last_invoice_status: invoice.status ?? "paid",
-      })
-      .eq("id", subscription.id);
+    const { data: shopProfileData, error: shopProfileError } = await admin
+      .from("shops")
+      .select("vendor_profile_id")
+      .eq("id", subscription.shop_id)
+      .maybeSingle();
 
-    if (updateError) {
-      throw new Error(updateError.message);
+    if (shopProfileError) {
+      throw new Error(shopProfileError.message);
+    }
+
+    const shopProfile = shopProfileData as ShopProfileRow | null;
+
+    if (shopProfile?.vendor_profile_id) {
+      await activateVendorStripeSubscription({
+        supabase: admin,
+        shopId: subscription.shop_id,
+        profileId: shopProfile.vendor_profile_id,
+        customerId: subscription.stripe_customer_id,
+        subscriptionId: subscription.stripe_subscription_id,
+        status: "active",
+        lastInvoiceStatus: invoice.status ?? "paid",
+      });
+    } else {
+      const { error: updateError } = await admin
+        .from("vendor_subscriptions")
+        .update({
+          status: "active",
+          last_invoice_status: invoice.status ?? "paid",
+        })
+        .eq("id", subscription.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
     }
 
     await updateShopVisibilityFromSubscription({
@@ -283,36 +486,61 @@ async function handleCheckoutSessionCompleted(
   const vendorProfileId = session.metadata?.vendor_profile_id;
 
   const admin = createSupabaseAdminClient();
-  if (shopId) {
-    const { error } = await admin
-      .from("vendor_subscriptions")
-      .upsert(
-        {
-          shop_id: shopId,
-          provider: "stripe",
-          status: "active",
-          stripe_customer_id: customerId,
-          stripe_subscription_id: subscriptionId,
-        },
-        { onConflict: "shop_id" },
-      );
-
-    if (error) {
-      throw new Error(error.message);
+  if (session.metadata?.kind === "buyer_order") {
+    if (session.payment_status === "paid") {
+      await handleBuyerCheckoutPaid(session);
     }
-
-    // Mark onboarding as completed so the vendor can access the dashboard.
-    if (vendorProfileId) {
-      const onboarding = await ensureVendorOnboardingRecord(admin, vendorProfileId);
-      await upsertVendorOnboardingStep(
-        admin,
-        vendorProfileId,
-        "completed",
-        Math.max(onboarding.current_step, 2),
-        onboarding.data_json,
-      );
-    }
+    return;
   }
+
+  if (shopId && vendorProfileId) {
+    const subscription = subscriptionId
+      ? await readStripeSubscription(subscriptionId).catch(() => null)
+      : null;
+
+    await activateVendorStripeSubscription({
+      supabase: admin,
+      shopId,
+      profileId: vendorProfileId,
+      customerId,
+      subscriptionId,
+      status: normalizeStripeSubscriptionStatus(subscription?.status ?? "active"),
+      priceId: subscription?.items?.data?.[0]?.price?.id ?? null,
+      currentPeriodEnd:
+        typeof subscription?.current_period_end === "number"
+          ? new Date(subscription.current_period_end * 1000).toISOString()
+          : null,
+      cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
+      checkoutSessionId: session.id,
+      lastInvoiceStatus: "paid",
+    });
+  }
+}
+
+async function handleCheckoutSessionAsyncPaymentSucceeded(
+  event: StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+) {
+  await handleBuyerCheckoutPaid(event.data.object);
+}
+
+async function handleCheckoutSessionExpired(
+  event: StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+) {
+  await handleBuyerCheckoutUnpaid({
+    sessionId: event.data.object.id,
+    status: "expired",
+    failedReason: "checkout_session_expired",
+  });
+}
+
+async function handleCheckoutSessionAsyncPaymentFailed(
+  event: StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+) {
+  await handleBuyerCheckoutUnpaid({
+    sessionId: event.data.object.id,
+    status: "failed",
+    failedReason: "stripe_async_payment_failed",
+  });
 }
 
 async function handleSubscriptionEvent(
@@ -324,7 +552,7 @@ async function handleSubscriptionEvent(
     typeof subscriptionObject.customer === "string"
       ? subscriptionObject.customer
       : undefined;
-  const status = normalizeSubscriptionStatus(subscriptionObject.status);
+  const status = normalizeStripeSubscriptionStatus(subscriptionObject.status);
   const priceId = subscriptionObject.items?.data?.[0]?.price?.id ?? null;
 
   const subscription = await findVendorSubscriptionByStripeRefs({
@@ -371,8 +599,9 @@ export async function POST(request: Request) {
   try {
     webhookSecret = readStripeWebhookSecret();
   } catch (error) {
+    console.error("[stripe/webhook] Missing webhook configuration:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Missing STRIPE_WEBHOOK_SECRET." },
+      { error: "Webhook endpoint is not configured." },
       { status: 500 },
     );
   }
@@ -398,8 +627,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const isFirstTimeProcessing = await upsertWebhookEvent(event);
-    if (!isFirstTimeProcessing) {
+    const alreadyProcessed = await isWebhookEventAlreadyProcessed(event.id);
+    if (alreadyProcessed) {
       return NextResponse.json({ received: true, duplicate: true });
     }
 
@@ -407,6 +636,18 @@ export async function POST(request: Request) {
       await handleInvoiceEvent(event as StripeWebhookEvent<StripeInvoiceEventObject>);
     } else if (event.type === "checkout.session.completed") {
       await handleCheckoutSessionCompleted(
+        event as StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+      );
+    } else if (event.type === "checkout.session.async_payment_succeeded") {
+      await handleCheckoutSessionAsyncPaymentSucceeded(
+        event as StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+      );
+    } else if (event.type === "checkout.session.async_payment_failed") {
+      await handleCheckoutSessionAsyncPaymentFailed(
+        event as StripeWebhookEvent<StripeCheckoutSessionEventObject>,
+      );
+    } else if (event.type === "checkout.session.expired") {
+      await handleCheckoutSessionExpired(
         event as StripeWebhookEvent<StripeCheckoutSessionEventObject>,
       );
     } else if (
@@ -419,15 +660,12 @@ export async function POST(request: Request) {
       );
     }
 
+    await markWebhookEventProcessed(event);
     return NextResponse.json({ received: true });
   } catch (error) {
+    console.error("[stripe/webhook] Failed to process event:", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No se pudo procesar el webhook de Stripe.",
-      },
+      { error: "No se pudo procesar el webhook de Stripe." },
       { status: 500 },
     );
   }

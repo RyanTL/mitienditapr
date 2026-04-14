@@ -3,7 +3,10 @@ import { redirect } from "next/navigation";
 import { VendorShopSettingsClient } from "@/components/vendor/vendor-shop-settings-client";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  getVendorPolicyTemplatesData,
   getVendorRequestContext,
+  getVendorShopPoliciesData,
+  getVendorShopSettingsData,
   getVendorStatusSnapshot,
 } from "@/lib/supabase/vendor-server";
 
@@ -25,9 +28,24 @@ export default async function VendorShopSettingsPage() {
     supabase: dataClient,
   });
 
-  if (!snapshot.onboarding || snapshot.onboarding.status !== "completed") {
+  const isOnboardingDone = snapshot.onboarding?.status === "completed";
+
+  if (!isOnboardingDone) {
     redirect("/vendedor/onboarding");
   }
 
-  return <VendorShopSettingsClient />;
+  const [initialStatusData, initialPolicyTemplates, initialPolicyData] =
+    await Promise.all([
+      getVendorShopSettingsData(dataClient, context.userId),
+      getVendorPolicyTemplatesData(dataClient),
+      getVendorShopPoliciesData(dataClient, context.userId),
+    ]);
+
+  return (
+    <VendorShopSettingsClient
+      initialStatusData={initialStatusData}
+      initialPolicyTemplates={initialPolicyTemplates.templates}
+      initialPolicyData={initialPolicyData}
+    />
+  );
 }

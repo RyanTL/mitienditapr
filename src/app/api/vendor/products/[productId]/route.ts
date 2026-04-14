@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -9,6 +10,7 @@ import {
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
@@ -30,10 +32,6 @@ type ProductRow = {
 type OrderItemRow = {
   id: string;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getNumeric(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -69,6 +67,20 @@ export async function PATCH(
   const body = await parseJsonBody<ProductPatchPayload>(request);
   if (!body || !isRecord(body)) {
     return badRequestResponse("Cuerpo invalido.");
+  }
+
+  if (typeof body.name === "string" && body.name.trim().length > 200) {
+    return NextResponse.json(
+      { error: "El nombre del producto no puede exceder 200 caracteres." },
+      { status: 400 },
+    );
+  }
+
+  if (typeof body.description === "string" && body.description.trim().length > 5000) {
+    return NextResponse.json(
+      { error: "La descripción no puede exceder 5,000 caracteres." },
+      { status: 400 },
+    );
   }
 
   let dataClient = context.supabase;
@@ -116,7 +128,7 @@ export async function PATCH(
 
     const nextPrice = getNumeric(body.priceUsd);
     if (nextPrice !== null) {
-      updates.price_usd = Math.max(0, nextPrice);
+      updates.price_usd = Math.min(99999.99, Math.max(0, nextPrice));
     }
 
     if (Object.keys(updates).length > 0) {
@@ -147,7 +159,7 @@ export async function PATCH(
       if (firstVariant) {
         const { error: variantUpdateError } = await dataClient
           .from("product_variants")
-          .update({ price_usd: Math.max(0, nextPrice) })
+          .update({ price_usd: Math.min(99999.99, Math.max(0, nextPrice)) })
           .eq("id", firstVariant.id)
           .eq("product_id", product.id);
 
@@ -157,7 +169,12 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ ok: true });
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
+    return NextResponse.json({
+      ok: true,
+      shopActivated: autoPublishResult.activated,
+    });
   } catch (error) {
     return serverErrorResponse(error, "No se pudo actualizar el producto.");
   }

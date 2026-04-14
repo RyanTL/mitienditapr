@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { VendorProductsClient } from "@/components/vendor/vendor-products-client";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  getVendorProductsData,
   getVendorRequestContext,
   getVendorStatusSnapshot,
 } from "@/lib/supabase/vendor-server";
@@ -25,9 +26,13 @@ export default async function VendorProductsPage() {
     supabase: dataClient,
   });
 
-  if (!snapshot.onboarding || snapshot.onboarding.status !== "completed") {
+  const isOnboardingDone = snapshot.onboarding?.status === "completed";
+
+  if (!isOnboardingDone) {
     redirect("/vendedor/onboarding");
   }
 
-  return <VendorProductsClient />;
+  const initialData = await getVendorProductsData(dataClient, context.profile);
+
+  return <VendorProductsClient initialData={initialData} />;
 }

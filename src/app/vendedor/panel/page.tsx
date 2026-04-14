@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import {
   ChevronIcon,
   OrdersIcon,
-  PackageIcon,
   PlusIcon,
   SettingsIcon,
 } from "@/components/icons";
@@ -18,7 +17,14 @@ import {
   getVendorStatusSnapshot,
 } from "@/lib/supabase/vendor-server";
 
-export default async function VendorPanelPage() {
+type VendorPanelPageProps = {
+  searchParams: Promise<{
+    welcome?: string;
+  }>;
+};
+
+export default async function VendorPanelPage({ searchParams }: VendorPanelPageProps) {
+  const { welcome } = await searchParams;
   const context = await getVendorRequestContext();
   if (!context) {
     redirect("/sign-in?next=/vendedor/panel");
@@ -36,11 +42,7 @@ export default async function VendorPanelPage() {
     supabase: dataClient,
   });
 
-  const isOnboardingDone =
-    snapshot.onboarding?.status === "completed" ||
-    snapshot.subscription?.status === "active" ||
-    snapshot.subscription?.status === "trialing" ||
-    snapshot.billingBypassEnabled;
+  const isOnboardingDone = snapshot.onboarding?.status === "completed";
 
   if (!isOnboardingDone) {
     redirect("/vendedor/onboarding");
@@ -51,21 +53,81 @@ export default async function VendorPanelPage() {
     : null;
 
   const shopName = snapshot.shop?.vendor_name ?? "Tu tienda";
-  const shopSlug = snapshot.shop?.slug ?? "";
   const newOrderCount = snapshot.metrics.newOrderCount;
   const productCount = snapshot.metrics.productCount;
   const orderCount = snapshot.metrics.orderCount;
   const revenueThirtyDays = analytics?.revenueLastThirtyDaysUsd ?? 0;
   const totalRevenue = analytics?.totalRevenueUsd ?? 0;
   const avgOrderValue = analytics?.avgOrderValueUsd ?? 0;
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-  const shopUrl = shopSlug ? `${appUrl}/${shopSlug}` : null;
-
+  const isSubscribed =
+    snapshot.subscription?.status === "active" ||
+    snapshot.subscription?.status === "trialing";
+  const showWelcomeBanner = welcome === "onboarding-complete" || welcome === "vendor-activated";
   return (
     <VendorPageShell
       title={shopName}
       titleAction={<VendorShopShareAction />}
     >
+      {showWelcomeBanner && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-[var(--color-carbon)]">
+          <p className="text-sm font-semibold text-emerald-900">
+            {welcome === "vendor-activated" ? "Tu suscripción está activa" : "Tu tienda está lista"}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-emerald-900/80">
+            {welcome === "vendor-activated"
+              ? "Tu cuenta de vendedor ya está lista. Ya puedes listar productos ilimitados."
+              : "Tus políticas generales ya están listas. Agrega productos y publicaremos tu tienda automáticamente cuando esté lista para vender."}
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <Link
+              href="/vendedor/productos"
+              className="inline-flex items-center justify-center rounded-full bg-black px-4 py-2.5 text-sm font-semibold text-white transition-transform active:scale-[0.98]"
+            >
+              Listar productos
+            </Link>
+            <Link
+              href="/vendedor/tienda"
+              className="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-900 transition-colors hover:bg-emerald-100"
+            >
+              Configurar tienda
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade card for free-tier vendors */}
+      {!isSubscribed && !snapshot.billingBypassEnabled && (
+        <Link
+          href="/vendedor/suscripcion"
+          className="group block rounded-2xl border border-[var(--vendor-card-border)] bg-white p-4 shadow-[var(--vendor-card-shadow)] transition-shadow hover:shadow-[var(--vendor-card-shadow-hover)]"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-[var(--color-carbon)]">
+                Plan Gratuito
+              </p>
+              <p className="mt-1 text-xs text-[var(--color-gray-500)]">
+                Hasta 4 productos &middot; 2 fotos por producto &middot; Una variante por producto
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-black px-4 py-2 text-xs font-semibold text-white transition-transform group-hover:scale-[1.02] group-active:scale-[0.98]">
+              Mejorar a $10/mes
+            </span>
+          </div>
+                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-[var(--vendor-card-border)] pt-3 text-[11px] text-[var(--color-gray-500)]">
+            <span>Productos ilimitados</span>
+            <span>&middot;</span>
+            <span>Hasta 20 fotos por producto</span>
+            <span>&middot;</span>
+            <span>Variantes ilimitadas</span>
+            <span>&middot;</span>
+            <span>Código QR</span>
+            <span>&middot;</span>
+            <span>Seguimiento en vivo</span>
+          </div>
+        </Link>
+      )}
+
       {/* Billing bypass banner */}
       {snapshot.billingBypassEnabled && (
         <div className="rounded-xl border border-[var(--color-brand)]/20 bg-[var(--color-brand)]/5 px-4 py-2.5 text-xs font-medium text-[var(--color-brand)]">
@@ -77,9 +139,9 @@ export default async function VendorPanelPage() {
       {newOrderCount > 0 && (
         <Link
           href="/vendedor/pedidos"
-          className="group flex items-center gap-3 rounded-2xl border border-[var(--vendor-card-border)] border-l-4 border-l-[var(--vendor-status-new)] bg-white p-4 shadow-[var(--vendor-card-shadow)] transition-shadow hover:shadow-[var(--vendor-card-shadow-hover)]"
+          className="group flex items-center gap-3 rounded-2xl border border-[var(--vendor-card-border)] bg-white p-4 shadow-[var(--vendor-card-shadow)] transition-shadow hover:shadow-[var(--vendor-card-shadow-hover)]"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--vendor-status-new)]/10 text-[var(--vendor-status-new)]">
+          <span className="shrink-0 text-[var(--color-gray-500)]">
             <OrdersIcon className="h-5 w-5" />
           </span>
           <span className="flex-1">
@@ -169,7 +231,7 @@ export default async function VendorPanelPage() {
               href={href}
               className="flex items-center gap-3 rounded-xl border border-[var(--vendor-card-border)] bg-white px-4 py-3.5 text-[var(--color-carbon)] transition-colors hover:bg-[var(--vendor-page-bg)]"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--vendor-page-bg)]">
+              <span className="shrink-0 text-[var(--color-gray-500)]">
                 <Icon className="h-[18px] w-[18px]" />
               </span>
               <span className="text-sm font-medium">{label}</span>

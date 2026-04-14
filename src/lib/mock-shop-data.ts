@@ -1,31 +1,4 @@
-export type Product = {
-  id: string;
-  name: string;
-  priceUsd: number;
-  rating?: string;
-  reviewCount?: number;
-  imageUrl: string;
-  alt: string;
-  description: string;
-};
-
-export type ShopDetail = {
-  slug: string;
-  vendorName: string;
-  rating: string;
-  reviewCount: number;
-  description: string;
-  products: Product[];
-  athMovilPhone: string | null;
-};
-
-export type MarketplaceShopCard = {
-  id: string;
-  name: string;
-  rating: string;
-  reviewCount: number;
-  products: Pick<Product, "id" | "imageUrl" | "alt">[];
-};
+import type { ShopDetail } from "@/lib/supabase/shop-types";
 
 export const mockShopDetails: ShopDetail[] = [
   {
@@ -110,6 +83,13 @@ export const mockShopDetails: ShopDetail[] = [
       },
     ],
     athMovilPhone: null,
+    contactPhone: null,
+    contactInstagram: null,
+    contactFacebook: null,
+    contactWhatsapp: null,
+    shippingFlatFeeUsd: 0,
+    offersPickup: false,
+    acceptsStripePayments: false,
   },
   {
     slug: "estilo-boutique",
@@ -193,6 +173,13 @@ export const mockShopDetails: ShopDetail[] = [
       },
     ],
     athMovilPhone: null,
+    contactPhone: null,
+    contactInstagram: null,
+    contactFacebook: null,
+    contactWhatsapp: null,
+    shippingFlatFeeUsd: 0,
+    offersPickup: false,
+    acceptsStripePayments: false,
   },
   {
     slug: "hecho-a-mano-pr",
@@ -276,23 +263,12 @@ export const mockShopDetails: ShopDetail[] = [
       },
     ],
     athMovilPhone: null,
+    contactPhone: null,
+    contactInstagram: null,
+    contactFacebook: null,
+    contactWhatsapp: null,
+    shippingFlatFeeUsd: 0,
+    offersPickup: false,
+    acceptsStripePayments: false,
   },
 ];
-
-export const marketplaceShopCards: MarketplaceShopCard[] = mockShopDetails.map(
-  (shop) => ({
-    id: shop.slug,
-    name: shop.vendorName,
-    rating: shop.rating,
-    reviewCount: shop.reviewCount,
-    products: shop.products.slice(0, 3).map(({ id, imageUrl, alt }) => ({
-      id,
-      imageUrl,
-      alt,
-    })),
-  }),
-);
-
-export function getShopBySlug(shopSlug: string) {
-  return mockShopDetails.find((shop) => shop.slug === shopSlug);
-}

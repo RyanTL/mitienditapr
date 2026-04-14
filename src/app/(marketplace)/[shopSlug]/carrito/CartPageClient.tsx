@@ -4,7 +4,10 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { AthMovilCheckoutWizard } from "@/components/cart/ath-movil-checkout-wizard";
+import { StripeCheckoutWizard } from "@/components/cart/stripe-checkout-wizard";
 import {
+  AthMovilIcon,
   BackIcon,
   CloseIcon,
   HeartIcon,
@@ -16,12 +19,18 @@ import { useFavoriteProducts } from "@/hooks/use-favorite-products";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
+import { fetchAccountSnapshot, saveCheckoutProfile } from "@/lib/account/client";
 import { formatUsd } from "@/lib/formatters";
+import {
+  createStripeCheckoutSession,
+  type CheckoutBuyerInput,
+  type CheckoutFulfillmentInput,
+  type CheckoutRequestPayload,
+} from "@/lib/orders/client";
 import { fetchPublicShopPolicies } from "@/lib/policies/client";
 import type { PublicShopPoliciesResponse, PolicyType } from "@/lib/policies/types";
-import type { ShopDetail } from "@/lib/mock-shop-data";
+import type { ShopDetail } from "@/lib/supabase/shop-types";
 import {
-  checkoutCartByShop,
   fetchCartItems,
   removeCartItem,
   setCartItemQuantity,
@@ -39,11 +48,21 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [activeCheckoutMethod, setActiveCheckoutMethod] = useState<"stripe" | "ath_movil" | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [policiesData, setPoliciesData] = useState<PublicShopPoliciesResponse | null>(null);
   const [isLoadingPolicies, setIsLoadingPolicies] = useState(false);
   const [policiesError, setPoliciesError] = useState<string | null>(null);
-  const [hasAcceptedRequiredPolicies, setHasAcceptedRequiredPolicies] = useState(false);
+  const [hasAcceptedRequiredPolicies, setHasAcceptedRequiredPolicies] = useState(true);
+  const [buyerInput, setBuyerInput] = useState<CheckoutBuyerInput>({
+    fullName: "",
+    email: "",
+    phone: "",
+  });
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [shippingZipCode, setShippingZipCode] = useState("");
+  const [athWizardOpen, setAthWizardOpen] = useState(false);
+  const [stripeWizardOpen, setStripeWizardOpen] = useState(false);
   const [activePolicyModalType, setActivePolicyModalType] = useState<PolicyType | null>(null);
   const { addFavorite } = useFavoriteProducts();
 
@@ -80,6 +99,8 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
       ),
     [cartItems],
   );
+  const summaryShippingFeeUsd = shop.offersPickup ? null : shop.shippingFlatFeeUsd;
+  const summaryTotalUsd = subtotal + (summaryShippingFeeUsd ?? 0);
 
   const activeMenuItem = useMemo(
     () => cartItems.find((item) => item.id === menuItemId) ?? null,
@@ -91,6 +112,9 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
       hasAcceptedRequiredPolicies &&
       !isLoadingPolicies,
   );
+  const supportsStripe = shop.acceptsStripePayments;
+  const supportsAthMovil = Boolean(shop.athMovilPhone);
+  const hasAnyPaymentMethod = supportsStripe || supportsAthMovil;
   const activePolicyModal =
     activePolicyModalType && policiesData?.policies
       ? policiesData.policies[activePolicyModalType] ?? null
@@ -106,8 +130,16 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
             ? "Política de privacidad"
             : "";
 
-  useBodyScrollLock(Boolean(menuItemId || activePolicyModalType));
-  useEscapeKey(Boolean(menuItemId || activePolicyModalType), () => {
+  useBodyScrollLock(Boolean(menuItemId || activePolicyModalType || athWizardOpen || stripeWizardOpen));
+  useEscapeKey(Boolean(menuItemId || activePolicyModalType || athWizardOpen || stripeWizardOpen), () => {
+    if (stripeWizardOpen) {
+      setStripeWizardOpen(false);
+      return;
+    }
+    if (athWizardOpen) {
+      setAthWizardOpen(false);
+      return;
+    }
     setMenuItemId(null);
     setActivePolicyModalType(null);
   });
@@ -138,6 +170,35 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
   useEffect(() => {
     void loadPolicies();
   }, [loadPolicies]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBuyerSnapshot() {
+      try {
+        const snapshot = await fetchAccountSnapshot();
+        if (cancelled) {
+          return;
+        }
+
+        setBuyerInput({
+          fullName: snapshot.fullName,
+          email: snapshot.email,
+          phone: snapshot.phone,
+        });
+        setShippingAddress(snapshot.address);
+        setShippingZipCode(snapshot.zipCode);
+      } catch {
+        // The checkout APIs still validate auth and required fields.
+      }
+    }
+
+    void loadBuyerSnapshot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const removeLineItem = useCallback(
     async (lineItemId: string) => {
@@ -243,59 +304,123 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
     }
   }, [activeMenuItem, addFavorite, cartItems]);
 
-  const handleCheckout = useCallback(async () => {
-    if (!policiesData?.requiredPolicyVersionIds) {
-      setCheckoutError(
-        "La tienda no tiene Términos y Política de envío publicados. No se puede continuar.",
-      );
-      return;
-    }
+  const buildCheckoutPayloadWith = useCallback(
+    (
+      buyer: { fullName: string | null; email: string | null; phone: string | null },
+      fulfillment: CheckoutFulfillmentInput,
+    ) => {
+      if (!policiesData?.requiredPolicyVersionIds) {
+        throw new Error(
+          "La tienda no tiene Términos y Política de envío publicados. No se puede continuar.",
+        );
+      }
 
-    if (!hasAcceptedRequiredPolicies) {
-      setCheckoutError("Debes aceptar Términos y Política de envío para continuar.");
-      return;
-    }
+      if (!hasAcceptedRequiredPolicies) {
+        throw new Error("Debes aceptar Términos y Política de envío para continuar.");
+      }
 
+      if (!hasAnyPaymentMethod) {
+        throw new Error("Esta tienda todavía no configuró un método de pago.");
+      }
+
+      return {
+        shopSlug: shop.slug,
+        buyer: {
+          fullName: buyer.fullName?.trim() || null,
+          email: buyer.email?.trim() || null,
+          phone: buyer.phone?.trim() || null,
+        },
+        fulfillment,
+        policyAcceptance: {
+          shopId: policiesData.shopId,
+          termsVersionId: policiesData.requiredPolicyVersionIds.terms,
+          shippingVersionId: policiesData.requiredPolicyVersionIds.shipping,
+          acceptedAt: new Date().toISOString(),
+          acceptanceText: "Acepto Términos y Política de envío de esta tienda.",
+        },
+      };
+    },
+    [hasAcceptedRequiredPolicies, hasAnyPaymentMethod, policiesData, shop.slug],
+  );
+
+  const handleStripeCheckout = useCallback(async (payload: CheckoutRequestPayload) => {
     setIsCheckingOut(true);
+    setActiveCheckoutMethod("stripe");
     setCheckoutError(null);
 
     try {
-      const result = await checkoutCartByShop(shop.slug, {
-        shopId: policiesData.shopId,
-        termsVersionId: policiesData.requiredPolicyVersionIds.terms,
-        shippingVersionId: policiesData.requiredPolicyVersionIds.shipping,
-        acceptedAt: new Date().toISOString(),
-        acceptanceText: "Acepto Términos y Política de envío de esta tienda.",
+      try {
+        await saveCheckoutProfile({
+          fullName: payload.buyer.fullName ?? "",
+          email: payload.buyer.email ?? "",
+          phone: payload.buyer.phone ?? "",
+          address:
+            payload.fulfillment.method === "shipping"
+              ? (payload.fulfillment.shippingAddress ?? "")
+              : undefined,
+          zipCode:
+            payload.fulfillment.method === "shipping"
+              ? (payload.fulfillment.shippingZipCode ?? "")
+              : undefined,
+        });
+      } catch (profileError) {
+        console.error("No se pudo guardar la info del comprador en su cuenta:", profileError);
+      }
+
+      setBuyerInput({
+        fullName: payload.buyer.fullName ?? "",
+        email: payload.buyer.email ?? "",
+        phone: payload.buyer.phone ?? "",
       });
-
-      if (result.unauthorized) {
-        router.push(`/sign-in?next=${encodeURIComponent(`/${shop.slug}/carrito`)}`);
-        return;
+      if (payload.fulfillment.method === "shipping") {
+        setShippingAddress(payload.fulfillment.shippingAddress ?? "");
+        setShippingZipCode(payload.fulfillment.shippingZipCode ?? "");
       }
-
-      if (result.empty) {
-        setCheckoutError("Tu carrito no tiene productos para procesar.");
-        return;
-      }
-
-      await loadShopCartItems();
-      router.push("/ordenes");
-      router.refresh();
+      const result = await createStripeCheckoutSession(payload);
+      window.location.assign(result.url);
     } catch (error) {
-      console.error("No se pudo completar la orden:", error);
-      setCheckoutError(
-        error instanceof Error ? error.message : "No se pudo completar la orden.",
-      );
+      const message =
+        error instanceof Error ? error.message : "No se pudo abrir el pago con tarjeta.";
+      setCheckoutError(message);
+      if (message.toLowerCase().includes("no autenticado")) {
+        router.push(`/sign-in?next=${encodeURIComponent(`/${shop.slug}/carrito`)}`);
+      }
+      throw error instanceof Error ? error : new Error(message);
     } finally {
       setIsCheckingOut(false);
+      setActiveCheckoutMethod(null);
     }
   }, [
-    hasAcceptedRequiredPolicies,
-    loadShopCartItems,
-    policiesData,
     router,
     shop.slug,
   ]);
+
+  const athCartLines = useMemo(
+    () =>
+      cartItems.map((item) => ({
+        id: item.id,
+        name: item.product.name,
+        quantity: item.quantity,
+        lineTotalUsd: item.product.priceUsd * item.quantity,
+      })),
+    [cartItems],
+  );
+
+  const handleAthWizardSuccess = useCallback(async () => {
+    setAthWizardOpen(false);
+    await loadShopCartItems();
+    router.push("/ordenes");
+    router.refresh();
+  }, [loadShopCartItems, router]);
+
+  const handleAthWizardCheckoutError = useCallback(
+    (message: string) => {
+      if (message.toLowerCase().includes("no autenticado")) {
+        router.push(`/sign-in?next=${encodeURIComponent(`/${shop.slug}/carrito`)}`);
+      }
+    },
+    [router, shop.slug],
+  );
 
   return (
     <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
@@ -304,7 +429,7 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
           {shouldShowShopHeader ? (
             <header className="mb-5 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-icon)] text-xl font-bold text-[var(--color-carbon)]">
-                N
+                {shop.vendorName.charAt(0).toUpperCase()}
               </div>
               <div>
                 <h1 className="text-base font-bold leading-none text-[var(--color-carbon)]">
@@ -396,6 +521,53 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                 </p>
               </div>
 
+              <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-4">
+                <p className="text-xs font-semibold text-[var(--color-gray-500)]">
+                  Método de pago
+                </p>
+                <p className="mt-1 text-sm text-[var(--color-carbon)]">
+                  Elige cómo quieres pagar este pedido.
+                </p>
+                <div className="mt-4 flex flex-col gap-3">
+                  {supportsStripe ? (
+                    <button
+                      type="button"
+                      disabled={isCheckingOut || !canCheckout}
+                      className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-base font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)] disabled:opacity-70"
+                      onClick={() => {
+                        setCheckoutError(null);
+                        setStripeWizardOpen(true);
+                      }}
+                    >
+                      {isCheckingOut && activeCheckoutMethod === "stripe"
+                        ? "Abriendo Stripe..."
+                        : "Pagar con tarjeta"}
+                    </button>
+                  ) : null}
+
+                  {supportsAthMovil ? (
+                    <button
+                      type="button"
+                      disabled={!canCheckout}
+                      className="flex w-full items-center justify-center gap-2 rounded-3xl border-2 border-[var(--color-carbon)] bg-[var(--color-white)] px-6 py-3.5 text-base font-semibold text-[var(--color-carbon)] disabled:opacity-50"
+                      onClick={() => {
+                        setCheckoutError(null);
+                        setAthWizardOpen(true);
+                      }}
+                    >
+                      <AthMovilIcon className="h-5 w-5" />
+                      Continuar con ATH Móvil
+                    </button>
+                  ) : null}
+
+                  {!supportsStripe && !supportsAthMovil ? (
+                    <p className="text-sm text-[var(--color-danger)]">
+                      Esta tienda aún no configuró un método de pago.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
               <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] p-3">
                 <p className="text-xs font-semibold text-[var(--color-gray-500)]">
                   Políticas requeridas
@@ -441,20 +613,47 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                 )}
               </div>
 
+              <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-4">
+                <div className="flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                  <span>Subtotal</span>
+                  <span className="font-semibold">{formatUsd(subtotal)}</span>
+                </div>
+                {shop.offersPickup ? (
+                  <>
+                    <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                      <span>Recogido en tienda</span>
+                      <span className="font-semibold">Gratis</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                      <span>Envío a domicilio</span>
+                      <span className="font-semibold">{formatUsd(shop.shippingFlatFeeUsd)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
+                    <span>Envío</span>
+                    <span className="font-semibold">{formatUsd(shop.shippingFlatFeeUsd)}</span>
+                  </div>
+                )}
+                <div className="mt-3 flex items-center justify-between border-t border-[var(--color-gray-border)] pt-3 text-base text-[var(--color-carbon)]">
+                  <span className="font-semibold">
+                    {shop.offersPickup ? "Total desde" : "Total"}
+                  </span>
+                  <span className="font-bold">{formatUsd(summaryTotalUsd)}</span>
+                </div>
+                {shop.offersPickup ? (
+                  <p className="mt-3 text-xs text-[var(--color-gray-500)]">
+                    Al pagar eliges recogido en tienda (sin costo) o envío a domicilio (se suma el
+                    monto de arriba).
+                  </p>
+                ) : null}
+              </div>
+
               {checkoutError ? (
                 <p className="mb-3 rounded-2xl border border-[var(--color-danger)] bg-[var(--color-white)] px-3 py-2 text-xs text-[var(--color-danger)]">
                   {checkoutError}
                 </p>
               ) : null}
-
-              <button
-                type="button"
-                disabled={isCheckingOut || !canCheckout}
-                className="w-full rounded-3xl bg-[var(--color-brand)] px-6 py-3.5 text-base font-semibold text-[var(--color-white)] shadow-[0_10px_24px_var(--shadow-brand-020)] disabled:opacity-70"
-                onClick={() => void handleCheckout()}
-              >
-                {isCheckingOut ? "Procesando..." : "Continuar al pago"}
-              </button>
             </>
           )}
         </section>
@@ -504,6 +703,50 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
             </div>
           </section>
         </div>
+      ) : null}
+
+      {athWizardOpen && shop.athMovilPhone ? (
+        <AthMovilCheckoutWizard
+          shopName={shop.vendorName}
+          shopAthMovilPhone={shop.athMovilPhone}
+          fulfillmentDecidedOnSheet={false}
+          shopOffersPickup={shop.offersPickup}
+          fulfillmentMethod="shipping"
+          vendorContact={{
+            phone: shop.contactPhone,
+            instagram: shop.contactInstagram,
+            facebook: shop.contactFacebook,
+            whatsapp: shop.contactWhatsapp,
+          }}
+          cartLines={athCartLines}
+          subtotalUsd={subtotal}
+          shopShippingFlatFeeUsd={shop.shippingFlatFeeUsd}
+          initialFullName={buyerInput.fullName ?? ""}
+          initialEmail={buyerInput.email ?? ""}
+          initialPhone={buyerInput.phone ?? ""}
+          initialShippingAddress={shippingAddress}
+          initialShippingZipCode={shippingZipCode}
+          buildCheckoutPayload={buildCheckoutPayloadWith}
+          onSuccess={() => void handleAthWizardSuccess()}
+          onCheckoutError={handleAthWizardCheckoutError}
+          onClose={() => setAthWizardOpen(false)}
+        />
+      ) : null}
+
+      {stripeWizardOpen && supportsStripe ? (
+        <StripeCheckoutWizard
+          shopOffersPickup={shop.offersPickup}
+          subtotalUsd={subtotal}
+          shopShippingFlatFeeUsd={shop.shippingFlatFeeUsd}
+          initialFullName={buyerInput.fullName ?? ""}
+          initialEmail={buyerInput.email ?? ""}
+          initialPhone={buyerInput.phone ?? ""}
+          initialShippingAddress={shippingAddress}
+          initialShippingZipCode={shippingZipCode}
+          buildCheckoutPayload={buildCheckoutPayloadWith}
+          onSubmit={handleStripeCheckout}
+          onClose={() => setStripeWizardOpen(false)}
+        />
       ) : null}
 
       {menuItemId ? (

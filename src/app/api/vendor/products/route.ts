@@ -1,17 +1,25 @@
 import { NextResponse } from "next/server";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
   serverErrorResponse,
   unauthorizedResponse,
 } from "@/lib/vendor/api";
+import {
+  VENDOR_FREE_TIER_PRODUCT_LIMIT,
+  getVendorMaxImagesPerProduct,
+} from "@/lib/vendor/constants";
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
+import { vendorHasPremiumProductFeatures } from "@/lib/vendor/vendor-subscription-gates";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
+  getVendorSubscriptionByShopId,
 } from "@/lib/supabase/vendor-server";
 
 type VariantPayload = {
@@ -69,10 +77,6 @@ type ImageRow = {
   alt: string | null;
   sort_order: number;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function readText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -170,8 +174,21 @@ export async function GET() {
   }
 
   const products = productRows as ProductRow[];
+
+  const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
+  const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+  const productLimit = hasPremiumProductFeatures ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
+  const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
+  const variantsEnabled = hasPremiumProductFeatures;
+
   if (products.length === 0) {
-    return NextResponse.json({ products: [] });
+    return NextResponse.json({
+      products: [],
+      productLimit,
+      productCount: 0,
+      maxImagesPerProduct,
+      variantsEnabled,
+    });
   }
 
   const productIds = products.map((row) => row.id);
@@ -206,6 +223,10 @@ export async function GET() {
       variantRows as VariantRow[],
       imageRows as ImageRow[],
     ),
+    productLimit,
+    productCount: products.length,
+    maxImagesPerProduct,
+    variantsEnabled,
   });
 }
 
@@ -229,7 +250,21 @@ export async function POST(request: Request) {
     return badRequestResponse("El nombre del producto es requerido.");
   }
 
+  if (name.length > 200) {
+    return NextResponse.json(
+      { error: "El nombre del producto no puede exceder 200 caracteres." },
+      { status: 400 },
+    );
+  }
+
   const description = readText(body.description);
+
+  if (description && description.length > 5000) {
+    return NextResponse.json(
+      { error: "La descripción no puede exceder 5,000 caracteres." },
+      { status: 400 },
+    );
+  }
   const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
   const images =
     Array.isArray(body.images)
@@ -260,7 +295,7 @@ export async function POST(request: Request) {
 
   const variantTitle = readText(rawVariant.title) || "Default";
   const variantSku = readText(rawVariant.sku);
-  const variantPrice = Math.max(0, readNumeric(rawVariant.priceUsd, 0));
+  const variantPrice = Math.min(99999.99, Math.max(0, readNumeric(rawVariant.priceUsd, 0)));
   const rawStock = rawVariant.stockQty;
   const variantStock =
     rawStock === null || rawStock === undefined || rawStock === ""
@@ -276,6 +311,12 @@ export async function POST(request: Request) {
       : imageUrl
         ? [{ imageUrl, alt: name }]
         : [];
+  if (imagesToInsert.length === 0) {
+    return NextResponse.json(
+      { error: "Se requiere al menos una imagen." },
+      { status: 400 }
+    );
+  }
   const primaryImageUrl = imagesToInsert[0]?.imageUrl ?? null;
 
   let dataClient = context.supabase;
@@ -288,6 +329,39 @@ export async function POST(request: Request) {
   try {
     const profile = await ensureVendorRole(dataClient, context.profile);
     const shop = await ensureVendorShopForProfile(dataClient, profile);
+
+    const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
+    const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+    const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
+
+    if (imagesToInsert.length > maxImagesPerProduct) {
+      return NextResponse.json(
+        {
+          error: hasPremiumProductFeatures
+            ? `Puedes agregar hasta ${maxImagesPerProduct} fotos por producto.`
+            : `El plan gratuito permite hasta ${maxImagesPerProduct} fotos por producto. Suscríbete al Plan Vendedor para hasta ${getVendorMaxImagesPerProduct(true)} fotos.`,
+          upgradeRequired: !hasPremiumProductFeatures,
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!hasPremiumProductFeatures) {
+      const { count } = await dataClient
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("shop_id", shop.id);
+
+      if ((count ?? 0) >= VENDOR_FREE_TIER_PRODUCT_LIMIT) {
+        return NextResponse.json(
+          {
+            error: `Has alcanzado el límite de ${VENDOR_FREE_TIER_PRODUCT_LIMIT} productos del plan gratuito. Suscríbete al Plan Vendedor ($10/mes) para productos ilimitados.`,
+            upgradeRequired: true,
+          },
+          { status: 403 },
+        );
+      }
+    }
 
     const { data: productRow, error: productError } = await dataClient
       .from("products")
@@ -337,12 +411,15 @@ export async function POST(request: Request) {
       }
     }
 
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
     return NextResponse.json(
       {
         product: {
           id: productRow.id,
           name: productRow.name,
         },
+        shopActivated: autoPublishResult.activated,
       },
       { status: 201 },
     );

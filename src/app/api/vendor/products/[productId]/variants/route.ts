@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -10,10 +11,13 @@ import {
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
+  getVendorSubscriptionByShopId,
 } from "@/lib/supabase/vendor-server";
+import { vendorHasPremiumProductFeatures } from "@/lib/vendor/vendor-subscription-gates";
 
 type VariantPayload = {
   title?: string;
@@ -32,10 +36,6 @@ type ProductRow = {
 type VariantPriceRow = {
   price_usd: number;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getNumeric(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -111,7 +111,7 @@ export async function POST(
       ? body.title.trim()
       : "Nueva variante";
   const sku = typeof body.sku === "string" ? body.sku.trim() : "";
-  const priceUsd = Math.max(0, getNumeric(body.priceUsd, 0));
+  const priceUsd = Math.min(99999.99, Math.max(0, getNumeric(body.priceUsd, 0)));
   const stockQty = Math.max(0, Math.trunc(getNumeric(body.stockQty, 0)));
   const isActive = body.isActive ?? true;
   const attributes = isRecord(body.attributes) ? body.attributes : {};
@@ -142,6 +142,29 @@ export async function POST(
       return NextResponse.json({ error: "Producto no encontrado." }, { status: 404 });
     }
 
+    const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
+    const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+
+    const { count: variantCount, error: variantCountError } = await dataClient
+      .from("product_variants")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", product.id);
+
+    if (variantCountError) {
+      throw new Error(variantCountError.message);
+    }
+
+    if (!hasPremiumProductFeatures && (variantCount ?? 0) >= 1) {
+      return NextResponse.json(
+        {
+          error:
+            "El plan gratuito incluye una sola variante por producto. Suscríbete al Plan Vendedor para variantes ilimitadas.",
+          upgradeRequired: true,
+        },
+        { status: 403 },
+      );
+    }
+
     const { error: insertError } = await dataClient.from("product_variants").insert({
       product_id: product.id,
       title,
@@ -158,7 +181,15 @@ export async function POST(
 
     await syncProductPriceFromVariants(dataClient, product.id);
 
-    return NextResponse.json({ ok: true }, { status: 201 });
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
+    return NextResponse.json(
+      {
+        ok: true,
+        shopActivated: autoPublishResult.activated,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return serverErrorResponse(error, "No se pudo crear la variante.");
   }

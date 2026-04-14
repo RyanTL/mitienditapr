@@ -6,8 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
-import { AthMovilCheckoutSheet } from "@/components/cart/ath-movil-checkout-sheet";
+import { ShopCheckoutSheet } from "@/components/cart/shop-checkout-sheet";
 import { formatUsd } from "@/lib/formatters";
+import { fetchAccountSnapshot, type AccountSnapshot } from "@/lib/account/client";
 import {
   fetchCartItems,
   removeCartItem,
@@ -15,12 +16,65 @@ import {
   type CartItem,
 } from "@/lib/supabase/cart";
 
+type ShopGroup = {
+  shopSlug: string;
+  shopName: string;
+  shopOffersPickup: boolean;
+  shopShippingFlatFeeUsd: number;
+  shopAcceptsStripe: boolean;
+  shopAthMovilPhone: string | null;
+  shopContactPhone: string | null;
+  shopContactInstagram: string | null;
+  shopContactFacebook: string | null;
+  shopContactWhatsapp: string | null;
+  items: CartItem[];
+  subtotal: number;
+};
+
+type CheckoutFlowState =
+  | { phase: "idle" }
+  | { phase: "checking_out"; shopSlug: string }
+  | { phase: "done"; completedCount: number };
+
+function groupCartItems(cartItems: CartItem[]): ShopGroup[] {
+  const map = new Map<string, ShopGroup>();
+
+  for (const item of cartItems) {
+    const { shopSlug } = item.product;
+    const existing = map.get(shopSlug);
+    if (existing) {
+      existing.items.push(item);
+      existing.subtotal += item.product.priceUsd * item.quantity;
+    } else {
+      map.set(shopSlug, {
+        shopSlug,
+        shopName: item.product.shopName,
+        shopOffersPickup: item.product.shopOffersPickup,
+        shopShippingFlatFeeUsd: item.product.shopShippingFlatFeeUsd,
+        shopAcceptsStripe: item.product.shopAcceptsStripePayments,
+        shopAthMovilPhone: item.product.shopAthMovilPhone,
+        shopContactPhone: item.product.shopContactPhone,
+        shopContactInstagram: item.product.shopContactInstagram,
+        shopContactFacebook: item.product.shopContactFacebook,
+        shopContactWhatsapp: item.product.shopContactWhatsapp,
+        items: [item],
+        subtotal: item.product.priceUsd * item.quantity,
+      });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 export function GlobalCartPageClient() {
   const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isCheckoutSheetOpen, setIsCheckoutSheetOpen] = useState(false);
+  const [profile, setProfile] = useState<AccountSnapshot | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [selectedShopSlug, setSelectedShopSlug] = useState<string | null>(null);
+  const [checkoutFlow, setCheckoutFlow] = useState<CheckoutFlowState>({ phase: "idle" });
 
   const loadCartItems = useCallback(async () => {
     setIsLoading(true);
@@ -29,6 +83,13 @@ export function GlobalCartPageClient() {
     try {
       const items = await fetchCartItems();
       setCartItems(items);
+      const firstShopSlug = items[0]?.product.shopSlug ?? null;
+      setSelectedShopSlug((current) => {
+        if (current && items.some((item) => item.product.shopSlug === current)) {
+          return current;
+        }
+        return firstShopSlug;
+      });
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "No se pudo cargar el carrito.",
@@ -42,29 +103,42 @@ export function GlobalCartPageClient() {
     void loadCartItems();
   }, [loadCartItems]);
 
-  const subtotal = useMemo(
-    () =>
-      cartItems.reduce(
-        (total, item) => total + item.quantity * item.product.priceUsd,
-        0,
-      ),
-    [cartItems],
+  const loadProfile = useCallback(async () => {
+    // Supabase auth can race on initial page load — retry with back-off
+    const delays = [0, 600, 1500];
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+      try {
+        const snapshot = await fetchAccountSnapshot();
+        setProfile(snapshot);
+        setProfileLoaded(true);
+        return;
+      } catch {
+        // Try next attempt
+      }
+    }
+    setProfileLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
+
+  const shopGroups = useMemo(() => groupCartItems(cartItems), [cartItems]);
+
+  const selectedGroup = useMemo(
+    () => shopGroups.find((g) => g.shopSlug === selectedShopSlug) ?? null,
+    [shopGroups, selectedShopSlug],
   );
 
-  // Determine the primary shop from the cart (first shop group)
-  const primaryShop = useMemo(() => {
-    if (cartItems.length === 0) return null;
-    const first = cartItems[0].product;
-    const shopSubtotal = cartItems
-      .filter((item) => item.product.shopSlug === first.shopSlug)
-      .reduce((total, item) => total + item.quantity * item.product.priceUsd, 0);
-    return {
-      slug: first.shopSlug,
-      name: first.shopName,
-      athMovilPhone: first.shopAthMovilPhone,
-      subtotal: shopSubtotal,
-    };
-  }, [cartItems]);
+  const selectedTotal = useMemo(
+    () => selectedGroup?.subtotal ?? 0,
+    [selectedGroup],
+  );
+
+  const toggleShop = useCallback((slug: string) => {
+    setSelectedShopSlug((current) => (current === slug ? null : slug));
+  }, []);
 
   const handleIncrease = useCallback(
     async (item: CartItem) => {
@@ -134,59 +208,71 @@ export function GlobalCartPageClient() {
     [cartItems, router],
   );
 
-  const CheckoutButton = useCallback(
-    ({ className }: { className?: string }) => {
-      if (!primaryShop) return null;
+  const handleStartCheckout = useCallback(() => {
+    if (!selectedShopSlug) return;
+    setCheckoutFlow({ phase: "checking_out", shopSlug: selectedShopSlug });
+  }, [selectedShopSlug]);
 
-      if (!primaryShop.athMovilPhone) {
-        return (
-          <div className={className}>
-            <button
-              type="button"
-              disabled
-              className="w-full rounded-full bg-[var(--color-gray)] py-3 text-sm font-semibold text-[var(--color-gray-500)] cursor-not-allowed"
-            >
-              Proceder al pago
-            </button>
-            <p className="mt-2 text-center text-[11px] text-[var(--color-gray-500)]">
-              Esta tienda aún no acepta pagos en línea.
-            </p>
-          </div>
-        );
-      }
+  const handleSheetSuccess = useCallback(async () => {
+    if (checkoutFlow.phase !== "checking_out") return;
+    setCheckoutFlow({ phase: "done", completedCount: 1 });
+    await loadCartItems();
+    router.push("/ordenes");
+    router.refresh();
+  }, [checkoutFlow, loadCartItems, router]);
 
-      return (
-        <button
-          type="button"
-          onClick={() => setIsCheckoutSheetOpen(true)}
-          className={[
-            "w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-[var(--color-white)] transition-opacity hover:opacity-80",
-            className,
-          ]
-            .filter(Boolean)
-            .join(" ")}
-        >
-          Pagar con ATH Móvil
-        </button>
-      );
-    },
-    [primaryShop],
-  );
+  const handleSheetClose = useCallback(() => {
+    setCheckoutFlow({ phase: "idle" });
+  }, []);
+
+  const activeShopGroup = useMemo(() => {
+    if (checkoutFlow.phase !== "checking_out") return null;
+    return shopGroups.find((g) => g.shopSlug === checkoutFlow.shopSlug) ?? null;
+  }, [checkoutFlow, shopGroups]);
+
+  const profileLoadFailed = profileLoaded && !profile;
+
+  const checkoutButtonLabel = useMemo(() => {
+    if (!profileLoaded) return "Cargando...";
+    if (profileLoadFailed && cartItems.length === 0) return "Inicia sesión para continuar";
+    if (!selectedGroup) return "Selecciona una tienda";
+    return `Finalizar compra · ${formatUsd(selectedTotal)}`;
+  }, [profileLoaded, profileLoadFailed, cartItems.length, selectedGroup, selectedTotal]);
+
+  const checkoutButtonDisabled = !profileLoaded || !selectedGroup;
+
+  const handleCheckoutButtonClick = useCallback(() => {
+    if (profileLoadFailed) {
+      handleStartCheckout();
+      return;
+    }
+    handleStartCheckout();
+  }, [profileLoadFailed, handleStartCheckout]);
 
   return (
     <div className="min-h-screen bg-[var(--color-gray)] px-4 py-6 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
       <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
         <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
-          {/* Cart items */}
-          <section className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]">
+          {/* Cart */}
+          <section>
             <header className="mb-5">
               <h1 className="text-2xl font-bold leading-none text-[var(--color-carbon)]">
                 Carrito
               </h1>
+              <p className="mt-2 text-sm text-[var(--color-gray-500)]">
+                Selecciona una sola tienda por compra. Si quieres comprar en varias,
+                completa cada pedido por separado.
+              </p>
             </header>
 
+            {profileLoadFailed ? (
+              <div className="mb-4 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-3 text-sm text-[var(--color-carbon)]">
+                No pudimos precargar tu perfil. Puedes completar teléfono y dirección dentro del checkout.
+              </div>
+            ) : null}
+
             {isLoading ? (
-              <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
+              <div className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-8 text-center shadow-[0_16px_34px_var(--shadow-black-008)]">
                 <p className="text-base font-semibold text-[var(--color-carbon)]">
                   Cargando carrito...
                 </p>
@@ -196,102 +282,125 @@ export function GlobalCartPageClient() {
                 {errorMessage}
               </div>
             ) : cartItems.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[var(--color-gray)] bg-[var(--color-gray)] px-4 py-8 text-center">
+              <div className="rounded-[2rem] bg-[var(--color-white)] px-4 py-8 text-center shadow-[0_16px_34px_var(--shadow-black-008)]">
                 <p className="text-base font-semibold text-[var(--color-carbon)]">
-                  Tu carrito esta vacio.
+                  Tu carrito está vacío.
                 </p>
               </div>
             ) : (
-              <>
-                <div className="space-y-4 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 lg:grid-cols-1 lg:space-y-4">
-                  {cartItems.map((item) => {
-                    const hasProductRoute = Boolean(item.product.shopSlug);
-                    const productHref = hasProductRoute
-                      ? `/${item.product.shopSlug}/producto/${item.product.productId}`
-                      : null;
+              <div className="space-y-4">
+                {shopGroups.map((group) => (
+                  <div
+                    key={group.shopSlug}
+                    className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]"
+                  >
+                    {/* Shop header with checkbox */}
+                    <label className="mb-4 flex cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedShopSlug === group.shopSlug}
+                        onChange={() => toggleShop(group.shopSlug)}
+                        className="h-5 w-5 rounded accent-[var(--color-carbon)]"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-[var(--color-carbon)]">
+                          {group.shopName}
+                        </p>
+                        <p className="text-xs text-[var(--color-gray-500)]">
+                          {group.items.length}{" "}
+                          {group.items.length === 1 ? "producto" : "productos"} ·{" "}
+                          {formatUsd(group.subtotal)}
+                        </p>
+                      </div>
+                    </label>
 
-                    return (
-                      <article key={item.id} className="rounded-2xl border border-[var(--color-gray)] p-3">
-                        <div className="flex gap-3">
-                          <div className="relative h-[84px] w-[84px] overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-                            <Image
-                              src={item.product.imageUrl}
-                              alt={item.product.alt}
-                              fill
-                              className="object-cover"
-                              sizes="84px"
-                            />
-                          </div>
+                    {/* Items */}
+                    <div className="space-y-4 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 lg:grid-cols-1 lg:space-y-4">
+                      {group.items.map((item) => {
+                        const productHref = `/${item.product.shopSlug}/producto/${item.product.productId}`;
 
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium text-[var(--color-gray-500)]">
-                              {item.product.shopName}
-                            </p>
-
-                            {productHref ? (
-                              <Link
-                                href={productHref}
-                                className="mt-0.5 block truncate text-sm font-semibold text-[var(--color-carbon)]"
-                              >
-                                {item.product.name}
-                              </Link>
-                            ) : (
-                              <p className="mt-0.5 truncate text-sm font-semibold text-[var(--color-carbon)]">
-                                {item.product.name}
-                              </p>
-                            )}
-
-                            <p className="mt-1 text-sm font-semibold text-[var(--color-carbon)]">
-                              {formatUsd(item.product.priceUsd)}
-                            </p>
-
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                              <div className="inline-flex items-center gap-4 rounded-full border border-[var(--color-gray-border)] bg-[var(--color-white)] px-3 py-1 text-sm leading-none text-[var(--color-carbon)]">
-                                <button
-                                  type="button"
-                                  aria-label="Reducir cantidad"
-                                  onClick={() => void handleDecrease(item)}
-                                >
-                                  −
-                                </button>
-                                <span>{item.quantity}</span>
-                                <button
-                                  type="button"
-                                  aria-label="Aumentar cantidad"
-                                  onClick={() => void handleIncrease(item)}
-                                >
-                                  +
-                                </button>
+                        return (
+                          <article
+                            key={item.id}
+                            className="rounded-2xl border border-[var(--color-gray)] p-3"
+                          >
+                            <div className="flex gap-3">
+                              <div className="relative h-[84px] w-[84px] overflow-hidden rounded-2xl bg-[var(--color-gray)]">
+                                {item.product.imageUrl ? (
+                                  <Image
+                                    src={item.product.imageUrl}
+                                    alt={item.product.alt}
+                                    fill
+                                    className="object-cover"
+                                    sizes="84px"
+                                  />
+                                ) : (
+                                  <span className="flex h-full w-full items-center justify-center text-center text-[10px] leading-tight text-[var(--color-gray-500)]">
+                                    Sin foto
+                                  </span>
+                                )}
                               </div>
 
-                              <button
-                                type="button"
-                                className="text-xs font-semibold text-[var(--color-danger)]"
-                                onClick={() => void handleRemove(item)}
-                              >
-                                Eliminar
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
+                              <div className="min-w-0 flex-1">
+                                <Link
+                                  href={productHref}
+                                  className="mt-0.5 block truncate text-sm font-semibold text-[var(--color-carbon)]"
+                                >
+                                  {item.product.name}
+                                </Link>
 
-                {/* Subtotal + checkout — mobile only (desktop shows in aside) */}
-                <div className="mt-5 lg:hidden">
-                  <div className="flex items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3">
-                    <p className="text-sm font-semibold text-[var(--color-carbon)]">Subtotal</p>
-                    <p className="text-sm font-bold text-[var(--color-carbon)]">
-                      {formatUsd(subtotal)}
-                    </p>
+                                <p className="mt-1 text-sm font-semibold text-[var(--color-carbon)]">
+                                  {formatUsd(item.product.priceUsd)}
+                                </p>
+
+                                <div className="mt-2 flex items-center justify-between gap-2">
+                                  <div className="inline-flex items-center gap-4 rounded-full border border-[var(--color-gray-border)] bg-[var(--color-white)] px-3 py-1 text-sm leading-none text-[var(--color-carbon)]">
+                                    <button
+                                      type="button"
+                                      aria-label="Reducir cantidad"
+                                      onClick={() => void handleDecrease(item)}
+                                    >
+                                      −
+                                    </button>
+                                    <span>{item.quantity}</span>
+                                    <button
+                                      type="button"
+                                      aria-label="Aumentar cantidad"
+                                      onClick={() => void handleIncrease(item)}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    className="text-xs font-semibold text-[var(--color-danger)]"
+                                    onClick={() => void handleRemove(item)}
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="mt-3">
-                    <CheckoutButton />
-                  </div>
+                ))}
+
+                {/* Mobile checkout bar */}
+                <div className="lg:hidden">
+                  <button
+                    type="button"
+                    disabled={checkoutButtonDisabled}
+                    onClick={handleCheckoutButtonClick}
+                    className="block w-full rounded-full bg-[var(--color-carbon)] py-3 text-center text-sm font-semibold text-[var(--color-white)] transition-opacity hover:opacity-80 disabled:opacity-50"
+                  >
+                    {checkoutButtonLabel}
+                  </button>
                 </div>
-              </>
+              </div>
             )}
           </section>
 
@@ -302,18 +411,36 @@ export function GlobalCartPageClient() {
                 <h2 className="mb-4 text-lg font-bold leading-none text-[var(--color-carbon)]">
                   Resumen del pedido
                 </h2>
-                <div className="flex items-center justify-between rounded-2xl bg-[var(--color-gray)] px-4 py-3">
-                  <p className="text-sm font-semibold text-[var(--color-carbon)]">Subtotal</p>
-                  <p className="text-sm font-bold text-[var(--color-carbon)]">
-                    {formatUsd(subtotal)}
-                  </p>
+
+                <div className="space-y-2 mb-4">
+                  {shopGroups.map((group) => (
+                    <div
+                      key={group.shopSlug}
+                      className={[
+                        "flex items-center justify-between rounded-2xl px-4 py-3 text-sm",
+                        selectedShopSlug === group.shopSlug
+                          ? "bg-[var(--color-gray)]"
+                          : "bg-[var(--color-white)] opacity-40",
+                      ].join(" ")}
+                    >
+                      <span className="font-medium truncate mr-2">{group.shopName}</span>
+                      <span className="font-semibold shrink-0">{formatUsd(group.subtotal)}</span>
+                    </div>
+                  ))}
                 </div>
-                <p className="mt-3 text-xs text-[var(--color-gray-500)]">
+
+                <p className="mb-4 text-xs text-[var(--color-gray-500)]">
                   Los impuestos y el envío se calculan al finalizar la compra.
                 </p>
-                <div className="mt-4">
-                  <CheckoutButton />
-                </div>
+
+                <button
+                  type="button"
+                  disabled={checkoutButtonDisabled}
+                  onClick={handleCheckoutButtonClick}
+                  className="block w-full rounded-full bg-[var(--color-carbon)] py-3 text-center text-sm font-semibold text-[var(--color-white)] transition-opacity hover:opacity-80 disabled:opacity-50"
+                >
+                  {checkoutButtonLabel}
+                </button>
               </div>
             </aside>
           ) : null}
@@ -322,14 +449,26 @@ export function GlobalCartPageClient() {
 
       <BackHomeBottomNav />
 
-      {primaryShop?.athMovilPhone ? (
-        <AthMovilCheckoutSheet
-          shopSlug={primaryShop.slug}
-          shopName={primaryShop.name}
-          athMovilPhone={primaryShop.athMovilPhone}
-          totalUsd={primaryShop.subtotal}
-          isOpen={isCheckoutSheetOpen}
-          onClose={() => setIsCheckoutSheetOpen(false)}
+      {/* Checkout sheet */}
+      {checkoutFlow.phase === "checking_out" && activeShopGroup ? (
+        <ShopCheckoutSheet
+          key={activeShopGroup.shopSlug}
+          shopSlug={activeShopGroup.shopSlug}
+          shopName={activeShopGroup.shopName}
+          shopItems={activeShopGroup.items}
+          shopOffersPickup={activeShopGroup.shopOffersPickup}
+          shopShippingFlatFeeUsd={activeShopGroup.shopShippingFlatFeeUsd}
+          shopAcceptsStripe={activeShopGroup.shopAcceptsStripe}
+          shopAthMovilPhone={activeShopGroup.shopAthMovilPhone}
+          vendorContact={{
+            phone: activeShopGroup.shopContactPhone,
+            instagram: activeShopGroup.shopContactInstagram,
+            facebook: activeShopGroup.shopContactFacebook,
+            whatsapp: activeShopGroup.shopContactWhatsapp,
+          }}
+          profile={profile}
+          onSuccess={() => void handleSheetSuccess()}
+          onClose={handleSheetClose}
         />
       ) : null}
     </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -16,6 +17,7 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   ensureVendorOnboardingRecord,
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorPublishChecks,
@@ -28,10 +30,6 @@ type StepPayload = {
   payload?: Record<string, unknown>;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function readString(
   input: Record<string, unknown>,
   key: string,
@@ -42,33 +40,22 @@ function readString(
 }
 
 function mapNextStep(currentStep: number, incomingStep: number) {
-  return Math.max(currentStep, Math.min(incomingStep + 1, VENDOR_ONBOARDING_STEP_COUNT));
+  return Math.max(currentStep, incomingStep + 1);
 }
 
 async function applyStepSideEffects(input: {
   supabase: SupabaseClient;
-  profileId: string;
   shopId: string;
   step: number;
   payload: Record<string, unknown>;
 }) {
-  const { supabase, profileId, shopId, step, payload } = input;
+  const { supabase, shopId, step, payload } = input;
 
   if (step === 1) {
     const vendorName = readString(payload, "vendorName").trim();
     const requestedSlug = readString(payload, "slug").trim();
     const description = readString(payload, "description").trim();
     const logoUrl = readString(payload, "logoUrl").trim();
-
-    if (vendorName) {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ full_name: vendorName })
-        .eq("id", profileId);
-      if (profileError) {
-        throw new Error(profileError.message);
-      }
-    }
 
     const slugSource = requestedSlug || vendorName;
     const slug = slugifyShopName(slugSource);
@@ -95,8 +82,7 @@ async function applyStepSideEffects(input: {
     return;
   }
 
-  // Step 2: subscription — handled by dedicated checkout/redeem/webhook routes.
-  // No side effects needed here.
+  // Additional steps can add side effects here as needed.
 }
 
 export async function PATCH(request: Request) {
@@ -135,7 +121,6 @@ export async function PATCH(request: Request) {
 
     await applyStepSideEffects({
       supabase: dataClient,
-      profileId: profile.id,
       shopId: shop.id,
       step,
       payload,
@@ -160,6 +145,8 @@ export async function PATCH(request: Request) {
       nextData,
     );
 
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
     const checks = await getVendorPublishChecks(dataClient, profile.id);
 
     return NextResponse.json({
@@ -167,6 +154,7 @@ export async function PATCH(request: Request) {
       checks,
       nextStep: nextOnboarding.current_step,
       completed: nextOnboarding.status === "completed",
+      shopActivated: autoPublishResult.activated,
     });
   } catch (error) {
     return serverErrorResponse(error, "No se pudo guardar este paso.");

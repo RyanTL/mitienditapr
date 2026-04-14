@@ -11,6 +11,7 @@ export type FollowedShopSummary = {
   vendorName: string;
   rating: string;
   reviewCount: number;
+  logoUrl: string | null;
 };
 
 type FollowRow = {
@@ -24,6 +25,7 @@ type ShopRow = {
   rating: number;
   review_count: number;
   is_active: boolean;
+  logo_url: string | null;
 };
 
 export type ShopFollowsChangedDetail = {
@@ -188,7 +190,7 @@ export async function fetchFollowedShops() {
 
   const { data: shopRows, error: shopsError } = await supabase
     .from("shops")
-    .select("id,slug,vendor_name,rating,review_count,is_active")
+    .select("id,slug,vendor_name,rating,review_count,is_active,logo_url")
     .in("id", shopIds);
 
   if (shopsError || !shopRows) {
@@ -214,6 +216,7 @@ export async function fetchFollowedShops() {
         vendorName: shop.vendor_name,
         rating: Number(shop.rating).toFixed(1),
         reviewCount: shop.review_count,
+        logoUrl: shop.logo_url,
       } satisfies FollowedShopSummary,
     ];
   });

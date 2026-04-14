@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -10,6 +11,7 @@ import {
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
+  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
@@ -37,10 +39,6 @@ type ProductRow = {
 type VariantPriceRow = {
   price_usd: number;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getNumeric(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -166,7 +164,7 @@ export async function PATCH(
 
     const priceUsd = getNumeric(body.priceUsd);
     if (priceUsd !== null) {
-      updates.price_usd = Math.max(0, priceUsd);
+      updates.price_usd = Math.min(99999.99, Math.max(0, priceUsd));
     }
 
     const stockQty = getNumeric(body.stockQty);
@@ -199,7 +197,12 @@ export async function PATCH(
       await syncProductPriceFromVariants(dataClient, product.id);
     }
 
-    return NextResponse.json({ ok: true });
+    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+
+    return NextResponse.json({
+      ok: true,
+      shopActivated: autoPublishResult.activated,
+    });
   } catch (error) {
     return serverErrorResponse(error, "No se pudo actualizar la variante.");
   }

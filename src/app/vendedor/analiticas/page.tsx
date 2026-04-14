@@ -5,8 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   getVendorAnalytics,
   getVendorRequestContext,
-  getVendorShopByProfileId,
-  getVendorOnboardingByProfileId,
+  getVendorStatusSnapshot,
 } from "@/lib/supabase/vendor-server";
 import { formatUsd } from "@/lib/formatters";
 
@@ -33,15 +32,18 @@ export default async function VendorAnaliticasPage() {
     // Secret key is optional in development.
   }
 
-  const onboarding = await getVendorOnboardingByProfileId(dataClient, context.userId);
-  if (!onboarding || onboarding.status !== "completed") {
+  const snapshot = await getVendorStatusSnapshot({
+    ...context,
+    supabase: dataClient,
+  });
+
+  const isOnboardingDone = snapshot.onboarding?.status === "completed";
+
+  if (!isOnboardingDone || !snapshot.shop) {
     redirect("/vendedor/onboarding");
   }
 
-  const shop = await getVendorShopByProfileId(dataClient, context.userId);
-  if (!shop) {
-    redirect("/vendedor/onboarding");
-  }
+  const shop = snapshot.shop;
 
   const analytics = await getVendorAnalytics(dataClient, shop.id);
 

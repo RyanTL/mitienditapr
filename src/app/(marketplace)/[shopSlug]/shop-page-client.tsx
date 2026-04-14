@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -18,17 +19,30 @@ import { FavoriteToggleButton } from "@/components/favorites/favorite-toggle-but
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { BOTTOM_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
-import { ShopSharePopup } from "@/components/share/shop-share-popup";
 import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
-import { formatUsd } from "@/lib/formatters";
+import {
+  formatDateEsPr,
+  formatPhoneForDisplay,
+  formatUsd,
+  renderStars,
+} from "@/lib/formatters";
 import { POLICY_TYPE_LABELS } from "@/lib/policies/constants";
 import { fetchPublicShopPolicies } from "@/lib/policies/client";
 import type { PolicyType, PublicShopPoliciesResponse } from "@/lib/policies/types";
 import { fetchShopReviews } from "@/lib/reviews/client";
 import type { ShopReviewsResponse } from "@/lib/reviews/types";
-import type { ShopDetail } from "@/lib/mock-shop-data";
+import type { ShopDetail } from "@/lib/supabase/shop-types";
+import { fetchVendorStatus } from "@/lib/vendor/client";
+
+const ShopSharePopup = dynamic(
+  () =>
+    import("@/components/share/shop-share-popup").then(
+      (mod) => mod.ShopSharePopup,
+    ),
+  { ssr: false },
+);
 
 type ShopPageClientProps = {
   shop: ShopDetail;
@@ -43,19 +57,6 @@ const REPORT_REASON_OPTIONS = [
 
 function getContactEmail(shopSlug: string) {
   return `hola+${shopSlug}@mitienditapr.com`;
-}
-
-function renderStars(rating: number) {
-  const clamped = Math.max(0, Math.min(5, Math.round(rating)));
-  return `${"★".repeat(clamped)}${"☆".repeat(5 - clamped)}`;
-}
-
-function formatReviewDate(value: string) {
-  return new Intl.DateTimeFormat("es-PR", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
 }
 
 export function ShopPageClient({ shop }: ShopPageClientProps) {
@@ -79,9 +80,6 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
   const [reportPolicyType, setReportPolicyType] = useState<PolicyType | "">("");
   const [reportFeedback, setReportFeedback] = useState<string | null>(null);
   const contactEmail = getContactEmail(shop.slug);
-  const instagramHandle = `@${shop.slug.replaceAll("-", "")}`;
-  const whatsappNumber = "+1 (939) 555-0192";
-  const supportHours = "Lunes a Viernes, 9:00 AM - 5:00 PM";
   const closeShopMenu = useCallback(() => {
     setIsShopMenuOpen(false);
     setIsPoliciesExpanded(false);
@@ -99,26 +97,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
 
     async function resolveOwnerMode() {
       try {
-        const response = await fetch("/api/vendor/status", {
-          method: "GET",
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          if (isMounted) {
-            setIsOwnerViewingShop(false);
-          }
-          return;
-        }
-
-        const body = (await response.json().catch(() => null)) as
-          | {
-              shop?: {
-                slug?: string;
-              } | null;
-            }
-          | null;
-
+        const body = await fetchVendorStatus();
         if (!isMounted) {
           return;
         }
@@ -246,14 +225,20 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
 
         <section className="mb-20 text-center md:mb-14">
           <h1 className="text-5xl font-extrabold tracking-tight">{shop.vendorName}</h1>
-          <p className="mx-auto mt-6 max-w-[32ch] text-lg leading-6 text-[var(--color-carbon)]">
-            {shop.description}
-          </p>
-          {shop.athMovilPhone ? (
+          {shop.description.trim().length > 0 ? (
+            <p className="mx-auto mt-6 max-w-[32ch] text-lg leading-6 text-[var(--color-carbon)]">
+              {shop.description}
+            </p>
+          ) : null}
+          {(shop.athMovilPhone || shop.acceptsStripePayments) ? (
             <div className="mt-5 flex justify-center">
               <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gray)] bg-[var(--color-white)] px-4 py-2 text-sm font-semibold text-[var(--color-carbon)] shadow-[0_4px_12px_var(--shadow-black-008)]">
-                <AthMovilIcon className="h-4 w-4" />
-                Se acepta ATH Móvil
+                {shop.athMovilPhone ? <AthMovilIcon className="h-4 w-4" /> : null}
+                {shop.athMovilPhone && shop.acceptsStripePayments
+                  ? "Se acepta ATH Móvil y tarjetas"
+                  : shop.athMovilPhone
+                    ? "Se acepta ATH Móvil"
+                    : "Se aceptan pagos con tarjetas"}
               </span>
             </div>
           ) : null}
@@ -341,7 +326,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
-                  N
+                  {shop.vendorName.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <p className="text-base font-bold text-[var(--color-carbon)]">{shop.vendorName}</p>
@@ -409,7 +394,7 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                           {renderStars(review.rating)}
                         </p>
                         <p className="mt-1 text-xs text-[var(--color-carbon)]">
-                          {review.reviewerDisplayName} · {formatReviewDate(review.createdAt)}
+                          {review.reviewerDisplayName} · {formatDateEsPr(review.createdAt)}
                         </p>
                       </article>
                     ))}
@@ -472,36 +457,52 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
                   Contactar
                 </h3>
                 <div className="mt-3 grid gap-2">
-                  <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                      Instagram
-                    </p>
-                    <p className="text-sm text-[var(--color-carbon)]">{instagramHandle}</p>
-                  </div>
-                  <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                      WhatsApp
-                    </p>
-                    <p className="text-sm text-[var(--color-carbon)]">{whatsappNumber}</p>
-                  </div>
+                  {shop.contactInstagram ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        Instagram
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">@{shop.contactInstagram.replace(/^@/, "")}</p>
+                    </div>
+                  ) : null}
+                  {shop.contactWhatsapp ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        WhatsApp
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">{formatPhoneForDisplay(shop.contactWhatsapp)}</p>
+                    </div>
+                  ) : null}
                   <div className="rounded-xl px-1 py-2.5">
                     <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
                       Email
                     </p>
                     <p className="text-sm text-[var(--color-carbon)]">{contactEmail}</p>
                   </div>
-                  <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                      Horario
-                    </p>
-                    <p className="text-sm text-[var(--color-carbon)]">{supportHours}</p>
-                  </div>
+                  {shop.contactFacebook ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        Facebook
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">{shop.contactFacebook}</p>
+                    </div>
+                  ) : null}
+                  {shop.contactPhone ? (
+                    <div className="rounded-xl px-1 py-2.5">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
+                        Teléfono
+                      </p>
+                      <p className="text-sm text-[var(--color-carbon)]">{formatPhoneForDisplay(shop.contactPhone)}</p>
+                    </div>
+                  ) : null}
                   {shop.athMovilPhone ? (
                     <div className="rounded-xl px-1 py-2.5">
                       <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
                         ATH Móvil
                       </p>
-                      <p className="text-sm text-[var(--color-carbon)]">{shop.athMovilPhone}</p>
+                      <p className="text-sm text-[var(--color-carbon)]">
+                        {formatPhoneForDisplay(shop.athMovilPhone)}
+                      </p>
                     </div>
                   ) : null}
                 </div>
@@ -641,12 +642,14 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
         </div>
       ) : null}
 
-      <ShopSharePopup
-        isOpen={isSharePopupOpen}
-        onClose={() => setIsSharePopupOpen(false)}
-        shopSlug={shop.slug}
-        ownerMode={isOwnerViewingShop}
-      />
+      {isSharePopupOpen ? (
+        <ShopSharePopup
+          isOpen={isSharePopupOpen}
+          onClose={() => setIsSharePopupOpen(false)}
+          shopSlug={shop.slug}
+          ownerMode={isOwnerViewingShop}
+        />
+      ) : null}
     </div>
   );
 }

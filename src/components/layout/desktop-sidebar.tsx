@@ -39,11 +39,10 @@ export function DesktopSidebar() {
   const [cartCount, setCartCount] = useState(0);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
+  const displayCartCount = user ? cartCount : 0;
+
   useEffect(() => {
-    if (!user) {
-      setCartCount(0);
-      return;
-    }
+    if (!user) return;
 
     const syncCartCount = async () => {
       try {
@@ -131,9 +130,9 @@ export function DesktopSidebar() {
           >
             <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
               <CartIcon className="h-5 w-5" />
-              {cartCount > 0 ? (
+              {displayCartCount > 0 ? (
                 <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-brand)] text-[9px] font-bold text-[var(--color-white)] leading-none">
-                  {cartCount > 9 ? "9+" : cartCount}
+                  {displayCartCount > 9 ? "9+" : displayCartCount}
                 </span>
               ) : null}
             </span>
@@ -172,6 +171,8 @@ export function DesktopSidebar() {
       </div>
 
       <ProfileMenu
+        user={user}
+        isAuthLoading={isLoading}
         isOpen={isProfileMenuOpen}
         onClose={() => setIsProfileMenuOpen(false)}
         desktopPosition="sidebar"

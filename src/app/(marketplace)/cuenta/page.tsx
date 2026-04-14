@@ -9,9 +9,11 @@ import { AccountPageClient } from "@/app/(marketplace)/cuenta/account-page-clien
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type ProfileRow = {
+  email: string | null;
   full_name: string | null;
   phone: string | null;
   address: string | null;
+  zip_code: string | null;
 };
 
 export default async function AccountPage() {
@@ -27,23 +29,26 @@ export default async function AccountPage() {
 
   const { data: profileData } = await supabase
     .from("profiles")
-    .select("full_name,phone,address")
+    .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
-  const profile = (profileData as ProfileRow | null) ?? {
-    full_name: null,
-    phone: null,
-    address: null,
+  const row = (profileData as Record<string, unknown> | null) ?? null;
+  const profile: ProfileRow = {
+    email: typeof row?.email === "string" ? row.email : null,
+    full_name: typeof row?.full_name === "string" ? row.full_name : null,
+    phone: typeof row?.phone === "string" ? row.phone : null,
+    address: typeof row?.address === "string" ? row.address : null,
+    zip_code: typeof row?.zip_code === "string" ? row.zip_code : null,
   };
 
   return (
     <AccountPageClient
-      initialEmail={user.email ?? ""}
+      initialEmail={profile.email ?? user.email ?? ""}
       initialFullName={profile.full_name ?? ""}
       initialPhone={profile.phone ?? ""}
       initialAddress={profile.address ?? ""}
+      initialZipCode={profile.zip_code ?? ""}
     />
   );
 }
-

@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  DEFAULT_POLICY_BODIES,
+  DEFAULT_POLICY_TITLES,
+  DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
   POLICY_LOCALE,
   REQUIRED_POLICY_TYPES,
 } from "@/lib/policies/constants";
@@ -10,6 +13,7 @@ import type {
   VendorPolicyAcceptance,
   VendorPolicyCompletion,
 } from "@/lib/policies/types";
+import { POLICY_TYPES } from "@/lib/policies/types";
 
 type ShopRow = {
   id: string;
@@ -142,6 +146,40 @@ export async function getLatestVendorPolicyAcceptance(
   return mapAcceptanceRow((data as VendorPolicyAcceptanceRow | null) ?? null);
 }
 
+async function ensureShopPoliciesRowExists(
+  supabase: SupabaseClient,
+  shopId: string,
+) {
+  const { data, error } = await supabase
+    .from("shop_policies")
+    .select("shop_id")
+    .eq("shop_id", shopId)
+    .maybeSingle<{ shop_id: string }>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (data?.shop_id) {
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("shop_policies").upsert(
+    {
+      shop_id: shopId,
+      refund_policy: DEFAULT_POLICY_BODIES.refund,
+      shipping_policy: DEFAULT_POLICY_BODIES.shipping,
+      privacy_policy: DEFAULT_POLICY_BODIES.privacy,
+      terms: DEFAULT_POLICY_BODIES.terms,
+    },
+    { onConflict: "shop_id" },
+  );
+
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+}
+
 export function buildVendorPolicyCompletion(
   currentPolicies: Partial<Record<PolicyType, ShopPolicyVersion | null>>,
 ) {
@@ -270,6 +308,83 @@ export async function publishShopPolicyVersion(input: {
   }
 
   return version;
+}
+
+export async function ensureDefaultShopPolicies(input: {
+  supabase: SupabaseClient;
+  shopId: string;
+  publishedBy: string;
+}) {
+  const { supabase, shopId, publishedBy } = input;
+
+  await ensureShopPoliciesRowExists(supabase, shopId);
+
+  let currentPolicies = await getCurrentShopPolicyVersions(supabase, shopId);
+  const defaultedPolicyTypes: PolicyType[] = [];
+
+  for (const policyType of POLICY_TYPES) {
+    if (currentPolicies[policyType]?.id) {
+      continue;
+    }
+
+    try {
+      await publishShopPolicyVersion({
+        supabase,
+        shopId,
+        policyType,
+        title: DEFAULT_POLICY_TITLES[policyType],
+        body: DEFAULT_POLICY_BODIES[policyType],
+        publishedBy,
+      });
+      defaultedPolicyTypes.push(policyType);
+    } catch (err) {
+      // Duplicate key means a concurrent request already created this version — safe to ignore.
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.includes("duplicate key")) {
+        throw err;
+      }
+    }
+  }
+
+  if (defaultedPolicyTypes.length > 0) {
+    currentPolicies = await getCurrentShopPolicyVersions(supabase, shopId);
+  }
+
+  let acceptanceCreated = false;
+  const requiredIds = getRequiredPolicyIds(currentPolicies);
+  const defaultedRequiredPolicy = defaultedPolicyTypes.some((policyType) =>
+    REQUIRED_POLICY_TYPES.includes(policyType),
+  );
+
+  if (requiredIds && defaultedRequiredPolicy) {
+    const hasRequiredAcceptance = await hasPolicyAcceptanceForCurrentRequired({
+      supabase,
+      shopId,
+      termsVersionId: requiredIds.terms,
+      shippingVersionId: requiredIds.shipping,
+    });
+
+    if (!hasRequiredAcceptance) {
+      await createVendorPolicyAcceptance({
+        supabase,
+        shopId,
+        acceptedByProfileId: publishedBy,
+        acceptanceScope: "publish",
+        termsVersionId: requiredIds.terms,
+        shippingVersionId: requiredIds.shipping,
+        refundVersionId: currentPolicies.refund?.id ?? null,
+        privacyVersionId: currentPolicies.privacy?.id ?? null,
+        acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
+      });
+      acceptanceCreated = true;
+    }
+  }
+
+  return {
+    currentPolicies,
+    defaultedPolicyTypes,
+    acceptanceCreated,
+  };
 }
 
 export async function createVendorPolicyAcceptance(input: {

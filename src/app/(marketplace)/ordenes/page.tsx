@@ -1,99 +1,104 @@
 import Image from "next/image";
+import Link from "next/link";
 
-import {
-  CartIcon,
-  ChevronIcon,
-  DotsIcon,
-} from "@/components/icons";
+import { OrdersIcon } from "@/components/icons";
 import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
 import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { FloatingSearchButton } from "@/components/navigation/floating-search-button";
-import { formatUsd } from "@/lib/formatters";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { formatDateEsPr, formatUsd } from "@/lib/formatters";
+import { type OrderPaymentStatus } from "@/lib/orders/constants";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { CancelOrderButton } from "./cancel-order-button";
 
-type InProgressOrder = {
-  id: string;
-  title: string;
-  imageUrl: string;
-  alt: string;
-  tag: string;
-  isPending: boolean;
-};
-
-type PastOrder = {
-  id: string;
-  title: string;
-  subtitle: string;
-  imageUrl: string;
-  alt: string;
-};
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
 
 type OrderRow = {
   id: string;
+  shop_id: string;
   status: "pending" | "paid" | "fulfilled" | "cancelled" | "refunded";
+  vendor_status: "new" | "processing" | "shipped" | "delivered" | "canceled";
+  payment_status: OrderPaymentStatus;
+  payment_method: "stripe" | "ath_movil" | null;
   total_usd: number;
   created_at: string;
+  shops: Array<{
+    id: string;
+    vendor_name: string;
+    slug: string;
+  }> | null;
 };
 
 type OrderItemRow = {
   order_id: string;
   product_id: string;
   quantity: number;
+  unit_price_usd: number;
+  products: Array<{
+    id: string;
+    name: string;
+    image_url: string | null;
+  }> | null;
 };
 
-type ProductRow = {
+type DisplayOrder = {
   id: string;
-  shop_id: string;
-  name: string;
-  image_url: string;
+  shortId: string;
+  status: OrderRow["status"];
+  statusLabel: string;
+  statusColor: string;
+  shopName: string;
+  shopSlug: string;
+  totalUsd: number;
+  date: string;
+  canCancel: boolean;
+  items: Array<{
+    name: string;
+    imageUrl: string | null;
+    quantity: number;
+  }>;
 };
 
-type ShopRow = {
-  id: string;
-  vendor_name: string;
-};
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
 
 const IN_PROGRESS_STATUSES = new Set<OrderRow["status"]>(["pending", "paid"]);
 
-function formatOrderDate(value: string) {
-  const date = new Date(value);
-  return new Intl.DateTimeFormat("es-PR", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+function getStatusDisplay(
+  status: OrderRow["status"],
+  vendorStatus: OrderRow["vendor_status"],
+  paymentStatus: OrderRow["payment_status"],
+): { label: string; color: string } {
+  if (paymentStatus === "awaiting_vendor_verification")
+    return { label: "Verificando pago", color: "bg-amber-50 text-amber-700" };
+  if (paymentStatus === "requires_payment")
+    return { label: "Pendiente de pago", color: "bg-amber-50 text-amber-700" };
+  if (paymentStatus === "failed")
+    return { label: "Pago rechazado", color: "bg-red-50 text-red-700" };
+  if (paymentStatus === "expired")
+    return { label: "Pago expirado", color: "bg-gray-100 text-gray-500" };
+  if (status === "fulfilled")
+    return { label: "Entregada", color: "bg-emerald-50 text-emerald-700" };
+  if (status === "cancelled")
+    return { label: "Cancelada", color: "bg-gray-100 text-gray-500" };
+  if (status === "refunded")
+    return { label: "Reembolsada", color: "bg-gray-100 text-gray-500" };
+  if (vendorStatus === "shipped")
+    return { label: "En camino", color: "bg-indigo-50 text-indigo-700" };
+  if (vendorStatus === "processing")
+    return { label: "En preparación", color: "bg-blue-50 text-blue-700" };
+  if (status === "paid")
+    return { label: "Pagada", color: "bg-emerald-50 text-emerald-700" };
+  return { label: "Pendiente", color: "bg-amber-50 text-amber-700" };
 }
 
-function buildPastOrderTitle(status: OrderRow["status"], createdAt: string) {
-  const date = formatOrderDate(createdAt);
+/* ------------------------------------------------------------------ */
+/*  Data loader                                                        */
+/* ------------------------------------------------------------------ */
 
-  if (status === "fulfilled") {
-    return `Entregada ${date}`;
-  }
-
-  if (status === "cancelled") {
-    return `Cancelada ${date}`;
-  }
-
-  if (status === "refunded") {
-    return `Reembolsada ${date}`;
-  }
-
-  return `Orden ${date}`;
-}
-
-function buildStatusTag(status: OrderRow["status"]) {
-  if (status === "pending") {
-    return "Pendiente";
-  }
-
-  if (status === "paid") {
-    return "Pagada";
-  }
-
-  return "En proceso";
-}
+const EMPTY = { activeOrders: [] as DisplayOrder[], pastOrders: [] as DisplayOrder[] };
 
 async function loadOrdersForCurrentUser() {
   const supabase = await createSupabaseServerClient();
@@ -101,247 +106,233 @@ async function loadOrdersForCurrentUser() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return {
-      inProgressOrders: [] as InProgressOrder[],
-      pastOrders: [] as PastOrder[],
-    };
+  if (!user) return EMPTY;
+
+  let dataClient = supabase;
+  try {
+    dataClient = createSupabaseAdminClient();
+  } catch {
+    // Development fallback.
   }
 
-  const { data: ordersData, error: ordersError } = await supabase
+  const { data: ordersData } = await dataClient
     .from("orders")
-    .select("id,status,total_usd,created_at")
+    .select(
+      "id,shop_id,status,vendor_status,payment_status,payment_method,total_usd,created_at,shops(id,vendor_name,slug)",
+    )
     .eq("profile_id", user.id)
     .order("created_at", { ascending: false });
 
-  if (ordersError || !ordersData || ordersData.length === 0) {
-    return {
-      inProgressOrders: [] as InProgressOrder[],
-      pastOrders: [] as PastOrder[],
-    };
-  }
+  if (!ordersData?.length) return EMPTY;
 
-  const orders = ordersData as OrderRow[];
-  const orderIds = orders.map((order) => order.id);
+  const orders = ordersData as unknown as OrderRow[];
+  const orderIds = orders.map((o) => o.id);
 
-  const { data: orderItemsData, error: orderItemsError } = await supabase
+  const { data: orderItemsData } = await dataClient
     .from("order_items")
-    .select("order_id,product_id,quantity")
+    .select("order_id,product_id,quantity,unit_price_usd,products(id,name,image_url)")
     .in("order_id", orderIds);
 
-  if (orderItemsError || !orderItemsData) {
-    return {
-      inProgressOrders: [] as InProgressOrder[],
-      pastOrders: [] as PastOrder[],
-    };
+  if (!orderItemsData) return EMPTY;
+
+  const orderItems = orderItemsData as unknown as OrderItemRow[];
+
+  const itemsByOrder = new Map<string, OrderItemRow[]>();
+  for (const item of orderItems) {
+    const arr = itemsByOrder.get(item.order_id) ?? [];
+    arr.push(item);
+    itemsByOrder.set(item.order_id, arr);
   }
 
-  const orderItems = orderItemsData as OrderItemRow[];
-  const productIds = Array.from(new Set(orderItems.map((item) => item.product_id)));
-  if (productIds.length === 0) {
-    return {
-      inProgressOrders: [] as InProgressOrder[],
-      pastOrders: [] as PastOrder[],
-    };
-  }
+  const allOrders: DisplayOrder[] = orders.flatMap((order) => {
+    const items = itemsByOrder.get(order.id) ?? [];
+    const shopInfo = order.shops?.[0] ?? null;
+    if (!shopInfo) return [];
 
-  const { data: productsData, error: productsError } = await supabase
-    .from("products")
-    .select("id,shop_id,name,image_url")
-    .in("id", productIds);
-
-  if (productsError || !productsData) {
-    return {
-      inProgressOrders: [] as InProgressOrder[],
-      pastOrders: [] as PastOrder[],
-    };
-  }
-
-  const products = productsData as ProductRow[];
-  const productById = new Map(products.map((product) => [product.id, product]));
-  const shopIds = Array.from(new Set(products.map((product) => product.shop_id)));
-
-  const { data: shopsData, error: shopsError } = await supabase
-    .from("shops")
-    .select("id,vendor_name")
-    .in("id", shopIds);
-
-  if (shopsError || !shopsData) {
-    return {
-      inProgressOrders: [] as InProgressOrder[],
-      pastOrders: [] as PastOrder[],
-    };
-  }
-
-  const shopById = new Map((shopsData as ShopRow[]).map((shop) => [shop.id, shop]));
-  const orderItemsByOrderId = new Map<string, OrderItemRow[]>();
-
-  orderItems.forEach((item) => {
-    const existingItems = orderItemsByOrderId.get(item.order_id) ?? [];
-    orderItemsByOrderId.set(item.order_id, [...existingItems, item]);
-  });
-
-  const inProgressOrders = orders.flatMap((order) => {
-    if (!IN_PROGRESS_STATUSES.has(order.status)) {
-      return [];
-    }
-
-    const items = orderItemsByOrderId.get(order.id) ?? [];
-    const firstProduct = items[0] ? productById.get(items[0].product_id) : null;
-    if (!firstProduct) {
-      return [];
-    }
+    const { label, color } = getStatusDisplay(
+      order.status,
+      order.vendor_status,
+      order.payment_status,
+    );
+    const canCancel =
+      order.vendor_status === "new" &&
+      (
+        order.payment_status === "requires_payment" ||
+        order.payment_status === "awaiting_vendor_verification" ||
+        (order.payment_status === "paid" && order.payment_method === "stripe")
+      );
 
     return [
       {
         id: order.id,
-        title: firstProduct.name,
-        imageUrl: firstProduct.image_url,
-        alt: firstProduct.name,
-        tag: buildStatusTag(order.status),
-        isPending: order.status === "pending",
-      } satisfies InProgressOrder,
+        shortId: order.id.slice(-6).toUpperCase(),
+        status: order.status,
+        statusLabel: label,
+        statusColor: color,
+        shopName: shopInfo.vendor_name,
+        shopSlug: shopInfo.slug,
+        totalUsd: Number(order.total_usd),
+        date: formatDateEsPr(order.created_at, { day: "numeric", month: "short" }),
+        canCancel,
+        items: items.map((item) => {
+          return {
+            name: item.products?.[0]?.name ?? "Producto",
+            imageUrl: item.products?.[0]?.image_url ?? null,
+            quantity: item.quantity,
+          };
+        }),
+      },
     ];
   });
 
-  const pastOrders = orders.flatMap((order) => {
-    if (IN_PROGRESS_STATUSES.has(order.status)) {
-      return [];
-    }
-
-    const items = orderItemsByOrderId.get(order.id) ?? [];
-    const firstProduct = items[0] ? productById.get(items[0].product_id) : null;
-    if (!firstProduct) {
-      return [];
-    }
-
-    const shop = shopById.get(firstProduct.shop_id);
-    const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-    const shopLabel = shop?.vendor_name ?? "Tienda";
-    const itemsLabel = `${totalItems} ${totalItems === 1 ? "articulo" : "articulos"}`;
-
-    return [
-      {
-        id: order.id,
-        title: buildPastOrderTitle(order.status, order.created_at),
-        subtitle: `${shopLabel} • ${itemsLabel} • ${formatUsd(Number(order.total_usd))}`,
-        imageUrl: firstProduct.image_url,
-        alt: firstProduct.name,
-      } satisfies PastOrder,
-    ];
-  });
-
-  return { inProgressOrders, pastOrders };
+  return {
+    activeOrders: allOrders.filter((order) => {
+      if (!IN_PROGRESS_STATUSES.has(order.status)) {
+        return false;
+      }
+      return order.statusLabel !== "Pago rechazado" && order.statusLabel !== "Pago expirado";
+    }),
+    pastOrders: allOrders.filter((order) => {
+      if (!IN_PROGRESS_STATUSES.has(order.status)) {
+        return true;
+      }
+      return order.statusLabel === "Pago rechazado" || order.statusLabel === "Pago expirado";
+    }),
+  };
 }
 
+/* ------------------------------------------------------------------ */
+/*  Order card                                                         */
+/* ------------------------------------------------------------------ */
+
+function OrderCard({ order }: { order: DisplayOrder }) {
+  const totalItems = order.items.reduce((sum, i) => sum + i.quantity, 0);
+
+  return (
+    <article className="overflow-hidden rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)]">
+      {/* Header */}
+      <div className="flex items-start justify-between px-4 pt-4 pb-3">
+        <div className="min-w-0">
+          <Link
+            href={`/${order.shopSlug}`}
+            className="block truncate text-sm font-bold text-[var(--color-carbon)] hover:underline"
+          >
+            {order.shopName}
+          </Link>
+          <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">
+            #{order.shortId} &middot; {order.date}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${order.statusColor}`}
+        >
+          {order.statusLabel}
+        </span>
+      </div>
+
+      {/* Items */}
+      <div className="border-t border-[var(--color-gray-100)] px-4 py-3">
+        <div className="space-y-2">
+          {order.items.map((item, idx) => (
+            <div key={idx} className="flex items-center gap-3">
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-[var(--color-gray-100)]">
+                {item.imageUrl && (
+                  <Image
+                    src={item.imageUrl}
+                    alt={item.name}
+                    fill
+                    className="object-cover"
+                    sizes="40px"
+                  />
+                )}
+              </div>
+              <span className="min-w-0 flex-1 truncate text-sm text-[var(--color-carbon)]">
+                {item.name}
+              </span>
+              <span className="shrink-0 text-xs text-[var(--color-gray-500)]">x{item.quantity}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between border-t border-[var(--color-gray-100)] px-4 py-3">
+        <p className="text-sm text-[var(--color-carbon)]">
+          <span className="text-[var(--color-gray-500)]">
+            {totalItems} {totalItems === 1 ? "artículo" : "artículos"}
+          </span>
+          <span className="mx-1.5 text-[var(--color-gray-300)]">&middot;</span>
+          <span className="font-bold">{formatUsd(order.totalUsd)}</span>
+        </p>
+        {order.canCancel && <CancelOrderButton orderId={order.id} />}
+      </div>
+    </article>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
 export default async function OrdersPage() {
-  const { inProgressOrders, pastOrders } = await loadOrdersForCurrentUser();
+  const { activeOrders, pastOrders } = await loadOrdersForCurrentUser();
+  const hasNoOrders = activeOrders.length === 0 && pastOrders.length === 0;
 
   return (
     <div className="min-h-screen bg-[var(--color-gray)] pb-36 lg:pb-8">
       <main className="mx-auto w-full max-w-md px-4 pt-6 md:max-w-3xl md:px-5 lg:max-w-4xl">
-        <header className="mb-8 flex items-center justify-between">
-          <div className="w-8" />
-          <h1 className="text-4xl font-semibold tracking-tight text-[var(--color-black)]">Órdenes</h1>
-          <button type="button" className="text-[var(--color-black)]" aria-label="Más opciones">
-            <DotsIcon />
-          </button>
-        </header>
+        <h1 className="mb-6 text-[2rem] font-extrabold leading-none tracking-tight text-[var(--color-carbon)]">
+          Órdenes
+        </h1>
 
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <h2 className="text-3xl font-bold leading-none text-[var(--color-carbon)]">
-              Compras en proceso
-            </h2>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-gray-icon)] text-[var(--color-carbon)]">
-              <ChevronIcon />
+        {hasNoOrders ? (
+          <section className="flex flex-col items-center justify-center rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] px-6 py-16 text-center shadow-[0_1px_0_var(--shadow-black-003),0_8px_20px_var(--shadow-black-002)]">
+            <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-gray-100)] text-[var(--color-gray-500)]">
+              <OrdersIcon className="h-7 w-7" />
             </span>
-          </div>
+            <p className="text-lg font-bold text-[var(--color-carbon)]">No tienes órdenes</p>
+            <p className="mt-1 text-sm text-[var(--color-gray-500)]">
+              Cuando realices una compra, aparecerá aquí.
+            </p>
+            <Link
+              href="/"
+              className="mt-5 inline-flex items-center rounded-full bg-[var(--color-carbon)] px-6 py-3 text-sm font-semibold text-[var(--color-white)] transition-opacity hover:opacity-80"
+            >
+              Explorar tiendas
+            </Link>
+          </section>
+        ) : (
+          <>
+            {activeOrders.length > 0 && (
+              <section className="mb-8">
+                <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--color-gray-500)]">
+                  En proceso ({activeOrders.length})
+                </h2>
+                <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
+                  {activeOrders.map((order) => (
+                    <OrderCard key={order.id} order={order} />
+                  ))}
+                </div>
+              </section>
+            )}
 
-          {inProgressOrders.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--color-gray-border)] bg-[var(--color-white)] px-4 py-7 text-sm text-[var(--color-carbon)]">
-              No tienes compras en proceso.
-            </div>
-          ) : (
-            <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 md:grid md:grid-cols-3 md:gap-3 md:overflow-visible md:px-0">
-              {inProgressOrders.map((item) => (
-                <article
-                  key={item.id}
-                  className="relative min-w-[170px] snap-start overflow-hidden rounded-3xl border border-[var(--color-gray)] bg-[var(--color-white)] md:min-w-0"
-                >
-                  <div className="relative h-[170px]">
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.alt}
-                      fill
-                      className="object-cover"
-                      sizes="170px"
-                    />
-                  </div>
-                  <span className="absolute top-3 left-3 rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-xs font-semibold text-[var(--color-white)]">
-                    {item.tag}
-                  </span>
-                  {item.isPending && (
-                    <div className="absolute bottom-3 left-3">
-                      <CancelOrderButton orderId={item.id} />
-                    </div>
-                  )}
-                  <button type="button"
-                    className="absolute right-3 bottom-3 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-carbon)] text-[var(--color-white)]"
-                    aria-label={`Agregar ${item.title} al carrito`}
-                  >
-                    <CartIcon />
-                  </button>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="mt-8">
-          <div className="mb-4 flex items-center gap-2">
-            <h2 className="text-3xl font-bold leading-none text-[var(--color-carbon)]">
-              Compras pasadas
-            </h2>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-gray-icon)] text-[var(--color-carbon)]">
-              <ChevronIcon />
-            </span>
-          </div>
-
-          {pastOrders.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--color-gray-border)] bg-[var(--color-white)] px-4 py-7 text-sm text-[var(--color-carbon)]">
-              Aún no tienes compras pasadas.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {pastOrders.map((order) => (
-                <article key={order.id} className="flex items-center gap-3">
-                  <div className="relative h-[74px] w-[74px] overflow-hidden rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)]">
-                    <Image
-                      src={order.imageUrl}
-                      alt={order.alt}
-                      fill
-                      className="object-cover"
-                      sizes="74px"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-lg font-bold leading-none text-[var(--color-carbon)]">
-                      {order.title}
-                    </h3>
-                    <p className="mt-1 truncate text-sm leading-none text-[var(--color-carbon)]">
-                      {order.subtitle}
-                    </p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+            {pastOrders.length > 0 && (
+              <section>
+                <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--color-gray-500)]">
+                  Historial ({pastOrders.length})
+                </h2>
+                <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
+                  {pastOrders.map((order) => (
+                    <OrderCard key={order.id} order={order} />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        )}
       </main>
 
       <BackHomeBottomNav />
-
       <FloatingSearchButton href="/" />
       <FloatingCartLink href="/carrito" resolveFromCart />
     </div>

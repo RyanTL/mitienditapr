@@ -1,20 +1,34 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isRecord } from "@/lib/utils";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  buildVendorPolicyCompletion,
+  ensureDefaultShopPolicies,
   getCurrentShopPolicyVersions,
-  getMissingRequiredPolicyTypes,
+  getLatestVendorPolicyAcceptance,
   getRequiredPolicyIds,
-  hasPolicyAcceptanceForCurrentRequired,
 } from "@/lib/supabase/vendor-policy-server";
 import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import {
+  VENDOR_FREE_TIER_PRODUCT_LIMIT,
   VENDOR_ONBOARDING_STEP_COUNT,
+  getVendorMaxImagesPerProduct,
   type VendorOnboardingStatus,
   type VendorShopStatus,
 } from "@/lib/vendor/constants";
+import { vendorHasPremiumProductFeatures } from "@/lib/vendor/vendor-subscription-gates";
 import { slugifyShopName } from "@/lib/vendor/slug";
-import { POLICY_TYPE_LABELS } from "@/lib/policies/constants";
+import type {
+  PolicyTemplate,
+  PolicyType,
+  VendorShopPoliciesResponse,
+} from "@/lib/policies/types";
+import type {
+  VendorPolicyTemplatesResponse,
+  VendorProductsResponse,
+  VendorShopSettingsResponse,
+} from "@/lib/vendor/types";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -41,6 +55,10 @@ export type VendorShopRow = {
   offers_pickup: boolean;
   stripe_connect_account_id: string | null;
   ath_movil_phone: string | null;
+  contact_phone: string | null;
+  contact_instagram: string | null;
+  contact_facebook: string | null;
+  contact_whatsapp: string | null;
   published_at: string | null;
   unpublished_at: string | null;
   unpublished_reason: string | null;
@@ -85,15 +103,53 @@ type VariantRow = {
   id: string;
 };
 
+type VendorProductRow = {
+  id: string;
+  shop_id: string;
+  name: string;
+  description: string;
+  price_usd: number;
+  image_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type VendorProductVariantRow = {
+  id: string;
+  product_id: string;
+  title: string;
+  sku: string | null;
+  attributes_json: Record<string, unknown>;
+  price_usd: number;
+  stock_qty: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type VendorProductImageRow = {
+  id: string;
+  product_id: string;
+  image_url: string;
+  alt: string | null;
+  sort_order: number;
+};
+
+type PolicyTemplateRow = {
+  id: string;
+  policy_type: PolicyType;
+  locale: string;
+  title: string;
+  body_template: string;
+  version: number;
+};
+
 export type VendorRequestContext = {
   supabase: SupabaseClient;
   userId: string;
   profile: ProfileRow;
 };
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function normalizeOnboardingData(value: unknown) {
   return isRecord(value) ? value : {};
@@ -164,7 +220,7 @@ export async function getVendorShopByProfileId(
   const { data, error } = await supabase
     .from("shops")
     .select(
-      "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,published_at,unpublished_at,unpublished_reason",
+      "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,contact_phone,contact_instagram,contact_facebook,contact_whatsapp,published_at,unpublished_at,unpublished_reason",
     )
     .eq("vendor_profile_id", profileId)
     .order("created_at", { ascending: true })
@@ -285,7 +341,7 @@ export async function ensureVendorShopForProfile(
         is_active: false,
       })
       .select(
-        "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,published_at,unpublished_at,unpublished_reason",
+        "id,slug,share_code,vendor_profile_id,vendor_name,description,logo_url,status,is_active,shipping_flat_fee_usd,offers_pickup,stripe_connect_account_id,ath_movil_phone,contact_phone,contact_instagram,contact_facebook,contact_whatsapp,published_at,unpublished_at,unpublished_reason",
       )
       .maybeSingle();
 
@@ -399,17 +455,8 @@ async function getActiveVariantCountForShop(
 function hasRequiredShopFields(shop: VendorShopRow) {
   return (
     shop.vendor_name.trim().length > 0 &&
-    shop.slug.trim().length > 0 &&
-    shop.description.trim().length > 0
+    shop.slug.trim().length > 0
   );
-}
-
-function isActiveSubscriptionStatus(status: string | null | undefined) {
-  if (!status) {
-    return false;
-  }
-
-  return status === "active" || status === "trialing";
 }
 
 function isManualCodeExpired(subscription: VendorSubscriptionRow | null) {
@@ -428,16 +475,224 @@ function isManualCodeExpired(subscription: VendorSubscriptionRow | null) {
   return new Date(subscription.current_period_end).getTime() <= Date.now();
 }
 
-function canUseSubscriptionForPublishing(subscription: VendorSubscriptionRow | null) {
-  if (!subscription) {
-    return false;
+function mapVendorProducts(
+  products: VendorProductRow[],
+  variants: VendorProductVariantRow[],
+  images: VendorProductImageRow[],
+): VendorProductsResponse["products"] {
+  const variantsByProductId = new Map<string, VendorProductVariantRow[]>();
+  variants.forEach((variant) => {
+    const currentVariants = variantsByProductId.get(variant.product_id) ?? [];
+    currentVariants.push(variant);
+    variantsByProductId.set(variant.product_id, currentVariants);
+  });
+
+  const imagesByProductId = new Map<string, VendorProductImageRow[]>();
+  images.forEach((image) => {
+    const currentImages = imagesByProductId.get(image.product_id) ?? [];
+    currentImages.push(image);
+    imagesByProductId.set(image.product_id, currentImages);
+  });
+
+  return products.map((product) => ({
+    id: product.id,
+    shopId: product.shop_id,
+    name: product.name,
+    description: product.description,
+    imageUrl: product.image_url,
+    priceUsd: Number(product.price_usd),
+    isActive: product.is_active,
+    createdAt: product.created_at,
+    updatedAt: product.updated_at,
+    variants: (variantsByProductId.get(product.id) ?? []).map((variant) => ({
+      id: variant.id,
+      productId: variant.product_id,
+      title: variant.title,
+      sku: variant.sku,
+      attributes: variant.attributes_json,
+      priceUsd: Number(variant.price_usd),
+      stockQty: variant.stock_qty,
+      isActive: variant.is_active,
+      createdAt: variant.created_at,
+      updatedAt: variant.updated_at,
+    })),
+    images: (imagesByProductId.get(product.id) ?? []).map((image) => ({
+      id: image.id,
+      productId: image.product_id,
+      imageUrl: image.image_url,
+      alt: image.alt,
+      sortOrder: image.sort_order,
+    })),
+  }));
+}
+
+export async function getVendorPolicyTemplatesData(
+  supabase: SupabaseClient,
+): Promise<VendorPolicyTemplatesResponse> {
+  const { data, error } = await supabase
+    .from("policy_templates")
+    .select("id,policy_type,locale,title,body_template,version")
+    .eq("is_active", true)
+    .eq("locale", "es-PR")
+    .order("policy_type", { ascending: true })
+    .order("version", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
   }
 
-  if (!isActiveSubscriptionStatus(subscription.status)) {
-    return false;
+  return {
+    templates: ((data as PolicyTemplateRow[] | null) ?? []).map((row) => ({
+      id: row.id,
+      policyType: row.policy_type,
+      locale: row.locale,
+      title: row.title,
+      bodyTemplate: row.body_template,
+      version: row.version,
+    })) satisfies PolicyTemplate[],
+  };
+}
+
+export async function getVendorProductsData(
+  supabase: SupabaseClient,
+  profile: ProfileRow,
+): Promise<VendorProductsResponse> {
+  const ensuredProfile = await ensureVendorRole(supabase, profile);
+  const shop = await ensureVendorShopForProfile(supabase, ensuredProfile);
+
+  const { data: productRows, error: productsError } = await supabase
+    .from("products")
+    .select("id,shop_id,name,description,price_usd,image_url,is_active,created_at,updated_at")
+    .eq("shop_id", shop.id)
+    .order("created_at", { ascending: false });
+
+  if (productsError || !productRows) {
+    throw new Error(productsError?.message ?? "No se pudieron cargar tus productos.");
   }
 
-  return !isManualCodeExpired(subscription);
+  const products = productRows as VendorProductRow[];
+  const subscription = await getVendorSubscriptionByShopId(supabase, shop.id);
+  const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+  const productLimit = hasPremiumProductFeatures ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
+  const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
+  const variantsEnabled = hasPremiumProductFeatures;
+
+  if (products.length === 0) {
+    return {
+      products: [],
+      productLimit,
+      productCount: 0,
+      maxImagesPerProduct,
+      variantsEnabled,
+    };
+  }
+
+  const productIds = products.map((product) => product.id);
+  const [{ data: variantRows, error: variantsError }, { data: imageRows, error: imagesError }] =
+    await Promise.all([
+      supabase
+        .from("product_variants")
+        .select(
+          "id,product_id,title,sku,attributes_json,price_usd,stock_qty,is_active,created_at,updated_at",
+        )
+        .in("product_id", productIds)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("product_images")
+        .select("id,product_id,image_url,alt,sort_order")
+        .in("product_id", productIds)
+        .order("sort_order", { ascending: true }),
+    ]);
+
+  if (variantsError || !variantRows) {
+    throw new Error(variantsError?.message ?? "No se pudieron cargar variantes.");
+  }
+
+  if (imagesError || !imageRows) {
+    throw new Error(imagesError?.message ?? "No se pudieron cargar imagenes.");
+  }
+
+  return {
+    products: mapVendorProducts(
+      products,
+      variantRows as VendorProductVariantRow[],
+      imageRows as VendorProductImageRow[],
+    ),
+    productLimit,
+    productCount: products.length,
+    maxImagesPerProduct,
+    variantsEnabled,
+  };
+}
+
+export async function getVendorShopSettingsData(
+  supabase: SupabaseClient,
+  profileId: string,
+): Promise<VendorShopSettingsResponse> {
+  await maybeAutoPublishDraftShop(supabase, profileId);
+
+  const shop = await getVendorShopByProfileId(supabase, profileId);
+  if (!shop) {
+    return {
+      shop: null,
+      policies: null,
+      checks: {
+        canPublish: false,
+        activeVariantCount: 0,
+        blockingReasons: ["Debes crear tu tienda."],
+      },
+      subscription: null,
+    };
+  }
+
+  await ensureDefaultShopPolicies({
+    supabase,
+    shopId: shop.id,
+    publishedBy: shop.vendor_profile_id,
+  });
+
+  const [policies, checks, subscription] = await Promise.all([
+    getShopPoliciesByShopId(supabase, shop.id),
+    getVendorPublishChecks(supabase, profileId),
+    getVendorSubscriptionByShopId(supabase, shop.id),
+  ]);
+  const currentPolicyVersions = await getCurrentShopPolicyVersions(supabase, shop.id);
+
+  return {
+    shop,
+    policies,
+    policyCompletion: buildVendorPolicyCompletion(currentPolicyVersions),
+    currentPolicyVersionIds: getRequiredPolicyIds(currentPolicyVersions),
+    checks,
+    subscription,
+  };
+}
+
+export async function getVendorShopPoliciesData(
+  supabase: SupabaseClient,
+  profileId: string,
+): Promise<VendorShopPoliciesResponse> {
+  const shop = await getVendorShopByProfileId(supabase, profileId);
+  if (!shop) {
+    throw new Error("Debes crear tu tienda primero.");
+  }
+
+  await ensureDefaultShopPolicies({
+    supabase,
+    shopId: shop.id,
+    publishedBy: shop.vendor_profile_id,
+  });
+
+  const currentPolicies = await getCurrentShopPolicyVersions(supabase, shop.id);
+  const completion = buildVendorPolicyCompletion(currentPolicies);
+  const latestAcceptance = await getLatestVendorPolicyAcceptance(supabase, shop.id);
+
+  return {
+    locale: "es-PR",
+    currentPolicies,
+    completion,
+    latestAcceptance,
+  };
 }
 
 export async function getVendorPublishChecks(
@@ -460,6 +715,12 @@ export async function getVendorPublishChecks(
   }
 
   let subscription = await getVendorSubscriptionByShopId(supabase, shop.id);
+
+  await ensureDefaultShopPolicies({
+    supabase,
+    shopId: shop.id,
+    publishedBy: shop.vendor_profile_id,
+  });
 
   if (isManualCodeExpired(subscription)) {
     const nowIso = new Date().toISOString();
@@ -492,13 +753,7 @@ export async function getVendorPublishChecks(
   const activeVariantCount = await getActiveVariantCountForShop(supabase, shop.id);
 
   if (!hasRequiredShopFields(shop)) {
-    blockingReasons.push("Completa nombre, slug y descripción de la tienda.");
-  }
-
-  if (!isVendorBillingBypassEnabled) {
-    if (!canUseSubscriptionForPublishing(subscription)) {
-      blockingReasons.push("Activa la suscripción mensual de $10.");
-    }
+    blockingReasons.push("Completa nombre y slug de la tienda.");
   }
 
   if (isManualCodeExpired(subscription)) {
@@ -509,30 +764,8 @@ export async function getVendorPublishChecks(
     blockingReasons.push("Debes tener al menos una variante activa.");
   }
 
-  const currentPolicies = await getCurrentShopPolicyVersions(supabase, shop.id);
-  const missingRequiredPolicyTypes = getMissingRequiredPolicyTypes(currentPolicies);
-  if (missingRequiredPolicyTypes.length > 0) {
-    blockingReasons.push(
-      `Completa ${missingRequiredPolicyTypes
-        .map((policyType) => POLICY_TYPE_LABELS[policyType])
-        .join(" y ")}.`,
-    );
-  } else {
-    const requiredPolicyIds = getRequiredPolicyIds(currentPolicies);
-    if (requiredPolicyIds) {
-      const hasRequiredAcceptance = await hasPolicyAcceptanceForCurrentRequired({
-        supabase,
-        shopId: shop.id,
-        termsVersionId: requiredPolicyIds.terms,
-        shippingVersionId: requiredPolicyIds.shipping,
-      });
-
-      if (!hasRequiredAcceptance) {
-        blockingReasons.push(
-          "Debes aceptar legalmente Términos y Política de envío después de publicarlas.",
-        );
-      }
-    }
+  if (!shop.ath_movil_phone && !shop.stripe_connect_account_id) {
+    blockingReasons.push("Configura Stripe o ATH Móvil para poder cobrar.");
   }
 
   return {
@@ -544,37 +777,79 @@ export async function getVendorPublishChecks(
   };
 }
 
+export async function maybeAutoPublishDraftShop(
+  supabase: SupabaseClient,
+  profileId: string,
+) {
+  const [shop, onboarding] = await Promise.all([
+    getVendorShopByProfileId(supabase, profileId),
+    getVendorOnboardingByProfileId(supabase, profileId),
+  ]);
+
+  if (!shop || shop.status !== "draft") {
+    return {
+      activated: false,
+      shop,
+    };
+  }
+
+  if (onboarding?.status !== "completed") {
+    return {
+      activated: false,
+      shop,
+    };
+  }
+
+  const checks = await getVendorPublishChecks(supabase, profileId);
+  if (!checks.canPublish || !checks.shop) {
+    return {
+      activated: false,
+      shop: checks.shop,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("shops")
+    .update({
+      status: "active",
+      is_active: true,
+      published_at: nowIso,
+      unpublished_at: null,
+      unpublished_reason: null,
+    })
+    .eq("id", checks.shop.id)
+    .eq("vendor_profile_id", profileId)
+    .eq("status", "draft");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    activated: true,
+    shop: await getVendorShopByProfileId(supabase, profileId),
+  };
+}
+
 export async function getNewOrderCountForShop(
   supabase: SupabaseClient,
   shopId: string,
 ): Promise<number> {
-  const { data: allProductRows } = await supabase
-    .from("products")
-    .select("id")
-    .eq("shop_id", shopId);
-
-  if (!Array.isArray(allProductRows) || allProductRows.length === 0) {
-    return 0;
-  }
-
-  const productIds = allProductRows.map((row) => row.id);
-  const { data: orderItemRows } = await supabase
-    .from("order_items")
-    .select("order_id")
-    .in("product_id", productIds);
-
-  if (!Array.isArray(orderItemRows) || orderItemRows.length === 0) {
-    return 0;
-  }
-
-  const orderIds = Array.from(new Set(orderItemRows.map((row) => row.order_id)));
   const { data: orderRows } = await supabase
     .from("orders")
-    .select("id")
-    .in("id", orderIds)
+    .select("id,payment_status")
+    .eq("shop_id", shopId)
     .eq("vendor_status", "new");
 
-  return Array.isArray(orderRows) ? orderRows.length : 0;
+  return Array.isArray(orderRows)
+    ? orderRows.filter(
+        (row) =>
+          !["requires_payment", "expired"].includes(
+            (row as { payment_status?: string }).payment_status ?? "",
+          ),
+      ).length
+    : 0;
 }
 
 type OrderItemRow = {
@@ -622,54 +897,59 @@ export async function getVendorAnalytics(
     ordersByStatus: {},
   };
 
-  const { data: productRows } = await supabase
-    .from("products")
-    .select("id,name")
+  const { data: orderRows } = await supabase
+    .from("orders")
+    .select("id,vendor_status,created_at,payment_status")
     .eq("shop_id", shopId);
 
-  if (!Array.isArray(productRows) || productRows.length === 0) {
+  if (!Array.isArray(orderRows) || orderRows.length === 0) {
     return empty;
   }
 
-  const products = productRows as ProductNameRow[];
-  const productIds = products.map((p) => p.id);
-  const productNameById = new Map(products.map((p) => [p.id, p.name]));
+  const visibleOrders = (orderRows as Array<OrderRow & { payment_status?: string }>).filter(
+    (order) => !["requires_payment", "expired"].includes(order.payment_status ?? ""),
+  );
+  if (visibleOrders.length === 0) {
+    return empty;
+  }
 
+  const orderIds = visibleOrders.map((order) => order.id);
   const { data: itemRows } = await supabase
     .from("order_items")
     .select("order_id,product_id,quantity,unit_price_usd")
-    .in("product_id", productIds);
+    .in("order_id", orderIds);
 
   if (!Array.isArray(itemRows) || itemRows.length === 0) {
     return empty;
   }
 
   const items = itemRows as OrderItemRow[];
-  const orderIds = Array.from(new Set(items.map((i) => i.order_id)));
 
-  const { data: orderRows } = await supabase
-    .from("orders")
-    .select("id,vendor_status,created_at")
-    .in("id", orderIds);
+  const productIds = Array.from(new Set(items.map((item) => item.product_id)));
+  const { data: productRows } = await supabase
+    .from("products")
+    .select("id,name")
+    .in("id", productIds);
 
-  if (!Array.isArray(orderRows) || orderRows.length === 0) {
+  if (!Array.isArray(productRows) || productRows.length === 0) {
     return empty;
   }
 
-  const orders = orderRows as OrderRow[];
-  const orderById = new Map(orders.map((o) => [o.id, o]));
+  const products = productRows as ProductNameRow[];
+  const productNameById = new Map(products.map((p) => [p.id, p.name]));
+  const orderById = new Map(visibleOrders.map((o) => [o.id, o]));
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   // Status counts (all orders)
   const ordersByStatus: Record<string, number> = {};
-  for (const order of orders) {
+  for (const order of visibleOrders) {
     ordersByStatus[order.vendor_status] = (ordersByStatus[order.vendor_status] ?? 0) + 1;
   }
 
   // Revenue aggregations (exclude canceled)
   const nonCanceledOrderIds = new Set(
-    orders.filter((o) => o.vendor_status !== "canceled").map((o) => o.id),
+    visibleOrders.filter((o) => o.vendor_status !== "canceled").map((o) => o.id),
   );
 
   let totalRevenueUsd = 0;
@@ -722,6 +1002,8 @@ export async function getVendorAnalytics(
 
 export async function getVendorStatusSnapshot(context: VendorRequestContext) {
   const { supabase, userId, profile } = context;
+  await maybeAutoPublishDraftShop(supabase, userId);
+
   const shop = await getVendorShopByProfileId(supabase, userId);
   const onboarding = await getVendorOnboardingByProfileId(supabase, userId);
   const checks = await getVendorPublishChecks(supabase, userId);
@@ -738,30 +1020,20 @@ export async function getVendorStatusSnapshot(context: VendorRequestContext) {
 
   const productCount = Array.isArray(productRows) ? productRows.length : 0;
 
-  const { data: allProductRows } = shop
-    ? await supabase.from("products").select("id").eq("shop_id", shop.id)
-    : { data: [] as { id: string }[] };
-
   let orderCount = 0;
   let newOrderCount = 0;
-  if (shop && Array.isArray(allProductRows) && allProductRows.length > 0) {
-    const productIds = allProductRows.map((row) => row.id);
-    const { data: orderItemRows } = await supabase
-      .from("order_items")
-      .select("order_id")
-      .in("product_id", productIds);
+  if (shop) {
+    const { data: orderRows } = await supabase
+      .from("orders")
+      .select("id,vendor_status,payment_status")
+      .eq("shop_id", shop.id);
 
-    if (Array.isArray(orderItemRows)) {
-      const orderIds = Array.from(new Set(orderItemRows.map((row) => row.order_id)));
-      orderCount = orderIds.length;
-
-      const { data: newOrderRows } = await supabase
-        .from("orders")
-        .select("id")
-        .in("id", orderIds)
-        .eq("vendor_status", "new");
-
-      newOrderCount = Array.isArray(newOrderRows) ? newOrderRows.length : 0;
+    if (Array.isArray(orderRows)) {
+      const visibleOrders = orderRows.filter(
+        (row) => !["requires_payment", "expired"].includes(row.payment_status ?? ""),
+      );
+      orderCount = visibleOrders.length;
+      newOrderCount = visibleOrders.filter((row) => row.vendor_status === "new").length;
     }
   }
 

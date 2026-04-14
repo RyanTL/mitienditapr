@@ -56,13 +56,19 @@ export function FavoritesPageClient({ initialFavorites }: FavoritesPageClientPro
                     href={`/${favorite.shopSlug}/producto/${favorite.productId}`}
                     className="relative block h-[84px] w-[84px] overflow-hidden rounded-2xl bg-[var(--color-gray)]"
                   >
-                    <Image
-                      src={favorite.imageUrl}
-                      alt={favorite.alt}
-                      fill
-                      className="object-cover"
-                      sizes="84px"
-                    />
+                    {favorite.imageUrl ? (
+                      <Image
+                        src={favorite.imageUrl}
+                        alt={favorite.alt}
+                        fill
+                        className="object-cover"
+                        sizes="84px"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-center text-[10px] leading-tight text-[var(--color-gray-500)]">
+                        Sin foto
+                      </span>
+                    )}
                   </Link>
 
                   <div className="min-w-0 flex-1">

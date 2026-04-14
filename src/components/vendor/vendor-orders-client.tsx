@@ -9,8 +9,8 @@ import {
   VENDOR_ORDER_TRANSITIONS,
   type VendorOrderStatus,
 } from "@/lib/vendor/constants";
-import { fetchVendorOrders, updateVendorOrderStatus } from "@/lib/vendor/client";
-import { formatUsd } from "@/lib/formatters";
+import { fetchVendorOrders, updateVendorOrderStatus, verifyVendorOrderPayment } from "@/lib/vendor/client";
+import { formatDateEsPr, formatUsd } from "@/lib/formatters";
 
 type VendorOrder = Awaited<ReturnType<typeof fetchVendorOrders>>["orders"][number];
 
@@ -22,12 +22,20 @@ const STATUS_LABELS: Record<VendorOrderStatus, string> = {
   canceled: "Cancelada",
 };
 
-const STATUS_BADGE: Record<VendorOrderStatus, string> = {
-  new: "bg-blue-100 text-blue-700",
-  processing: "bg-yellow-100 text-yellow-700",
-  shipped: "bg-indigo-100 text-indigo-700",
-  delivered: "bg-green-100 text-green-700",
-  canceled: "bg-gray-100 text-gray-500",
+const STATUS_DOT_COLOR: Record<VendorOrderStatus, string> = {
+  new: "bg-[var(--vendor-status-new)]",
+  processing: "bg-[var(--vendor-status-processing)]",
+  shipped: "bg-[var(--vendor-status-shipped)]",
+  delivered: "bg-[var(--vendor-status-delivered)]",
+  canceled: "bg-[var(--vendor-status-canceled)]",
+};
+
+const STATUS_TEXT_COLOR: Record<VendorOrderStatus, string> = {
+  new: "text-[var(--vendor-status-new)]",
+  processing: "text-[var(--vendor-status-processing)]",
+  shipped: "text-[var(--vendor-status-shipped)]",
+  delivered: "text-[var(--vendor-status-delivered)]",
+  canceled: "text-[var(--color-gray-500)]",
 };
 
 const TRANSITION_LABEL: Record<VendorOrderStatus, string> = {
@@ -38,14 +46,30 @@ const TRANSITION_LABEL: Record<VendorOrderStatus, string> = {
   canceled: "Cancelar",
 };
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-PR", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
+const PAYMENT_LABELS: Record<string, string> = {
+  requires_payment: "Pendiente de pago",
+  awaiting_vendor_verification: "Verificar pago",
+  paid: "Pagada",
+  failed: "Pago rechazado",
+  expired: "Pago expirado",
+  refunded: "Reembolsada",
+};
+
+const PAYMENT_TEXT_COLOR: Record<string, string> = {
+  requires_payment: "text-amber-600",
+  awaiting_vendor_verification: "text-amber-600",
+  paid: "text-[var(--vendor-status-delivered)]",
+  failed: "text-[var(--color-danger)]",
+  expired: "text-[var(--color-gray-500)]",
+  refunded: "text-[var(--color-gray-500)]",
+};
+
+type FilterValue = VendorOrderStatus | "all";
+
+const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
+  { value: "all", label: "Todos" },
+  ...VENDOR_ORDER_STATUSES.map((s) => ({ value: s as FilterValue, label: STATUS_LABELS[s] })),
+];
 
 type FilterValue = VendorOrderStatus | "all";
 
@@ -85,6 +109,22 @@ export function VendorOrdersClient() {
         await loadOrders();
       } catch (e) {
         setErrorMsg(e instanceof Error ? e.message : "No se pudo actualizar el estado.");
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [loadOrders],
+  );
+
+  const handlePaymentVerification = useCallback(
+    async (orderId: string, action: "approve" | "reject") => {
+      setIsSaving(true);
+      setErrorMsg(null);
+      try {
+        await verifyVendorOrderPayment(orderId, action);
+        await loadOrders();
+      } catch (e) {
+        setErrorMsg(e instanceof Error ? e.message : "No se pudo verificar el pago.");
       } finally {
         setIsSaving(false);
       }
@@ -144,8 +184,8 @@ export function VendorOrdersClient() {
         </div>
       ) : filteredOrders.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white text-[var(--color-carbon)] shadow-sm">
-            <OrdersIcon className="h-9 w-9" />
+          <div className="text-[var(--color-gray-500)]">
+            <OrdersIcon className="h-12 w-12" />
           </div>
           <p className="font-semibold text-[var(--color-carbon)]">
             {activeFilter === "all" ? "Sin pedidos todavía" : `Sin pedidos ${STATUS_LABELS[activeFilter as VendorOrderStatus]?.toLowerCase() ?? ""}`}
@@ -158,8 +198,14 @@ export function VendorOrdersClient() {
         <ul className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
           {filteredOrders.map((order) => {
             const currentStatus = order.vendorStatus;
-            const nextStatuses = VENDOR_ORDER_TRANSITIONS[currentStatus] ?? [];
+            const nextStatuses =
+              order.paymentStatus === "paid"
+                ? VENDOR_ORDER_TRANSITIONS[currentStatus] ?? []
+                : [];
             const buyer = order.buyer?.fullName || order.buyer?.email || "Cliente";
+            const paymentLabel = PAYMENT_LABELS[order.paymentStatus] ?? order.paymentStatus;
+            const paymentTextColor = PAYMENT_TEXT_COLOR[order.paymentStatus] ?? "text-[var(--color-gray-500)]";
+            const needsAthVerification = order.paymentStatus === "awaiting_vendor_verification";
 
             return (
               <li key={order.id} className="rounded-2xl bg-white p-4 shadow-sm">
@@ -170,11 +216,33 @@ export function VendorOrdersClient() {
                       #{order.id.slice(-6).toUpperCase()}
                     </p>
                     <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">{buyer}</p>
-                    <p className="text-xs text-[var(--color-gray-500)]">{formatDate(order.createdAt)}</p>
+                    {order.buyer?.phone ? (
+                      <p className="text-xs text-[var(--color-gray-500)]">{order.buyer.phone}</p>
+                    ) : null}
+                    <p className="text-xs text-[var(--color-gray-500)]">{formatDateEsPr(order.createdAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[currentStatus]}`}>
-                    {STATUS_LABELS[currentStatus]}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`flex items-center gap-1.5 text-xs font-semibold ${STATUS_TEXT_COLOR[currentStatus]}`}>
+                      <span className={`inline-block h-2 w-2 rounded-full ${STATUS_DOT_COLOR[currentStatus]}`} />
+                      {STATUS_LABELS[currentStatus]}
+                    </span>
+                    <span className={`text-xs font-medium ${paymentTextColor}`}>
+                      {paymentLabel}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-2xl bg-[var(--color-gray-100,#f9fafb)] px-3 py-2 text-xs text-[var(--color-gray-500)]">
+                  <p>
+                    {order.fulfillmentMethod === "pickup" ? "Recogido" : "Envío"} ·{" "}
+                    {order.paymentMethod === "stripe" ? "Stripe" : "ATH Móvil"}
+                  </p>
+                  {order.fulfillmentMethod === "shipping" && order.shipping.address ? (
+                    <p className="mt-1">{order.shipping.address}{order.shipping.zipCode ? ` · ${order.shipping.zipCode}` : ""}</p>
+                  ) : null}
+                  {order.fulfillmentMethod === "pickup" && order.shipping.pickupNotes ? (
+                    <p className="mt-1">{order.shipping.pickupNotes}</p>
+                  ) : null}
                 </div>
 
                 {/* Items */}
@@ -202,6 +270,92 @@ export function VendorOrdersClient() {
                     {formatUsd(order.totalUsd)}
                   </span>
                 </div>
+
+                {needsAthVerification && order.payment?.receiptUrl ? (
+                  <div className="mt-3 rounded-2xl border border-[var(--vendor-card-border)] bg-white p-3">
+                    <p className="mb-2 text-xs font-bold text-amber-700">
+                      Verificar pago — ATH Móvil
+                    </p>
+                    <a
+                      href={order.payment.receiptUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block overflow-hidden rounded-xl border border-[var(--vendor-card-border)]"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={order.payment.receiptUrl}
+                        alt="Recibo ATH Móvil"
+                        className="max-h-48 w-full object-contain"
+                        loading="lazy"
+                      />
+                    </a>
+                    {order.payment.receiptNote ? (
+                      <p className="mt-2 text-xs text-[var(--color-gray-500)]">
+                        Nota del cliente: {order.payment.receiptNote}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => void handlePaymentVerification(order.id, "approve")}
+                        className="flex-1 rounded-full bg-green-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-60"
+                      >
+                        Aprobar pago
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => void handlePaymentVerification(order.id, "reject")}
+                        className="flex-1 rounded-full border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition-opacity hover:opacity-80 disabled:opacity-60"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </div>
+                ) : order.payment?.receiptUrl ? (
+                  <div className="mt-3">
+                    <a
+                      href={order.payment.receiptUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block overflow-hidden rounded-xl border border-[var(--color-gray-100,#f3f4f6)]"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={order.payment.receiptUrl}
+                        alt="Recibo ATH Móvil"
+                        className="max-h-36 w-full object-contain"
+                        loading="lazy"
+                      />
+                    </a>
+                    {order.payment.receiptNote ? (
+                      <p className="mt-1 text-xs text-[var(--color-gray-500)]">
+                        {order.payment.receiptNote}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : needsAthVerification ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => void handlePaymentVerification(order.id, "approve")}
+                      className="rounded-full bg-[var(--color-carbon)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      Aprobar pago
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => void handlePaymentVerification(order.id, "reject")}
+                      className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-60"
+                    >
+                      Rechazar pago
+                    </button>
+                  </div>
+                ) : null}
 
                 {/* Status transitions */}
                 {nextStatuses.length > 0 && (

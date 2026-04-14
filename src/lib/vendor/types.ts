@@ -1,4 +1,5 @@
 import type { VendorOnboardingStatus, VendorShopStatus } from "@/lib/vendor/constants";
+import type { PolicyTemplate, VendorPolicyCompletion } from "@/lib/policies/types";
 
 export type VendorStatusResponse = {
   userId: string;
@@ -24,6 +25,10 @@ export type VendorStatusResponse = {
     offers_pickup: boolean;
     stripe_connect_account_id: string | null;
     ath_movil_phone: string | null;
+    contact_phone: string | null;
+    contact_instagram: string | null;
+    contact_facebook: string | null;
+    contact_whatsapp: string | null;
     published_at: string | null;
     unpublished_at: string | null;
     unpublished_reason: string | null;
@@ -58,4 +63,73 @@ export type VendorStatusResponse = {
     orderCount: number;
     newOrderCount: number;
   };
+};
+
+export type VendorProductVariant = {
+  id: string;
+  productId: string;
+  title: string;
+  sku: string | null;
+  attributes: Record<string, unknown>;
+  priceUsd: number;
+  stockQty: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VendorProductImage = {
+  id: string;
+  productId: string;
+  imageUrl: string;
+  alt: string | null;
+  sortOrder: number;
+};
+
+export type VendorProduct = {
+  id: string;
+  shopId: string;
+  name: string;
+  description: string;
+  imageUrl: string | null;
+  priceUsd: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  variants: VendorProductVariant[];
+  images: VendorProductImage[];
+};
+
+export type VendorProductsResponse = {
+  products: VendorProduct[];
+  productLimit: number | null;
+  productCount: number;
+  maxImagesPerProduct: number;
+  variantsEnabled: boolean;
+};
+
+export type VendorShopActivationResponse = {
+  shopActivated: boolean;
+};
+
+export type VendorShopSettingsResponse = {
+  shop: VendorStatusResponse["shop"];
+  policies: {
+    shop_id: string;
+    refund_policy: string;
+    shipping_policy: string;
+    privacy_policy: string;
+    terms: string;
+  } | null;
+  policyCompletion?: VendorPolicyCompletion;
+  currentPolicyVersionIds?: {
+    terms: string;
+    shipping: string;
+  } | null;
+  checks: VendorStatusResponse["checks"];
+  subscription: VendorStatusResponse["subscription"] | null;
+};
+
+export type VendorPolicyTemplatesResponse = {
+  templates: PolicyTemplate[];
 };

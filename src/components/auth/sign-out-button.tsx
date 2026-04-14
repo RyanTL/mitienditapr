@@ -21,7 +21,7 @@ export function SignOutButton({ className, onSignedOut }: SignOutButtonProps) {
           const supabase = createSupabaseBrowserClient();
           await supabase.auth.signOut();
           onSignedOut?.();
-          router.push("/sign-in");
+          router.push("/");
           router.refresh();
         } catch (error) {
           console.error("No se pudo cerrar sesión:", error);

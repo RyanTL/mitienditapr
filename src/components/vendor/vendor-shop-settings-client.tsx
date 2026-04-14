@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -8,16 +9,22 @@ import {
   AlertIcon,
   AthMovilIcon,
   CheckIcon,
+  ChevronDownIcon,
   DocumentIcon,
   ImageIcon,
+  InfoIcon,
+  PencilIcon,
+  LinkIcon,
   SettingsIcon,
-  StoreIcon,
+  ShieldCheckIcon,
   TruckIcon,
+  UserIcon,
 } from "@/components/icons";
 import { VendorPageShell } from "@/components/vendor/vendor-page-shell";
 import {
   DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
   POLICY_TYPE_LABELS,
+  POLICY_TYPE_DESCRIPTIONS,
 } from "@/lib/policies/constants";
 import {
   fetchVendorPolicyTemplates,
@@ -27,18 +34,31 @@ import {
 import type {
   PolicyTemplate,
   PolicyType,
-  VendorPolicyCompletion,
   VendorShopPoliciesResponse,
 } from "@/lib/policies/types";
 import {
+  createStripeConnectAccountLink,
+  createVendorBillingPortalSession,
   fetchVendorShopSettings,
   publishVendorShop,
   uploadVendorImage,
   updateVendorShopSettings,
 } from "@/lib/vendor/client";
+import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import type { VendorShopStatus } from "@/lib/vendor/constants";
+import { toNumber } from "@/lib/utils";
+import type { VendorShopSettingsResponse } from "@/lib/vendor/types";
 
-type ShopResponse = Awaited<ReturnType<typeof fetchVendorShopSettings>>;
+type ShopResponse = VendorShopSettingsResponse;
+
+/** Short debounce: fewer round-trips than typing every keystroke, still feels instant. */
+const AUTOSAVE_DEBOUNCE_MS = 450;
+
+type VendorShopSettingsClientProps = {
+  initialStatusData?: ShopResponse;
+  initialPolicyTemplates?: PolicyTemplate[];
+  initialPolicyData?: VendorShopPoliciesResponse;
+};
 
 type PolicyDraftState = {
   title: string;
@@ -55,6 +75,10 @@ type ShopSettingsFormState = {
   shippingFlatFeeUsd: string;
   offersPickup: boolean;
   athMovilPhone: string;
+  contactPhone: string;
+  contactInstagram: string;
+  contactFacebook: string;
+  contactWhatsapp: string;
 };
 
 const DEFAULT_FORM_STATE: ShopSettingsFormState = {
@@ -65,16 +89,28 @@ const DEFAULT_FORM_STATE: ShopSettingsFormState = {
   shippingFlatFeeUsd: "0",
   offersPickup: false,
   athMovilPhone: "",
+  contactPhone: "",
+  contactInstagram: "",
+  contactFacebook: "",
+  contactWhatsapp: "",
 };
 
 const POLICY_TYPES: PolicyType[] = ["terms", "shipping", "refund", "privacy"];
 
-const STATUS_BADGE_STYLE: Record<string, string> = {
-  active: "bg-green-100 text-green-700",
-  trialing: "bg-green-100 text-green-700",
-  draft: "bg-yellow-100 text-yellow-700",
-  paused: "bg-gray-100 text-gray-600",
-  unpaid: "bg-red-100 text-red-600",
+const STATUS_DOT_STYLE: Record<string, string> = {
+  active: "bg-green-500",
+  trialing: "bg-green-500",
+  draft: "bg-amber-400",
+  paused: "bg-[var(--color-gray-500)]",
+  unpaid: "bg-[var(--color-danger)]",
+};
+
+const STATUS_TEXT_STYLE: Record<string, string> = {
+  active: "text-green-700",
+  trialing: "text-green-700",
+  draft: "text-amber-700",
+  paused: "text-[var(--color-gray-500)]",
+  unpaid: "text-[var(--color-danger)]",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -85,11 +121,6 @@ const STATUS_LABELS: Record<string, string> = {
   unpaid: "Impaga",
 };
 
-function toNumber(value: string, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function mapFormStateFromResponse(response: ShopResponse): ShopSettingsFormState {
   return {
     vendorName: response.shop?.vendor_name ?? "",
@@ -99,7 +130,31 @@ function mapFormStateFromResponse(response: ShopResponse): ShopSettingsFormState
     shippingFlatFeeUsd: String(response.shop?.shipping_flat_fee_usd ?? 0),
     offersPickup: response.shop?.offers_pickup ?? false,
     athMovilPhone: response.shop?.ath_movil_phone ?? "",
+    contactPhone: response.shop?.contact_phone ?? "",
+    contactInstagram: response.shop?.contact_instagram ?? "",
+    contactFacebook: response.shop?.contact_facebook ?? "",
+    contactWhatsapp: response.shop?.contact_whatsapp ?? "",
   };
+}
+
+function isShopFormDirty(formState: ShopSettingsFormState, statusData: ShopResponse | null) {
+  if (!statusData?.shop) return false;
+  const saved = mapFormStateFromResponse(statusData);
+  const shipForm = toNumber(formState.shippingFlatFeeUsd, 0);
+  const shipSaved = toNumber(saved.shippingFlatFeeUsd, 0);
+  return (
+    formState.vendorName !== saved.vendorName ||
+    formState.slug !== saved.slug ||
+    formState.description !== saved.description ||
+    formState.logoUrl !== saved.logoUrl ||
+    shipForm !== shipSaved ||
+    formState.offersPickup !== saved.offersPickup ||
+    formState.athMovilPhone !== saved.athMovilPhone ||
+    formState.contactPhone !== saved.contactPhone ||
+    formState.contactInstagram !== saved.contactInstagram ||
+    formState.contactFacebook !== saved.contactFacebook ||
+    formState.contactWhatsapp !== saved.contactWhatsapp
+  );
 }
 
 function createDefaultPolicyDraft() {
@@ -109,16 +164,6 @@ function createDefaultPolicyDraft() {
     templateId: null,
     accepted: false,
   } satisfies PolicyDraftState;
-}
-
-function mapCompletionBadge(status: VendorPolicyCompletion[PolicyType]) {
-  if (status === "completed") {
-    return { label: "Completa", className: "bg-green-100 text-green-700" };
-  }
-  if (status === "recommended") {
-    return { label: "Recomendada", className: "bg-gray-100 text-gray-600" };
-  }
-  return { label: "Requerida", className: "bg-red-100 text-red-600" };
 }
 
 function getDraftFromPolicy(input: {
@@ -146,11 +191,66 @@ function getDraftFromPolicy(input: {
   } satisfies PolicyDraftState;
 }
 
-// ─── Section wrapper ────────────────────────────────────────────────────────
+function buildTemplatesByType(templates: PolicyTemplate[]) {
+  return templates.reduce((map, template) => {
+    const current = map.get(template.policyType) ?? [];
+    map.set(template.policyType, [...current, template]);
+    return map;
+  }, new Map<PolicyType, PolicyTemplate[]>());
+}
+
+function buildPolicyDrafts(
+  policies: VendorShopPoliciesResponse | null,
+  templates: PolicyTemplate[],
+) {
+  const templatesByType = buildTemplatesByType(templates);
+
+  return {
+    terms: getDraftFromPolicy({
+      policyType: "terms",
+      policies,
+      templatesByType,
+    }),
+    shipping: getDraftFromPolicy({
+      policyType: "shipping",
+      policies,
+      templatesByType,
+    }),
+    refund: getDraftFromPolicy({
+      policyType: "refund",
+      policies,
+      templatesByType,
+    }),
+    privacy: getDraftFromPolicy({
+      policyType: "privacy",
+      policies,
+      templatesByType,
+    }),
+  };
+}
+
+function isPolicyDraftDirty(
+  policyType: PolicyType,
+  draft: PolicyDraftState,
+  policies: VendorShopPoliciesResponse | null,
+) {
+  const current = policies?.currentPolicies[policyType];
+
+  if (!current) {
+    return draft.title.trim().length > 0 || draft.body.trim().length > 0;
+  }
+
+  return (
+    draft.title.trim() !== current.title.trim() ||
+    draft.body.trim() !== current.body.trim()
+  );
+}
+
+// ─── Section wrapper (compact settings card) ─────────────────────────────────
 
 type SectionIconComponent = (props: ComponentPropsWithoutRef<"svg">) => ReactNode;
 
-function Section({
+function SettingsSection({
   label,
   description,
   Icon,
@@ -162,14 +262,14 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-[28px] border border-[var(--color-gray)] bg-white p-5 shadow-[0_8px_24px_var(--shadow-black-003)]">
-      <div className="mb-5 flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-carbon)] text-white">
-          <Icon className="h-5 w-5" />
+    <div className="rounded-2xl border border-[var(--color-gray)] bg-white p-4 shadow-[0_2px_12px_var(--shadow-black-003)]">
+      <div className="mb-3 flex items-start gap-2.5">
+        <div className="shrink-0 text-[var(--color-carbon)]">
+          <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <h2 className="text-base font-bold text-[var(--color-carbon)]">{label}</h2>
-          <p className="mt-1 max-w-[52ch] text-sm leading-5 text-[var(--color-gray-500)]">
+          <h2 className="text-sm font-bold text-[var(--color-carbon)]">{label}</h2>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-[var(--color-gray-500)]">
             {description}
           </p>
         </div>
@@ -179,42 +279,63 @@ function Section({
   );
 }
 
+const fieldInputClass =
+  "mt-1 w-full rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]";
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export function VendorShopSettingsClient() {
-  const [statusData, setStatusData] = useState<ShopResponse | null>(null);
-  const [formState, setFormState] = useState<ShopSettingsFormState>(DEFAULT_FORM_STATE);
-  const [policyTemplates, setPolicyTemplates] = useState<PolicyTemplate[]>([]);
-  const [policyData, setPolicyData] = useState<VendorShopPoliciesResponse | null>(null);
+export function VendorShopSettingsClient({
+  initialStatusData,
+  initialPolicyTemplates = [],
+  initialPolicyData,
+}: VendorShopSettingsClientProps) {
+  const hasInitialData = Boolean(initialStatusData && initialPolicyData);
+  const [statusData, setStatusData] = useState<ShopResponse | null>(
+    initialStatusData ?? null,
+  );
+  const [formState, setFormState] = useState<ShopSettingsFormState>(() =>
+    initialStatusData ? mapFormStateFromResponse(initialStatusData) : DEFAULT_FORM_STATE,
+  );
+  const [policyTemplates, setPolicyTemplates] = useState<PolicyTemplate[]>(
+    initialPolicyTemplates,
+  );
+  const [policyData, setPolicyData] = useState<VendorShopPoliciesResponse | null>(
+    initialPolicyData ?? null,
+  );
+  const [isPolicyEditorOpen, setIsPolicyEditorOpen] = useState(false);
   const [selectedPolicyType, setSelectedPolicyType] = useState<PolicyType>("terms");
-  const [policyDrafts, setPolicyDrafts] = useState<Record<PolicyType, PolicyDraftState>>({
-    terms: createDefaultPolicyDraft(),
-    shipping: createDefaultPolicyDraft(),
-    refund: createDefaultPolicyDraft(),
-    privacy: createDefaultPolicyDraft(),
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [isPublishingPolicy, setIsPublishingPolicy] = useState(false);
+  const [expandedPolicyCard, setExpandedPolicyCard] = useState<PolicyType | null>(null);
+  const [policyDrafts, setPolicyDrafts] = useState<Record<PolicyType, PolicyDraftState>>(
+    () => buildPolicyDrafts(initialPolicyData ?? null, initialPolicyTemplates),
+  );
+  const [isLoading, setIsLoading] = useState(!hasInitialData);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const templatesByType = useMemo(() => {
-    return policyTemplates.reduce((map, template) => {
-      const current = map.get(template.policyType) ?? [];
-      map.set(template.policyType, [...current, template]);
-      return map;
-    }, new Map<PolicyType, PolicyTemplate[]>());
+    return buildTemplatesByType(policyTemplates);
   }, [policyTemplates]);
 
-  const activePolicyDraft = policyDrafts[selectedPolicyType];
-  const activeTemplates = useMemo(
-    () => templatesByType.get(selectedPolicyType) ?? [],
-    [selectedPolicyType, templatesByType],
+  const applyFetchedBundle = useCallback(
+    (
+      shopResponse: ShopResponse,
+      templates: PolicyTemplate[],
+      policiesResponse: VendorShopPoliciesResponse,
+    ) => {
+      setStatusData(shopResponse);
+      setFormState(mapFormStateFromResponse(shopResponse));
+      setPolicyTemplates(templates);
+      setPolicyData(policiesResponse);
+      setPolicyDrafts(buildPolicyDrafts(policiesResponse, templates));
+    },
+    [],
   );
 
   const loadSettings = useCallback(async () => {
@@ -226,39 +347,51 @@ export function VendorShopSettingsClient() {
         fetchVendorPolicyTemplates(),
         fetchVendorShopPolicies(),
       ]);
-
-      setStatusData(shopResponse);
-      setFormState(mapFormStateFromResponse(shopResponse));
-      setPolicyTemplates(templatesResponse.templates);
-      setPolicyData(policiesResponse);
-
-      const templateMap = templatesResponse.templates.reduce((map, template) => {
-        const current = map.get(template.policyType) ?? [];
-        map.set(template.policyType, [...current, template]);
-        return map;
-      }, new Map<PolicyType, PolicyTemplate[]>());
-
-      setPolicyDrafts({
-        terms: getDraftFromPolicy({ policyType: "terms", policies: policiesResponse, templatesByType: templateMap }),
-        shipping: getDraftFromPolicy({ policyType: "shipping", policies: policiesResponse, templatesByType: templateMap }),
-        refund: getDraftFromPolicy({ policyType: "refund", policies: policiesResponse, templatesByType: templateMap }),
-        privacy: getDraftFromPolicy({ policyType: "privacy", policies: policiesResponse, templatesByType: templateMap }),
-      });
+      applyFetchedBundle(shopResponse, templatesResponse.templates, policiesResponse);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo cargar configuración.");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [applyFetchedBundle]);
 
-  useEffect(() => { void loadSettings(); }, [loadSettings]);
+  useEffect(() => {
+    if (hasInitialData) {
+      return;
+    }
 
-  const handleSave = useCallback(async () => {
-    setIsSaving(true);
+    void loadSettings();
+  }, [hasInitialData, loadSettings]);
+
+  const shopFormDirty = useMemo(
+    () => isShopFormDirty(formState, statusData),
+    [formState, statusData],
+  );
+
+  const policySaveTargets = useMemo(() => {
+    return POLICY_TYPES.filter((policyType) => {
+      const draft = policyDrafts[policyType];
+      return isPolicyDraftDirty(policyType, draft, policyData) && draft.accepted;
+    });
+  }, [policyDrafts, policyData]);
+
+  const hasBlockingPolicyEdits = useMemo(() => {
+    return POLICY_TYPES.some((policyType) => {
+      const draft = policyDrafts[policyType];
+      return isPolicyDraftDirty(policyType, draft, policyData) && !draft.accepted;
+    });
+  }, [policyDrafts, policyData]);
+
+  const hasAnythingToSave = shopFormDirty || policySaveTargets.length > 0;
+  const canSaveAll = hasAnythingToSave && !hasBlockingPolicyEdits;
+
+  const handleSaveAll = useCallback(async () => {
+    if (!canSaveAll) return;
+    setIsSavingSettings(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
     try {
-      const response = await updateVendorShopSettings({
+      const shopPayload = {
         vendorName: formState.vendorName,
         slug: formState.slug,
         description: formState.description,
@@ -266,20 +399,91 @@ export function VendorShopSettingsClient() {
         shippingFlatFeeUsd: Math.max(0, toNumber(formState.shippingFlatFeeUsd, 0)),
         offersPickup: formState.offersPickup,
         athMovilPhone: formState.athMovilPhone.trim() || null,
-      });
-      setStatusData((current) =>
-        current ? { ...current, shop: response.shop, checks: response.checks } : current,
-      );
+        contactPhone: formState.contactPhone.trim() || null,
+        contactInstagram: formState.contactInstagram.trim() || null,
+        contactFacebook: formState.contactFacebook.trim() || null,
+        contactWhatsapp: formState.contactWhatsapp.trim() || null,
+      };
+
+      const saveShop = shopFormDirty
+        ? updateVendorShopSettings(shopPayload).then((response) => {
+            setStatusData((prev) => {
+              if (!prev) return prev;
+              const next: ShopResponse = {
+                ...prev,
+                shop: response.shop,
+                checks: response.checks,
+              };
+              setFormState(mapFormStateFromResponse(next));
+              return next;
+            });
+          })
+        : Promise.resolve();
+
+      const savePolicies =
+        policySaveTargets.length > 0
+          ? Promise.all(
+              policySaveTargets.map((policyType) => {
+                const draft = policyDrafts[policyType];
+                return publishVendorShopPolicy(policyType, {
+                  title: draft.title,
+                  body: draft.body,
+                  templateId: draft.templateId,
+                  acceptanceScope: "update",
+                  acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
+                  accepted: draft.accepted,
+                });
+              }),
+            ).then(async () => {
+              const policiesResponse = await fetchVendorShopPolicies();
+              setPolicyData(policiesResponse);
+              setPolicyDrafts(buildPolicyDrafts(policiesResponse, policyTemplates));
+              setExpandedPolicyCard(null);
+            })
+          : Promise.resolve();
+
+      await Promise.all([saveShop, savePolicies]);
+
       setFeedbackMessage("Cambios guardados.");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "No se pudo guardar la tienda.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "No se pudieron guardar los cambios.",
+      );
     } finally {
-      setIsSaving(false);
+      setIsSavingSettings(false);
     }
-  }, [formState]);
+  }, [
+    canSaveAll,
+    formState,
+    policyDrafts,
+    policySaveTargets,
+    policyTemplates,
+    shopFormDirty,
+  ]);
+
+  const handleSaveAllRef = useRef(handleSaveAll);
+  handleSaveAllRef.current = handleSaveAll;
+
+  useEffect(() => {
+    if (isLoading || !canSaveAll || isSavingSettings || isUpdatingStatus || isUploadingLogo) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      void handleSaveAllRef.current();
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [
+    canSaveAll,
+    formState,
+    policyDrafts,
+    isLoading,
+    isSavingSettings,
+    isUpdatingStatus,
+    isUploadingLogo,
+  ]);
 
   const handleStatusUpdate = useCallback(async (nextStatus: VendorShopStatus) => {
-    setIsSaving(true);
+    setIsUpdatingStatus(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
     try {
@@ -291,7 +495,7 @@ export function VendorShopSettingsClient() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo actualizar estado.");
     } finally {
-      setIsSaving(false);
+      setIsUpdatingStatus(false);
     }
   }, []);
 
@@ -328,53 +532,39 @@ export function VendorShopSettingsClient() {
     }
   }, []);
 
-  const handleApplyTemplate = useCallback(() => {
-    const draft = policyDrafts[selectedPolicyType];
-    if (!draft.templateId) return;
-    const template = activeTemplates.find((item) => item.id === draft.templateId);
-    if (!template) return;
-    setPolicyDrafts((current) => ({
-      ...current,
-      [selectedPolicyType]: {
-        ...current[selectedPolicyType],
-        title: template.title,
-        body: template.bodyTemplate.replace(/\\n/g, "\n"),
-        accepted: false,
-      },
-    }));
-  }, [activeTemplates, policyDrafts, selectedPolicyType]);
+  const shopStatus = statusData?.shop?.status;
+  const isActive = shopStatus === "active";
+  const blockingReasons = statusData?.checks.blockingReasons ?? [];
+  const stripeConfigured = Boolean(statusData?.shop?.stripe_connect_account_id);
+  const athConfigured = formState.athMovilPhone.trim().length > 0;
 
-  const handlePublishPolicy = useCallback(async () => {
-    const draft = policyDrafts[selectedPolicyType];
-    setIsPublishingPolicy(true);
+  const handleConnectStripe = useCallback(async () => {
+    setIsConnectingStripe(true);
     setErrorMessage(null);
-    setFeedbackMessage(null);
     try {
-      const response = await publishVendorShopPolicy(selectedPolicyType, {
-        title: draft.title,
-        body: draft.body,
-        templateId: draft.templateId,
-        acceptanceScope: "update",
-        acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
-        accepted: draft.accepted,
-      });
-      setPolicyData(response);
-      setPolicyDrafts((current) => ({
-        ...current,
-        [selectedPolicyType]: { ...current[selectedPolicyType], accepted: false },
-      }));
-      setFeedbackMessage(
-        response.acceptancePending
-          ? "Política guardada. Completa Términos y Política de envío para finalizar la aceptación."
-          : "Política publicada.",
-      );
-      await loadSettings();
+      const response = await createStripeConnectAccountLink();
+      window.location.assign(response.url);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "No se pudo publicar la política.");
-    } finally {
-      setIsPublishingPolicy(false);
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo abrir Stripe.");
+      setIsConnectingStripe(false);
     }
-  }, [loadSettings, policyDrafts, selectedPolicyType]);
+  }, []);
+
+  const handleOpenBillingPortal = useCallback(async () => {
+    setIsOpeningBillingPortal(true);
+    setErrorMessage(null);
+    try {
+      const response = await createVendorBillingPortalSession();
+      window.location.assign(response.url);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "No se pudo abrir el portal de facturación.",
+      );
+      setIsOpeningBillingPortal(false);
+    }
+  }, []);
+
+  const subscription = statusData?.subscription ?? null;
 
   const shopStatus = statusData?.shop?.status;
   const isActive = shopStatus === "active";
@@ -383,7 +573,7 @@ export function VendorShopSettingsClient() {
   return (
     <VendorPageShell
       title="Configuración de tienda"
-      subtitle="Organiza la información pública de tu negocio, tus métodos de pago y los requisitos para publicar."
+      subtitle="Perfil público, envíos, cobros y políticas. Los cambios se guardan solos al poco tiempo de dejar de editar."
     >
       {/* Feedback / error banners */}
       {feedbackMessage && (
@@ -394,6 +584,14 @@ export function VendorShopSettingsClient() {
       {errorMessage && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{errorMessage}</p>
       )}
+      {!isLoading && hasBlockingPolicyEdits ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-snug text-amber-900">
+          Marca la casilla legal en cada política que editaste para poder guardarla automáticamente.
+        </p>
+      ) : null}
+      {!isLoading && isSavingSettings ? (
+        <p className="text-xs font-medium text-[var(--color-gray-500)]">Guardando…</p>
+      ) : null}
 
       {isLoading ? (
         <div className="space-y-3">
@@ -403,15 +601,100 @@ export function VendorShopSettingsClient() {
         </div>
       ) : (
         <>
+          <div className="space-y-4 pb-6 md:pb-10">
+          {/* ── Membresía ── */}
+          <SettingsSection
+            label="Membresía"
+            description="Suscripción al Plan Vendedor: cancelar, renovación automática y facturas."
+            Icon={UserIcon}
+          >
+            {isVendorBillingBypassEnabled ? (
+              <p className="text-xs leading-relaxed text-[var(--color-gray-500)]">
+                En modo prueba la facturación está omitida. El portal de administración de pagos no
+                está disponible.
+              </p>
+            ) : !subscription ? (
+              <div className="space-y-2">
+                <p className="text-xs text-[var(--color-gray-500)]">
+                  Aún no hay una suscripción registrada para esta tienda.
+                </p>
+                <Link
+                  href="/vendedor/suscripcion"
+                  className="inline-flex rounded-full bg-black px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Ver planes
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs text-[var(--color-gray-500)]">
+                <p>
+                  <span className="font-semibold text-[var(--color-carbon)]">Estado: </span>
+                  {subscription.status}
+                  {subscription.cancel_at_period_end ? (
+                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      Renovación desactivada al fin del periodo
+                    </span>
+                  ) : null}
+                </p>
+                <p>
+                  <span className="font-semibold text-[var(--color-carbon)]">Origen: </span>
+                  {subscription.provider === "stripe"
+                    ? "Stripe (tarjeta)"
+                    : subscription.provider === "manual_code"
+                      ? "Código de acceso"
+                      : subscription.provider}
+                </p>
+                {subscription.current_period_end ? (
+                  <p>
+                    <span className="font-semibold text-[var(--color-carbon)]">
+                      Próxima fecha clave:{" "}
+                    </span>
+                    {new Date(subscription.current_period_end).toLocaleDateString("es-PR", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
+                ) : null}
+                {subscription.provider === "stripe" &&
+                subscription.stripe_customer_id?.startsWith("cus_") ? (
+                  <button
+                    type="button"
+                    disabled={isOpeningBillingPortal}
+                    onClick={() => void handleOpenBillingPortal()}
+                    className="w-full rounded-full bg-[var(--color-carbon)] py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto sm:px-6"
+                  >
+                    {isOpeningBillingPortal
+                      ? "Abriendo portal…"
+                      : "Gestionar facturación y renovación"}
+                  </button>
+                ) : subscription.provider === "manual_code" ? (
+                  <p className="leading-relaxed">
+                    Tu acceso fue otorgado con un código. Para cambios de membresía, contacta a
+                    soporte.
+                  </p>
+                ) : (
+                  <p className="leading-relaxed">
+                    No hay un cliente de Stripe asociado. Suscríbete desde la página de suscripción
+                    para gestionar pagos en línea.
+                  </p>
+                )}
+              </div>
+            )}
+          </SettingsSection>
+
           {/* ── Información de tienda ── */}
-          <div className="rounded-[28px] border border-[var(--color-gray)] bg-white p-5 shadow-[0_8px_24px_var(--shadow-black-003)]">
-            {/* Logo upload — square tap-to-replace thumbnail */}
-            <div className="mb-4 flex items-center gap-4">
+          <SettingsSection
+            label="Tu tienda"
+            description="Nombre, enlace y descripción que ven tus clientes."
+            Icon={LinkIcon}
+          >
+            <div className="mb-3 flex items-center gap-3">
               <button
                 type="button"
                 disabled={isUploadingLogo}
                 onClick={() => logoInputRef.current?.click()}
-                className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--color-gray-100)] text-[var(--color-gray-500)] transition hover:opacity-80"
+                className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--color-gray-100)] text-[var(--color-gray-500)] transition hover:opacity-80"
               >
                 {formState.logoUrl ? (
                   <Image
@@ -422,7 +705,7 @@ export function VendorShopSettingsClient() {
                     className="object-cover"
                   />
                 ) : (
-                  <ImageIcon className="h-7 w-7" />
+                  <ImageIcon className="h-6 w-6" />
                 )}
                 {isUploadingLogo && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30">
@@ -441,17 +724,17 @@ export function VendorShopSettingsClient() {
                   if (file) void handleUploadLogo(file);
                 }}
               />
-              <div>
-                <p className="text-sm font-semibold text-[var(--color-carbon)]">Logo de tienda</p>
-                <p className="mt-0.5 text-sm leading-5 text-[var(--color-gray-500)]">
-                  Toca para {formState.logoUrl ? "cambiar" : "subir"} una imagen cuadrada con buena resolución.
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[var(--color-carbon)]">Logo</p>
+                <p className="mt-0.5 text-xs leading-snug text-[var(--color-gray-500)]">
+                  Toca para subir o cambiar. El logo se aplica en el guardado automático.
                 </p>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   Nombre de tienda
                 </span>
                 <input
@@ -460,29 +743,23 @@ export function VendorShopSettingsClient() {
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, vendorName: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Este nombre aparece como el título principal de tu tienda.
-                </p>
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">URL</span>
-                <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">mitiendita.pr/</p>
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">URL</span>
+                <p className="mt-0.5 text-[11px] text-[var(--color-gray-500)]">mitiendita.pr/</p>
                 <input
                   type="text"
                   value={formState.slug}
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, slug: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Usa un nombre corto y fácil de recordar para compartir tu enlace.
-                </p>
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   Descripción
                 </span>
                 <textarea
@@ -490,28 +767,24 @@ export function VendorShopSettingsClient() {
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, description: e.target.value }))
                   }
-                  rows={3}
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  rows={2}
+                  className={`${fieldInputClass} leading-relaxed`}
                 />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Escribe una descripción breve, clara y fácil de leer desde el celular.
-                </p>
               </label>
             </div>
-          </div>
+          </SettingsSection>
 
           {/* ── Envíos y recogida ── */}
-          <Section
+          <SettingsSection
             label="Envíos y recogida"
             description="Configura el costo base de envío y si ofreces recogido en persona."
             Icon={TruckIcon}
           >
-            <div className="space-y-4">
+            <div className="space-y-3">
               <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
                   Tarifa fija de envío (USD)
                 </span>
-                <p className="mt-0.5 text-xs text-[var(--color-gray-500)]">$</p>
                 <input
                   type="number"
                   min={0}
@@ -520,10 +793,10 @@ export function VendorShopSettingsClient() {
                   onChange={(e) =>
                     setFormState((s) => ({ ...s, shippingFlatFeeUsd: e.target.value }))
                   }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                  className={fieldInputClass}
                 />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Este monto se muestra en el checkout como costo base de envío.
+                <p className="mt-1 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                  Se muestra en el checkout como envío base.
                 </p>
               </label>
               <button
@@ -533,14 +806,14 @@ export function VendorShopSettingsClient() {
                 onClick={() =>
                   setFormState((s) => ({ ...s, offersPickup: !s.offersPickup }))
                 }
-                className="flex w-full items-start justify-between gap-4 rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-4 py-4 text-left"
+                className="flex w-full items-start justify-between gap-3 rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-left"
               >
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-[var(--color-carbon)]">
-                    Ofrecer recogido en persona
+                  <span className="block text-xs font-semibold text-[var(--color-carbon)]">
+                    Recogido en persona
                   </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-[var(--color-gray-500)]">
-                    Actívalo si permites coordinar entrega o pickup directamente con el cliente.
+                  <span className="mt-0.5 block text-[11px] leading-snug text-[var(--color-gray-500)]">
+                    Permite pickup o entrega coordinada con el cliente.
                   </span>
                 </span>
                 <span
@@ -560,264 +833,474 @@ export function VendorShopSettingsClient() {
                 </span>
               </button>
             </div>
-          </Section>
+          </SettingsSection>
 
           {/* ── Métodos de pago ── */}
-          <Section
-            label="Métodos de pago"
-            description="Añade la información de cobro que quieres mostrar dentro de tu tienda."
+          <SettingsSection
+            label="Cobros"
+            description="Tarjeta (Stripe) y ATH Móvil. El número ATH se guarda solo al editar."
             Icon={AthMovilIcon}
           >
-            <label className="block">
-              <span className="text-sm font-semibold text-[var(--color-carbon)]">
-                Número ATH Móvil
-              </span>
-              <input
-                type="tel"
-                value={formState.athMovilPhone}
-                placeholder="787-555-0100"
-                onChange={(e) =>
-                  setFormState((s) => ({ ...s, athMovilPhone: e.target.value }))
-                }
-                className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
-              />
-              <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                Déjalo en blanco si no usas ATH Móvil. Cuando lo añadas, tus clientes lo verán en la tienda.
-              </p>
-            </label>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--color-carbon)]">
+                      Stripe (tarjeta)
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                      Acción inmediata: se abre Stripe para conectar o revisar tu cuenta.
+                    </p>
+                  </div>
+                  <span
+                    className={[
+                      "flex items-center gap-1.5 text-xs font-semibold",
+                      stripeConfigured
+                        ? "text-green-700"
+                        : "text-amber-600",
+                    ].join(" ")}
+                  >
+                    <span className={[
+                      "inline-block h-2 w-2 rounded-full",
+                      stripeConfigured ? "bg-green-500" : "bg-amber-400",
+                    ].join(" ")} />
+                    {stripeConfigured ? "Conectado" : "Pendiente"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={isConnectingStripe}
+                  onClick={() => void handleConnectStripe()}
+                  className="mt-3 w-full rounded-full border border-[var(--color-carbon)] py-2 text-xs font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100,#f9fafb)] disabled:opacity-60 sm:w-auto sm:px-4"
+                >
+                  {isConnectingStripe
+                    ? "Abriendo Stripe..."
+                    : stripeConfigured
+                      ? "Revisar conexión Stripe"
+                      : "Conectar Stripe"}
+                </button>
+              </div>
 
-            {/* Save button for settings sections */}
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => void handleSave()}
-              className="mt-4 w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
-            >
-              {isSaving ? "Guardando..." : "Guardar cambios"}
-            </button>
-          </Section>
+              <div className="rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[var(--color-carbon)]">ATH Móvil</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                      El cliente paga fuera de la app y sube el recibo; tú lo verificas.
+                    </p>
+                  </div>
+                  <span
+                    className={[
+                      "flex items-center gap-1.5 text-xs font-semibold",
+                      athConfigured
+                        ? "text-green-700"
+                        : "text-amber-600",
+                    ].join(" ")}
+                  >
+                    <span className={[
+                      "inline-block h-2 w-2 rounded-full",
+                      athConfigured ? "bg-green-500" : "bg-amber-400",
+                    ].join(" ")} />
+                    {athConfigured ? "Activo" : "Pendiente"}
+                  </span>
+                </div>
+                <label className="mt-3 block">
+                  <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                    Número ATH Móvil
+                  </span>
+                  <input
+                    type="tel"
+                    value={formState.athMovilPhone}
+                    placeholder="787-555-0100"
+                    onChange={(e) =>
+                      setFormState((s) => ({ ...s, athMovilPhone: e.target.value }))
+                    }
+                    className={fieldInputClass}
+                  />
+                  <p className="mt-1 text-[11px] text-[var(--color-gray-500)]">
+                    Opcional. En blanco si no usas ATH.
+                  </p>
+                </label>
+              </div>
+
+              {!stripeConfigured && !athConfigured ? (
+                <div className="rounded-xl border border-[var(--color-danger)] bg-red-50 px-3 py-2.5 text-[11px] leading-snug text-[var(--color-danger)]">
+                  Configura Stripe o ATH Móvil para publicar y cobrar.
+                </div>
+              ) : null}
+            </div>
+          </SettingsSection>
+
+          {/* ── Contacto para compradores ── */}
+          <SettingsSection
+            label="Contacto en checkout"
+            description="Datos opcionales que ves en el flujo ATH para coordinar."
+            Icon={UserIcon}
+          >
+            <div className="space-y-2.5">
+              <label className="block">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                  Teléfono
+                </span>
+                <input
+                  type="tel"
+                  value={formState.contactPhone}
+                  placeholder="787-000-0000"
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, contactPhone: e.target.value }))
+                  }
+                  className={fieldInputClass}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                  WhatsApp
+                </span>
+                <input
+                  type="tel"
+                  value={formState.contactWhatsapp}
+                  placeholder="787-000-0000"
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, contactWhatsapp: e.target.value }))
+                  }
+                  className={fieldInputClass}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                  Instagram
+                </span>
+                <div className="relative mt-1">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-gray-500)]">@</span>
+                  <input
+                    type="text"
+                    value={formState.contactInstagram}
+                    placeholder="tu_tienda"
+                    onChange={(e) =>
+                      setFormState((s) => ({ ...s, contactInstagram: e.target.value.replace(/^@/, "") }))
+                    }
+                    className={`${fieldInputClass} pl-7`}
+                  />
+                </div>
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                  Facebook
+                </span>
+                <input
+                  type="text"
+                  value={formState.contactFacebook}
+                  placeholder="Página o enlace"
+                  onChange={(e) =>
+                    setFormState((s) => ({ ...s, contactFacebook: e.target.value }))
+                  }
+                  className={fieldInputClass}
+                />
+              </label>
+              <p className="text-[11px] leading-snug text-[var(--color-gray-500)]">
+                Solo se muestran los campos que llenes.
+              </p>
+            </div>
+          </SettingsSection>
 
           {/* ── Políticas ── */}
-          <Section
+          <SettingsSection
             label="Políticas"
-            description="Publica textos claros para tu tienda. Términos y Política de envío son obligatorios para publicar."
-            Icon={DocumentIcon}
+            description="Ya tienes textos por defecto. Edita solo si hace falta; se publican solos tras la confirmación legal."
+            Icon={ShieldCheckIcon}
           >
-            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] p-3">
-              <DocumentIcon className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-carbon)]" />
-              <div>
-                <p className="text-sm font-semibold text-[var(--color-carbon)]">
-                  Mejora la lectura del texto legal
+            <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-[var(--vendor-card-border)] bg-white px-3 py-2.5">
+              <div className="shrink-0 text-green-600">
+                <ShieldCheckIcon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[var(--color-carbon)]">
+                  Políticas por defecto activas
                 </p>
-                <p className="mt-1 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Usa párrafos cortos y saltos de línea entre secciones para que el contenido se lea bien en móvil.
+                <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                  Visibles en tu tienda y en el checkout.
                 </p>
               </div>
             </div>
 
-            <p className="mb-3 text-sm leading-5 text-[var(--color-gray-500)]">
-              Reembolso y privacidad siguen siendo recomendadas para dar más confianza a tus clientes.
-            </p>
-
-            {/* Policy type selector pills */}
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              {POLICY_TYPES.map((policyType) => {
-                const completion = policyData?.completion[policyType] ?? "recommended";
-                const badge = mapCompletionBadge(completion);
-                const isSelected = selectedPolicyType === policyType;
-                return (
-                  <button
-                    key={policyType}
-                    type="button"
-                    onClick={() => setSelectedPolicyType(policyType)}
-                    className={[
-                      "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                      isSelected
-                        ? "bg-[var(--color-carbon)] text-white"
-                        : "bg-[var(--color-gray-100,#f3f4f6)] text-[var(--color-carbon)]",
-                    ].join(" ")}
-                  >
-                    {POLICY_TYPE_LABELS[policyType]}
-                    <span
-                      className={[
-                        "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
-                        badge.className,
-                      ].join(" ")}
-                    >
-                      {badge.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="space-y-3">
-              {/* Template selector */}
-              {activeTemplates.length > 0 && (
-                <div className="flex items-end gap-2">
-                  <label className="block flex-1">
-                    <span className="text-sm font-semibold text-[var(--color-carbon)]">
-                      Plantilla
-                    </span>
-                    <select
-                      value={activePolicyDraft.templateId ?? ""}
-                      onChange={(e) =>
-                        setPolicyDrafts((current) => ({
-                          ...current,
-                          [selectedPolicyType]: {
-                            ...current[selectedPolicyType],
-                            templateId: e.target.value || null,
-                            accepted: false,
-                          },
-                        }))
-                      }
-                      className="mt-1.5 w-full appearance-none rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236d6d6d%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[position:right_16px_center] bg-no-repeat px-4 py-3 pr-10 text-sm outline-none"
-                    >
-                      <option value="">Seleccionar plantilla</option>
-                      {activeTemplates.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.title} (v{template.version})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleApplyTemplate}
-                    className="mb-0.5 shrink-0 rounded-full border border-[var(--color-gray-200,#e5e7eb)] px-3 py-3 text-xs font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)]"
-                  >
-                    Aplicar
-                  </button>
-                </div>
-              )}
-
-              {/* Title */}
-              <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">Título</span>
-                <input
-                  type="text"
-                  value={activePolicyDraft.title}
-                  onChange={(e) =>
-                    setPolicyDrafts((current) => ({
-                      ...current,
-                      [selectedPolicyType]: {
-                        ...current[selectedPolicyType],
-                        title: e.target.value,
-                        accepted: false,
-                      },
-                    }))
-                  }
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
-                />
-              </label>
-
-              {/* Body */}
-              <label className="block">
-                <span className="text-sm font-semibold text-[var(--color-carbon)]">
-                  Texto legal
+            <button
+              type="button"
+              onClick={() => setIsPolicyEditorOpen((current) => !current)}
+              className="flex w-full items-center justify-between rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-left transition hover:bg-[var(--color-gray-100,#f9fafb)]"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="shrink-0 text-[var(--color-gray-500)]">
+                  <DocumentIcon className="h-4 w-4" />
                 </span>
-                <textarea
-                  value={activePolicyDraft.body}
-                  onChange={(e) =>
-                    setPolicyDrafts((current) => ({
-                      ...current,
-                      [selectedPolicyType]: {
-                        ...current[selectedPolicyType],
-                        body: e.target.value,
-                        accepted: false,
-                      },
-                    }))
-                  }
-                  rows={9}
-                  className="mt-1.5 w-full rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
-                />
-                <p className="mt-1.5 text-xs leading-5 text-[var(--color-gray-500)]">
-                  Mantén títulos, párrafos y condiciones en bloques separados para mejorar la lectura.
-                </p>
-              </label>
-
-              {/* Legal acceptance checkbox */}
-              <label className="flex items-start gap-2.5 rounded-2xl bg-[var(--color-gray-100,#f3f4f6)] p-3 text-sm text-[var(--color-carbon)]">
-                <input
-                  type="checkbox"
-                  checked={activePolicyDraft.accepted}
-                  onChange={(e) =>
-                    setPolicyDrafts((current) => ({
-                      ...current,
-                      [selectedPolicyType]: {
-                        ...current[selectedPolicyType],
-                        accepted: e.target.checked,
-                      },
-                    }))
-                  }
-                  className="mt-0.5 shrink-0"
-                />
-                <span className="leading-5">
-                  Confirmo que esta política es precisa y cumple con las leyes aplicables a mi negocio.
-                </span>
-              </label>
-
-              <button
-                type="button"
-                disabled={isPublishingPolicy}
-                onClick={() => void handlePublishPolicy()}
-                className="w-full rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
-              >
-                {isPublishingPolicy ? "Guardando..." : `Publicar ${POLICY_TYPE_LABELS[selectedPolicyType]}`}
-              </button>
-
-              {/* Latest acceptance record */}
-              {policyData?.latestAcceptance && (
-                <div className="flex items-center gap-2 text-xs text-[var(--color-gray-500)]">
-                  <CheckIcon className="h-4 w-4 text-[var(--color-carbon)]" />
-                  <p>
-                    Última aceptación:{" "}
-                    {new Date(policyData.latestAcceptance.acceptedAt).toLocaleString("es-PR")}
+                <div>
+                  <p className="text-xs font-semibold text-[var(--color-carbon)]">
+                    Personalizar textos
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                    Avanzado: plantillas y borradores.
                   </p>
                 </div>
-              )}
-            </div>
-          </Section>
+              </div>
+              <ChevronDownIcon
+                className={[
+                  "h-4 w-4 text-[var(--color-gray-500)] transition-transform",
+                  isPolicyEditorOpen ? "rotate-180" : "",
+                ].join(" ")}
+              />
+            </button>
+
+            {isPolicyEditorOpen && (
+              <>
+                <div className="mt-5 space-y-2.5">
+                  {POLICY_TYPES.map((policyType) => {
+                    const isExpanded =
+                      selectedPolicyType === policyType && expandedPolicyCard === policyType;
+                    const draft = policyDrafts[policyType];
+                    const currentPolicy = policyData?.currentPolicies[policyType];
+                    const isPublished = Boolean(currentPolicy?.id);
+                    const version = currentPolicy?.versionNumber ?? 0;
+                    const isDirty = isPolicyDraftDirty(policyType, draft, policyData);
+
+                    return (
+                      <div
+                        key={policyType}
+                        className={[
+                          "overflow-hidden rounded-2xl border transition-all duration-200",
+                          isExpanded
+                            ? "border-[var(--color-brand)] shadow-[0_0_0_1px_var(--color-brand)]"
+                            : "border-[var(--color-gray-200,#e5e7eb)]",
+                        ].join(" ")}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isExpanded) {
+                              setExpandedPolicyCard(null);
+                            } else {
+                              setSelectedPolicyType(policyType);
+                              setExpandedPolicyCard(policyType);
+                            }
+                          }}
+                          className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-[var(--color-gray-100,#f9fafb)]"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-[var(--color-carbon)]">
+                                {POLICY_TYPE_LABELS[policyType]}
+                              </span>
+                              {isPublished && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700">
+                                  <CheckIcon className="h-2.5 w-2.5" />
+                                  {version > 1 ? `v${version}` : "Activa"}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-xs leading-4 text-[var(--color-gray-500)]">
+                              {POLICY_TYPE_DESCRIPTIONS[policyType]}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-[var(--color-gray-500)]">
+                            {isExpanded ? (
+                              <ChevronDownIcon className="h-4 w-4 rotate-180 transition-transform" />
+                            ) : (
+                              <PencilIcon className="h-3.5 w-3.5" />
+                            )}
+                          </div>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t border-[var(--color-gray-200,#e5e7eb)] bg-[var(--color-gray-100,#f9fafb)] px-4 py-4">
+                            <div className="space-y-3">
+                              {(templatesByType.get(policyType) ?? []).length > 0 && (
+                                <div className="flex items-end gap-2">
+                                  <label className="block flex-1">
+                                    <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                                      Plantilla
+                                    </span>
+                                    <select
+                                      value={draft.templateId ?? ""}
+                                      onChange={(e) =>
+                                        setPolicyDrafts((current) => ({
+                                          ...current,
+                                          [policyType]: {
+                                            ...current[policyType],
+                                            templateId: e.target.value || null,
+                                            accepted: false,
+                                          },
+                                        }))
+                                      }
+                                      className="mt-1 w-full appearance-none rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-xs outline-none"
+                                    >
+                                      <option value="">Seleccionar plantilla</option>
+                                      {(templatesByType.get(policyType) ?? []).map((template) => (
+                                        <option key={template.id} value={template.id}>
+                                          {template.title} (v{template.version})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const d = policyDrafts[policyType];
+                                      if (!d.templateId) return;
+                                      const template = (templatesByType.get(policyType) ?? []).find(
+                                        (item) => item.id === d.templateId,
+                                      );
+                                      if (!template) return;
+                                      setPolicyDrafts((current) => ({
+                                        ...current,
+                                        [policyType]: {
+                                          ...current[policyType],
+                                          title: template.title,
+                                          body: template.bodyTemplate.replace(/\\n/g, "\n"),
+                                          accepted: false,
+                                        },
+                                      }));
+                                    }}
+                                    className="shrink-0 rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-xs font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)]"
+                                  >
+                                    Aplicar
+                                  </button>
+                                </div>
+                              )}
+
+                              <label className="block">
+                                <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                                  Título
+                                </span>
+                                <input
+                                  type="text"
+                                  value={draft.title}
+                                  onChange={(e) =>
+                                    setPolicyDrafts((current) => ({
+                                      ...current,
+                                      [policyType]: {
+                                        ...current[policyType],
+                                        title: e.target.value,
+                                        accepted: false,
+                                      },
+                                    }))
+                                  }
+                                  className="mt-1 w-full rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                                />
+                              </label>
+
+                              <label className="block">
+                                <span className="text-xs font-semibold text-[var(--color-carbon)]">
+                                  Texto de la política
+                                </span>
+                                <textarea
+                                  value={draft.body}
+                                  onChange={(e) =>
+                                    setPolicyDrafts((current) => ({
+                                      ...current,
+                                      [policyType]: {
+                                        ...current[policyType],
+                                        body: e.target.value,
+                                        accepted: false,
+                                      },
+                                    }))
+                                  }
+                                  rows={8}
+                                  className="mt-1 w-full rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
+                                />
+                              </label>
+
+                              {isDirty ? (
+                                <>
+                                  <label className="flex items-start gap-2.5 rounded-xl bg-white p-3 text-[11px] text-[var(--color-carbon)]">
+                                    <input
+                                      type="checkbox"
+                                      checked={draft.accepted}
+                                      onChange={(e) =>
+                                        setPolicyDrafts((current) => ({
+                                          ...current,
+                                          [policyType]: {
+                                            ...current[policyType],
+                                            accepted: e.target.checked,
+                                          },
+                                        }))
+                                      }
+                                      className="mt-0.5 shrink-0"
+                                    />
+                                    <span className="leading-snug">
+                                      Confirmo que esta política es precisa y cumple con las leyes aplicables a mi negocio.
+                                    </span>
+                                  </label>
+                                  <p className="rounded-xl bg-white px-3 py-2 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                                    {draft.accepted
+                                      ? "Se publicará automáticamente en unos segundos junto con el resto de los cambios."
+                                      : "Marca la casilla para incluir esta política en el guardado automático."}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="rounded-xl bg-white px-3 py-2.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                                  La confirmación legal solo aplica cuando modificas el texto.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {policyData?.latestAcceptance && (
+                  <div className="mt-3 flex items-center gap-2 text-xs text-[var(--color-gray-500)]">
+                    <CheckIcon className="h-3.5 w-3.5 text-green-600" />
+                    <p>
+                      Última aceptación:{" "}
+                      {new Date(policyData.latestAcceptance.acceptedAt).toLocaleString("es-PR")}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </SettingsSection>
 
           {/* ── Estado de tienda ── */}
-          <Section
-            label="Estado de tienda"
-            description="Revisa si tu tienda está lista para publicarse o si necesitas completar algún requisito."
+          <SettingsSection
+            label="Estado y visibilidad"
+            description="Borrador, activa o pausada. Las acciones de pausa aplican al momento."
             Icon={SettingsIcon}
           >
-            {/* Current status badge */}
-            <div className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[var(--color-carbon)]">
-                  <StoreIcon className="h-5 w-5" />
+            <div className="mb-3 flex items-center justify-between rounded-xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] px-3 py-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="shrink-0 text-[var(--color-carbon)]">
+                  <InfoIcon className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[var(--color-carbon)]">Estado actual</p>
-                  <p className="text-xs leading-5 text-[var(--color-gray-500)]">
-                    Controla cuándo tu tienda está visible para compradores.
+                  <p className="text-xs font-semibold text-[var(--color-carbon)]">Estado</p>
+                  <p className="text-[11px] leading-snug text-[var(--color-gray-500)]">
+                    Visible para compradores cuando está activa.
                   </p>
                 </div>
               </div>
               <span
                 className={[
-                  "rounded-full px-3 py-1 text-sm font-semibold",
-                  STATUS_BADGE_STYLE[shopStatus ?? ""] ?? "bg-gray-100 text-gray-600",
+                  "flex items-center gap-1.5 text-xs font-semibold",
+                  STATUS_TEXT_STYLE[shopStatus ?? ""] ?? "text-[var(--color-gray-500)]",
                 ].join(" ")}
               >
+                <span className={[
+                  "inline-block h-2 w-2 rounded-full",
+                  STATUS_DOT_STYLE[shopStatus ?? ""] ?? "bg-[var(--color-gray-500)]",
+                ].join(" ")} />
                 {STATUS_LABELS[shopStatus ?? ""] ?? shopStatus ?? "—"}
               </span>
             </div>
 
-            {/* Blocking reasons checklist */}
             {blockingReasons.length > 0 && (
-              <div className="mb-4 rounded-2xl bg-red-50 p-4">
-                <p className="mb-2 text-sm font-semibold text-red-700">
-                  Requerido para publicar:
+              <div className="mb-3 rounded-xl border border-[var(--vendor-card-border)] border-l-[3px] border-l-[var(--color-danger)] bg-white p-3">
+                <p className="mb-1.5 text-xs font-semibold text-[var(--color-danger)]">
+                  Para activarla automáticamente:
                 </p>
-                <ul className="space-y-2">
+                <ul className="space-y-1.5">
                   {blockingReasons.map((reason) => (
-                    <li key={reason} className="flex items-start gap-2 text-sm leading-5 text-red-600">
-                      <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                    <li key={reason} className="flex items-start gap-2 text-xs leading-snug text-[var(--color-danger)]">
+                      <AlertIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>{reason}</span>
                     </li>
                   ))}
@@ -825,29 +1308,55 @@ export function VendorShopSettingsClient() {
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {!isActive ? (
-                <button
-                  type="button"
-                  disabled={isPublishing || isSaving || blockingReasons.length > 0}
-                  onClick={() => void handlePublishShop()}
-                  className="flex-1 rounded-full bg-[var(--color-carbon)] py-3 text-sm font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
-                >
-                  {isPublishing ? "Publicando..." : "Publicar tienda"}
-                </button>
+            {shopStatus === "draft" && (
+              blockingReasons.length > 0 ? (
+                <p className="text-xs leading-snug text-[var(--color-gray-500)]">
+                  Completa lo anterior y activaremos tu tienda automáticamente.
+                </p>
               ) : (
+                <p className="text-xs leading-snug text-[var(--color-gray-500)]">
+                  Tu tienda está lista; la estamos activando.
+                </p>
+              )
+            )}
+
+            {shopStatus === "paused" && (
+              <p className="mb-3 text-xs leading-snug text-[var(--color-gray-500)]">
+                Pausada por ti. Reactívala cuando quieras.
+              </p>
+            )}
+
+            {isActive || shopStatus === "paused" ? (
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">
+                Acciones inmediatas
+              </p>
+            ) : null}
+
+            {isActive ? (
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
-                  disabled={isSaving}
+                  disabled={isUpdatingStatus || isSavingSettings}
                   onClick={() => void handleStatusUpdate("paused")}
-                  className="flex-1 rounded-full border border-[var(--color-gray-200,#e5e7eb)] py-3 text-sm font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)] disabled:opacity-60"
+                  className="flex-1 rounded-full border border-[var(--color-gray-200,#e5e7eb)] py-2.5 text-xs font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)] disabled:opacity-60"
                 >
-                  Pausar tienda
+                  {isUpdatingStatus ? "Aplicando..." : "Pausar tienda"}
                 </button>
-              )}
-            </div>
-          </Section>
+              </div>
+            ) : shopStatus === "paused" ? (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  disabled={isUpdatingStatus || isSavingSettings || blockingReasons.length > 0}
+                  onClick={() => void handleStatusUpdate("active")}
+                  className="flex-1 rounded-full bg-[var(--color-carbon)] py-2.5 text-xs font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
+                >
+                  {isUpdatingStatus ? "Aplicando..." : "Reactivar tienda"}
+                </button>
+              </div>
+            ) : null}
+          </SettingsSection>
+          </div>
         </>
       )}
     </VendorPageShell>

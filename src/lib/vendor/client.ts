@@ -1,34 +1,14 @@
 "use client";
 
 import type { VendorOrderStatus, VendorShopStatus } from "@/lib/vendor/constants";
-import type { VendorStatusResponse } from "@/lib/vendor/types";
-
-async function fetchJson<TResponse>(
-  path: string,
-  options: RequestInit = {},
-): Promise<TResponse> {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-  });
-
-  const body = (await response.json().catch(() => null)) as
-    | (TResponse & { error?: string })
-    | null;
-
-  if (!response.ok) {
-    throw new Error(body?.error ?? `Request failed (${response.status}).`);
-  }
-
-  if (!body) {
-    throw new Error("Respuesta invalida del servidor.");
-  }
-
-  return body;
-}
+import type { OrderPaymentStatus } from "@/lib/orders/constants";
+import type {
+  VendorProductsResponse,
+  VendorShopActivationResponse,
+  VendorShopSettingsResponse,
+  VendorStatusResponse,
+} from "@/lib/vendor/types";
+import { fetchJson } from "@/lib/fetch-client";
 
 export function fetchVendorStatus() {
   return fetchJson<VendorStatusResponse>("/api/vendor/status", {
@@ -52,6 +32,7 @@ export function saveVendorOnboardingStep(step: number, payload: Record<string, u
     checks: VendorStatusResponse["checks"];
     nextStep: number;
     completed: boolean;
+    shopActivated: boolean;
   }>("/api/vendor/onboarding/step", {
     method: "PATCH",
     body: JSON.stringify({
@@ -71,28 +52,7 @@ export function publishVendorShop() {
 }
 
 export function fetchVendorShopSettings() {
-  return fetchJson<{
-    shop: VendorStatusResponse["shop"];
-    policies: {
-      shop_id: string;
-      refund_policy: string;
-      shipping_policy: string;
-      privacy_policy: string;
-      terms: string;
-    } | null;
-    policyCompletion?: {
-      terms: "completed" | "recommended" | "required";
-      shipping: "completed" | "recommended" | "required";
-      refund: "completed" | "recommended" | "required";
-      privacy: "completed" | "recommended" | "required";
-      requiredReady: boolean;
-    };
-    currentPolicyVersionIds?: {
-      terms: string;
-      shipping: string;
-    } | null;
-    checks: VendorStatusResponse["checks"];
-  }>("/api/vendor/shop", {
+  return fetchJson<VendorShopSettingsResponse>("/api/vendor/shop", {
     method: "GET",
     cache: "no-store",
   });
@@ -106,6 +66,10 @@ export function updateVendorShopSettings(payload: {
   shippingFlatFeeUsd?: number;
   offersPickup?: boolean;
   athMovilPhone?: string | null;
+  contactPhone?: string | null;
+  contactInstagram?: string | null;
+  contactFacebook?: string | null;
+  contactWhatsapp?: string | null;
   status?: VendorShopStatus;
   policies?: {
     refundPolicy?: string;
@@ -133,36 +97,7 @@ export type VendorVariantInput = {
 };
 
 export function fetchVendorProducts() {
-  return fetchJson<{
-    products: Array<{
-      id: string;
-      shopId: string;
-      name: string;
-      description: string;
-      imageUrl: string | null;
-      priceUsd: number;
-      isActive: boolean;
-      createdAt: string;
-      updatedAt: string;
-      variants: Array<{
-        id: string;
-        productId: string;
-        title: string;
-        sku: string | null;
-        attributes: Record<string, unknown>;
-        priceUsd: number;
-        stockQty: number;
-        isActive: boolean;
-      }>;
-      images: Array<{
-        id: string;
-        productId: string;
-        imageUrl: string;
-        alt: string | null;
-        sortOrder: number;
-      }>;
-    }>;
-  }>("/api/vendor/products", {
+  return fetchJson<VendorProductsResponse>("/api/vendor/products", {
     method: "GET",
     cache: "no-store",
   });
@@ -176,10 +111,13 @@ export function createVendorProduct(payload: {
   isActive?: boolean;
   variant: VendorVariantInput;
 }) {
-  return fetchJson<{ product: { id: string; name: string } }>("/api/vendor/products", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return fetchJson<{ product: { id: string; name: string } } & VendorShopActivationResponse>(
+    "/api/vendor/products",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function updateVendorProduct(
@@ -192,28 +130,18 @@ export function updateVendorProduct(
     priceUsd?: number;
   },
 ) {
-  return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function archiveVendorProduct(productId: string) {
-  return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}/archive`, {
-    method: "POST",
-  });
+  return fetchJson<{ ok: true } & VendorShopActivationResponse>(
+    `/api/vendor/products/${productId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function deleteVendorProduct(productId: string) {
   return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}`, {
     method: "DELETE",
-  });
-}
-
-export function createVendorVariant(productId: string, payload: VendorVariantInput) {
-  return fetchJson<{ ok: true }>(`/api/vendor/products/${productId}/variants`, {
-    method: "POST",
-    body: JSON.stringify(payload),
   });
 }
 
@@ -244,13 +172,69 @@ export function deleteVendorProductImage(productId: string, imageId: string) {
   );
 }
 
-export function updateVendorVariant(
-  variantId: string,
-  payload: Partial<VendorVariantInput>,
+export function createVendorProductVariant(
+  productId: string,
+  payload: VendorVariantInput,
 ) {
-  return fetchJson<{ ok: true }>(`/api/vendor/variants/${variantId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
+  return fetchJson<{ ok: true } & VendorShopActivationResponse>(
+    `/api/vendor/products/${productId}/variants`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        title: payload.title,
+        sku: payload.sku,
+        priceUsd: payload.priceUsd,
+        stockQty: payload.stockQty ?? 0,
+        isActive: payload.isActive,
+        attributes: payload.attributes,
+      }),
+    },
+  );
+}
+
+export function updateVendorProductVariant(
+  variantId: string,
+  payload: Partial<{
+    title: string;
+    sku: string | null;
+    priceUsd: number;
+    stockQty: number;
+    isActive: boolean;
+    attributes: Record<string, string>;
+  }>,
+) {
+  const body: Record<string, unknown> = {};
+  if (payload.title !== undefined) {
+    body.title = payload.title;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "sku")) {
+    body.sku = payload.sku;
+  }
+  if (payload.priceUsd !== undefined) {
+    body.priceUsd = payload.priceUsd;
+  }
+  if (payload.stockQty !== undefined) {
+    body.stockQty = payload.stockQty;
+  }
+  if (payload.isActive !== undefined) {
+    body.isActive = payload.isActive;
+  }
+  if (payload.attributes !== undefined) {
+    body.attributes = payload.attributes;
+  }
+
+  return fetchJson<{ ok: true } & VendorShopActivationResponse>(
+    `/api/vendor/variants/${variantId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export function createVendorBillingPortalSession() {
+  return fetchJson<{ url: string }>("/api/stripe/billing-portal", {
+    method: "POST",
   });
 }
 
@@ -260,18 +244,37 @@ export function fetchVendorOrders() {
       id: string;
       status: string;
       vendorStatus: VendorOrderStatus;
+      paymentStatus: OrderPaymentStatus;
+      paymentMethod: "stripe" | "ath_movil" | null;
       subtotalUsd: number;
+      shippingFeeUsd: number;
       totalUsd: number;
+      fulfillmentMethod: "shipping" | "pickup";
       createdAt: string;
       buyer: {
         id: string;
         email: string | null;
         fullName: string | null;
+        phone: string | null;
+      } | null;
+      shipping: {
+        address: string | null;
+        zipCode: string | null;
+        pickupNotes: string | null;
+      };
+      payment: {
+        provider: string;
+        status: OrderPaymentStatus;
+        receiptUrl: string | null;
+        receiptNote: string | null;
+        failedReason: string | null;
+        verifiedAt: string | null;
       } | null;
       items: Array<{
         productId: string;
         productVariantId: string | null;
         productName: string;
+        imageUrl: string | null;
         quantity: number;
         unitPriceUsd: number;
       }>;
@@ -289,18 +292,38 @@ export function updateVendorOrderStatus(orderId: string, status: VendorOrderStat
   });
 }
 
-export function createStripeConnectAccountLink() {
-  return fetchJson<{ url: string; stripeConnectAccountId: string }>(
-    "/api/stripe/connect/account-link",
-    {
-      method: "POST",
-    },
-  );
+export function verifyVendorOrderPayment(
+  orderId: string,
+  action: "approve" | "reject",
+) {
+  return fetchJson<{ ok: true }>(`/api/vendor/orders/${orderId}/verify-payment`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
 }
 
 export function createStripeSubscriptionCheckout() {
   return fetchJson<{ url: string }>("/api/stripe/subscription/checkout", {
     method: "POST",
+  });
+}
+
+export function createStripeConnectAccountLink() {
+  return fetchJson<{ url: string }>("/api/stripe/connect/account-link", {
+    method: "POST",
+  });
+}
+
+export type VerifyStripeSubscriptionResult = {
+  status: "active" | "pending" | "invalid";
+  message?: string;
+  redirectTo?: string;
+};
+
+export function verifyStripeSubscriptionCheckout(sessionId: string) {
+  return fetchJson<VerifyStripeSubscriptionResult>("/api/stripe/subscription/verify", {
+    method: "POST",
+    body: JSON.stringify({ sessionId }),
   });
 }
 
@@ -314,81 +337,6 @@ export function redeemVendorAccessCode(code: string) {
   }>("/api/vendor/subscription/redeem-code", {
     method: "POST",
     body: JSON.stringify({ code }),
-  });
-}
-
-export function fetchAdminVendorAccessCodes() {
-  return fetchJson<{
-    codes: Array<{
-      id: string;
-      label: string;
-      isActive: boolean;
-      maxRedemptions: number | null;
-      redeemedCount: number;
-      benefitType: "free_months" | "lifetime_free";
-      benefitMonths: number | null;
-      expiresAt: string | null;
-      createdAt: string;
-      updatedAt: string;
-    }>;
-  }>("/api/admin/vendor-access-codes", {
-    method: "GET",
-    cache: "no-store",
-  });
-}
-
-export function createAdminVendorAccessCode(payload: {
-  label: string;
-  benefitType: "free_months" | "lifetime_free";
-  benefitMonths?: number | null;
-  maxRedemptions?: number | null;
-  expiresAt?: string | null;
-}) {
-  return fetchJson<{
-    code: {
-      id: string;
-      label: string;
-      plainCode: string;
-      isActive: boolean;
-      maxRedemptions: number | null;
-      redeemedCount: number;
-      benefitType: "free_months" | "lifetime_free";
-      benefitMonths: number | null;
-      expiresAt: string | null;
-      createdAt: string;
-      updatedAt: string;
-    };
-  }>("/api/admin/vendor-access-codes", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateAdminVendorAccessCode(
-  codeId: string,
-  payload: {
-    label?: string;
-    isActive?: boolean;
-    maxRedemptions?: number | null;
-    expiresAt?: string | null;
-  },
-) {
-  return fetchJson<{
-    code: {
-      id: string;
-      label: string;
-      isActive: boolean;
-      maxRedemptions: number | null;
-      redeemedCount: number;
-      benefitType: "free_months" | "lifetime_free";
-      benefitMonths: number | null;
-      expiresAt: string | null;
-      createdAt: string;
-      updatedAt: string;
-    };
-  }>(`/api/admin/vendor-access-codes/${codeId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
   });
 }
 

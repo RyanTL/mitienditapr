@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ShopPageClient } from "@/app/(marketplace)/[shopSlug]/shop-page-client";
-import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data";
+import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data-server";
 
 type ShopPageProps = {
   params: Promise<{ shopSlug: string }>;

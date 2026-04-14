@@ -11,6 +11,7 @@ import {
   upsertFavoriteProduct,
   type FavoriteProduct,
 } from "@/lib/supabase/favorites";
+import { requireBrowserSession, redirectToSignIn } from "@/lib/supabase/browser-auth";
 
 type FavoriteProductInput = Omit<FavoriteProduct, "id">;
 
@@ -36,6 +37,10 @@ export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: F
   }, []);
 
   useEffect(() => {
+    if (initialFavorites !== undefined || favorites.length > 0) {
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       void refreshFavorites();
     }, 0);
@@ -43,7 +48,7 @@ export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: F
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [refreshFavorites]);
+  }, [favorites.length, initialFavorites, refreshFavorites]);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -58,18 +63,10 @@ export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: F
     };
   }, [refreshFavorites]);
 
-  const redirectToSignIn = useCallback(() => {
-    const nextPath = pathname ?? "/";
-    router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
-  }, [pathname, router]);
-
   const addFavorite = useCallback(
     async (input: FavoriteProductInput) => {
-      // Check auth instantly (local memory) — redirect before any UI change
-      const supabase = createSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await requireBrowserSession(router, pathname);
       if (!session) {
-        redirectToSignIn();
         return false;
       }
 
@@ -86,7 +83,7 @@ export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: F
         const result = await upsertFavoriteProduct(input.shopSlug, input.productId);
         if (result.unauthorized) {
           setFavorites(previousFavorites);
-          redirectToSignIn();
+          redirectToSignIn(router, pathname);
           return false;
         }
 
@@ -97,7 +94,7 @@ export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: F
         return false;
       }
     },
-    [favorites, redirectToSignIn],
+    [favorites, pathname, router],
   );
 
   const removeFavoriteById = useCallback(
@@ -118,23 +115,20 @@ export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: F
 
         if (result.unauthorized) {
           setFavorites(previousFavorites);
-          redirectToSignIn();
+          redirectToSignIn(router, pathname);
         }
       } catch (error) {
         console.error("No se pudo eliminar el favorito:", error);
         setFavorites(previousFavorites);
       }
     },
-    [favorites, redirectToSignIn],
+    [favorites, pathname, router],
   );
 
   const toggleFavorite = useCallback(
     async (input: FavoriteProductInput) => {
-      // Check auth instantly (local memory) — redirect before any UI change
-      const supabase = createSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await requireBrowserSession(router, pathname);
       if (!session) {
-        redirectToSignIn();
         return false;
       }
 
@@ -159,7 +153,7 @@ export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: F
 
         if (result.unauthorized) {
           setFavorites(previousFavorites);
-          redirectToSignIn();
+          redirectToSignIn(router, pathname);
           return isCurrentlyFavorite;
         }
 
@@ -170,7 +164,7 @@ export function useFavoriteProducts({ initialFavorites }: { initialFavorites?: F
         return isCurrentlyFavorite;
       }
     },
-    [favorites, redirectToSignIn],
+    [favorites, pathname, router],
   );
 
   const isFavorite = useCallback(

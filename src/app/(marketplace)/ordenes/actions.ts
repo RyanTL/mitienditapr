@@ -2,23 +2,32 @@
 
 import { revalidatePath } from "next/cache";
 
+import { createStripeRefund } from "@/lib/vendor/stripe";
+import {
+  releaseOrderInventory,
+  updateOrderPaymentState,
+} from "@/lib/orders/server";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendVendorOrderCancelledEmail } from "@/lib/email/resend";
 
-type OrderWithShop = {
+type OrderRow = {
   id: string;
   profile_id: string;
-  order_items: Array<{
-    product_id: string;
-    products: {
-      shop_id: string;
-      shops: {
-        id: string;
-        vendor_name: string;
-        vendor_profile_id: string;
-      } | null;
-    } | null;
-  }>;
+  shop_id: string;
+  status: string;
+  vendor_status: string;
+  payment_status: string;
+  payment_method: string | null;
+};
+
+type PaymentRow = {
+  stripe_payment_intent_id: string | null;
+};
+
+type ShopRow = {
+  id: string;
+  vendor_name: string;
+  vendor_profile_id: string;
 };
 
 type ProfileRow = {
@@ -37,33 +46,93 @@ export async function cancelOrder(orderId: string): Promise<{ error?: string }> 
     return { error: "No autorizado." };
   }
 
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("id", orderId)
-    .eq("profile_id", user.id)
-    .eq("status", "pending")
-    .maybeSingle();
+  let admin = supabase;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch {
+    // Development fallback.
+  }
 
-  if (!order) {
+  const [{ data: orderData, error: orderError }, { data: paymentData, error: paymentError }] =
+    await Promise.all([
+      admin
+        .from("orders")
+        .select(
+          "id,profile_id,shop_id,status,vendor_status,payment_status,payment_method",
+        )
+        .eq("id", orderId)
+        .eq("profile_id", user.id)
+        .maybeSingle(),
+      admin
+        .from("order_payments")
+        .select("stripe_payment_intent_id")
+        .eq("order_id", orderId)
+        .maybeSingle(),
+    ]);
+
+  if (orderError) {
+    return { error: "No se pudo cargar la orden." };
+  }
+
+  if (paymentError) {
+    return { error: "No se pudo cargar el pago de la orden." };
+  }
+
+  const order = orderData as OrderRow | null;
+  const payment = (paymentData as PaymentRow | null) ?? {
+    stripe_payment_intent_id: null,
+  };
+
+  if (!order || order.vendor_status !== "new") {
     return { error: "Orden no encontrada o no se puede cancelar." };
   }
 
-  const { error } = await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
+  try {
+    if (order.payment_method === "stripe" && order.payment_status === "paid") {
+      if (!payment.stripe_payment_intent_id) {
+        return { error: "No se encontró el pago de Stripe para reembolsar esta orden." };
+      }
 
-  if (error) {
+      await createStripeRefund({
+        paymentIntentId: payment.stripe_payment_intent_id,
+      });
+
+      await updateOrderPaymentState({
+        admin,
+        orderId,
+        paymentStatus: "refunded",
+        orderStatus: "refunded",
+        vendorStatus: "canceled",
+      });
+    } else {
+      await updateOrderPaymentState({
+        admin,
+        orderId,
+        paymentStatus:
+          order.payment_status === "refunded" ? "refunded" : "failed",
+        orderStatus: "cancelled",
+        vendorStatus: "canceled",
+        failedReason: "buyer_canceled_order",
+      });
+    }
+
+    await releaseOrderInventory(admin, orderId);
+  } catch {
     return { error: "No se pudo cancelar la orden." };
   }
 
   revalidatePath("/ordenes");
 
-  // Notify vendor about the cancellation (fire and forget)
-  void notifyVendorOfCancellation(orderId, user.id);
+  void notifyVendorOfCancellation(order.shop_id, user.id, orderId);
 
   return {};
 }
 
-async function notifyVendorOfCancellation(orderId: string, buyerProfileId: string): Promise<void> {
+async function notifyVendorOfCancellation(
+  shopId: string,
+  buyerProfileId: string,
+  orderId: string,
+): Promise<void> {
   let adminClient;
   try {
     adminClient = createSupabaseAdminClient();
@@ -71,47 +140,35 @@ async function notifyVendorOfCancellation(orderId: string, buyerProfileId: strin
     return;
   }
 
-  // Fetch the order with shop info via order_items → products → shops
-  const { data: orderData } = await adminClient
-    .from("orders")
-    .select(
-      "id,profile_id,order_items(product_id,products(shop_id,shops(id,vendor_name,vendor_profile_id)))",
-    )
-    .eq("id", orderId)
-    .maybeSingle();
+  const [{ data: shopData }, { data: buyerData }] = await Promise.all([
+    adminClient
+      .from("shops")
+      .select("id,vendor_name,vendor_profile_id")
+      .eq("id", shopId)
+      .maybeSingle(),
+    adminClient
+      .from("profiles")
+      .select("id,email,full_name")
+      .eq("id", buyerProfileId)
+      .maybeSingle(),
+  ]);
 
-  const typedOrder = orderData as OrderWithShop | null;
-  if (!typedOrder) return;
+  const shop = shopData as ShopRow | null;
+  const buyer = buyerData as ProfileRow | null;
+  if (!shop?.vendor_profile_id) return;
 
-  // Extract the first shop found in the order
-  const firstShop = typedOrder.order_items
-    .map((oi) => oi.products?.shops)
-    .find((s) => s != null);
-
-  if (!firstShop?.vendor_profile_id) return;
-
-  // Fetch vendor email
   const { data: vendorData } = await adminClient
     .from("profiles")
     .select("id,email,full_name")
-    .eq("id", firstShop.vendor_profile_id)
+    .eq("id", shop.vendor_profile_id)
     .maybeSingle();
 
   const vendor = vendorData as ProfileRow | null;
   if (!vendor?.email) return;
 
-  // Fetch buyer name
-  const { data: buyerData } = await adminClient
-    .from("profiles")
-    .select("id,email,full_name")
-    .eq("id", buyerProfileId)
-    .maybeSingle();
-
-  const buyer = buyerData as ProfileRow | null;
-
   await sendVendorOrderCancelledEmail({
     to: vendor.email,
-    vendorName: firstShop.vendor_name,
+    vendorName: shop.vendor_name,
     orderId,
     buyerName: buyer?.full_name ?? null,
   });

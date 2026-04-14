@@ -1,14 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ChevronDownIcon, SettingsIcon } from "@/components/icons";
-import { useAuthUser, getUserInitial } from "@/hooks/use-auth-user";
+import { getUserInitial } from "@/hooks/use-auth-user";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
+import { fetchVendorStatus } from "@/lib/vendor/client";
 import { cn } from "@/lib/utils";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchFollowedShops,
   SHOP_FOLLOWS_CHANGED_EVENT,
@@ -16,35 +18,21 @@ import {
 } from "@/lib/supabase/follows";
 
 async function fetchVendorMenuEntry(): Promise<VendorMenuEntry | null> {
-  const supabase = createSupabaseBrowserClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return null;
+  try {
+    const status = await fetchVendorStatus();
+    if (status.hasShop) {
+      return { href: "/vendedor", label: "Maneja tu tienda" };
+    }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-  if (!profile) return null;
-
-  const isVendor = profile.role === "vendor" || profile.role === "admin";
-  if (!isVendor) {
     return { href: "/vendedor/onboarding", label: "Conviértete en vendedor" };
+  } catch {
+    return null;
   }
-
-  const { data: shop } = await supabase
-    .from("shops")
-    .select("id")
-    .eq("vendor_profile_id", session.user.id)
-    .maybeSingle();
-
-  return shop
-    ? { href: "/vendedor/panel", label: "Panel de vendedor" }
-    : { href: "/vendedor/onboarding", label: "Conviértete en vendedor" };
 }
 
 type ProfileMenuProps = {
+  user: User | null;
+  isAuthLoading: boolean;
   isOpen: boolean;
   onClose: () => void;
   desktopPosition?: "sidebar";
@@ -161,30 +149,45 @@ function AuthMenuContent({
             </button>
 
             {isFollowingListOpen ? (
-              <div className="mt-2 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-gray)] p-2">
+              <div className="mt-1 pl-3">
                 {isLoadingFollowedShops ? (
-                  <p className="px-2 py-2 text-xs text-[var(--color-carbon)]">Cargando...</p>
+                  <p className="py-2 text-xs text-[var(--color-carbon)]">Cargando...</p>
                 ) : followedShopsError ? (
-                  <p className="px-2 py-2 text-xs text-[var(--color-danger)]">{followedShopsError}</p>
+                  <p className="py-2 text-xs text-[var(--color-danger)]">{followedShopsError}</p>
                 ) : followedShops.length === 0 ? (
-                  <p className="px-2 py-2 text-xs text-[var(--color-carbon)]">
+                  <p className="py-2 text-xs text-[var(--color-carbon)]">
                     Aún no sigues tiendas.
                   </p>
                 ) : (
-                  <ul className="space-y-1">
+                  <ul>
                     {followedShops.map((shop) => (
                       <li key={shop.shopId}>
                         <Link
                           href={`/${shop.slug}`}
                           onClick={onClose}
-                          className="block rounded-xl bg-[var(--color-white)] px-3 py-2"
+                          className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-[var(--color-gray)]"
                         >
-                          <p className="truncate text-sm font-semibold text-[var(--color-carbon)]">
-                            {shop.vendorName}
-                          </p>
-                          <p className="mt-0.5 text-xs text-[var(--color-carbon)]">
-                            {shop.rating} ★ ({shop.reviewCount})
-                          </p>
+                          {shop.logoUrl ? (
+                            <Image
+                              src={shop.logoUrl}
+                              alt={shop.vendorName}
+                              width={36}
+                              height={36}
+                              className="h-9 w-9 shrink-0 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-white">
+                              {shop.vendorName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[var(--color-carbon)]">
+                              {shop.vendorName}
+                            </p>
+                            <p className="mt-0.5 text-xs text-[var(--color-carbon)]">
+                              {shop.rating} ★ ({shop.reviewCount})
+                            </p>
+                          </div>
                         </Link>
                       </li>
                     ))}
@@ -243,9 +246,13 @@ function AuthMenuContent({
 
 // ─── Main ProfileMenu ───────────────────────────────────────────────────────
 
-export function ProfileMenu({ isOpen, onClose, desktopPosition }: ProfileMenuProps) {
-  const { user, isLoading } = useAuthUser();
-
+export function ProfileMenu({
+  user,
+  isAuthLoading,
+  isOpen,
+  onClose,
+  desktopPosition,
+}: ProfileMenuProps) {
   useBodyScrollLock(isOpen);
   useEscapeKey(isOpen, onClose);
 
@@ -286,7 +293,7 @@ export function ProfileMenu({ isOpen, onClose, desktopPosition }: ProfileMenuPro
             : "top-4 left-4 md:top-6 md:left-6 md:w-[min(46vw,360px)]",
         )}
       >
-        {isLoading ? (
+        {isAuthLoading ? (
           <div className="py-4 text-center text-sm text-[var(--color-gray-500)]">Cargando...</div>
         ) : user ? (
           <AuthMenuContent

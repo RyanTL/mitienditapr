@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CheckIcon } from "@/components/icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { requireBrowserSession, redirectToSignIn } from "@/lib/supabase/browser-auth";
 import {
   fetchShopFollowState,
   followShop,
@@ -84,12 +85,8 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
       return;
     }
 
-    // Check auth instantly (local memory) — redirect before any UI change
-    const supabase = createSupabaseBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await requireBrowserSession(router, pathname);
     if (!session) {
-      const nextPath = pathname ?? `/${shopSlug}`;
-      router.push(`/sign-in?next=${encodeURIComponent(nextPath)}`);
       return;
     }
 
@@ -107,6 +104,9 @@ export function FollowShopButton({ shopSlug, className }: FollowShopButtonProps)
 
       if (!result.ok) {
         setIsFollowing(previousState);
+        if (result.unauthorized) {
+          redirectToSignIn(router, pathname);
+        }
       }
     } catch (error) {
       console.error("No se pudo actualizar el seguimiento:", error);

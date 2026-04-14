@@ -1,19 +1,13 @@
 import { SignInForm } from "@/app/sign-in/sign-in-form";
+import { normalizeSafeAppPath } from "@/lib/utils";
 
 type SignInPageProps = {
   searchParams: Promise<{ next?: string }>;
 };
 
-function normalizeNextPath(nextPath: string | undefined) {
-  if (!nextPath || !nextPath.startsWith("/")) {
-    return "/";
-  }
-  return nextPath;
-}
-
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const { next } = await searchParams;
-  const nextPath = normalizeNextPath(next);
+  const nextPath = normalizeSafeAppPath(next);
 
   return (
     <div className="min-h-screen bg-[var(--color-gray-100)] px-4 py-8 md:flex md:items-center md:justify-center md:px-6">

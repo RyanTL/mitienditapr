@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { HomeIcon, OrdersIcon, PackageIcon, StoreIcon } from "@/components/icons";
+import { HomeIcon, OrdersIcon, PackageIcon, SettingsIcon } from "@/components/icons";
 
 const NAV_TABS = [
   { href: "/vendedor/panel", label: "Inicio", Icon: HomeIcon },
   { href: "/vendedor/pedidos", label: "Pedidos", Icon: OrdersIcon },
   { href: "/vendedor/productos", label: "Productos", Icon: PackageIcon },
-  { href: "/vendedor/tienda", label: "Tienda", Icon: StoreIcon },
+  { href: "/vendedor/tienda", label: "Configuración", Icon: SettingsIcon },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {
@@ -38,9 +38,6 @@ export function VendorBottomNav() {
               >
                 <Icon className="h-[22px] w-[22px]" />
                 <span className="text-[11px] font-semibold leading-none">{label}</span>
-                {isActive && (
-                  <span className="mt-0.5 h-[3px] w-[3px] rounded-full bg-[var(--vendor-nav-accent)]" />
-                )}
               </Link>
             </li>
           );

@@ -8,7 +8,6 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   CART_CHANGED_EVENT,
   type CartChangedEventDetail,
-  fetchPrimaryCartShopSlug,
   fetchCartQuantityTotal,
 } from "@/lib/supabase/cart";
 
@@ -39,17 +38,15 @@ export function FloatingCartLink({
 
     const fetchFullState = async () => {
       try {
-        const [nextCount, primaryShopSlug] = await Promise.all([
-          typeof count === "number" ? Promise.resolve(count) : fetchCartQuantityTotal(),
-          resolveFromCart ? fetchPrimaryCartShopSlug() : Promise.resolve(null),
-        ]);
+        const nextCount =
+          typeof count === "number" ? count : await fetchCartQuantityTotal();
 
         if (typeof count !== "number") {
           setDynamicCount(nextCount);
         }
 
         if (resolveFromCart) {
-          setDynamicHref(primaryShopSlug ? `/${primaryShopSlug}/carrito` : href);
+          setDynamicHref("/carrito");
         }
       } catch (error) {
         console.error("No se pudo cargar el contador del carrito:", error);

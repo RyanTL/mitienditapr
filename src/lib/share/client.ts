@@ -4,10 +4,7 @@ import type {
   OwnerShopShareResponse,
   PublicShopShareResponse,
 } from "@/lib/share/types";
-
-type ErrorBody = {
-  error?: string;
-};
+import { fetchJson } from "@/lib/fetch-client";
 
 export class ShareRequestError extends Error {
   status: number;
@@ -19,52 +16,19 @@ export class ShareRequestError extends Error {
   }
 }
 
-async function fetchJson<TResponse>(
-  path: string,
-  options: RequestInit = {},
-): Promise<TResponse> {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-    cache: options.cache ?? "no-store",
-  });
-
-  const body = (await response.json().catch(() => null)) as
-    | (TResponse & ErrorBody)
-    | null;
-
-  if (!response.ok) {
-    throw new ShareRequestError(
-      body?.error ?? `Request failed (${response.status}).`,
-      response.status,
-    );
-  }
-
-  if (!body) {
-    throw new ShareRequestError(
-      "Respuesta invalida del servidor.",
-      response.status,
-    );
-  }
-
-  return body;
-}
-
 export function fetchPublicShopShare(shopSlug: string) {
   return fetchJson<PublicShopShareResponse>(
     `/api/shops/${encodeURIComponent(shopSlug)}/share`,
     {
       method: "GET",
     },
+    ShareRequestError,
   );
 }
 
 export function fetchOwnerShopShare() {
   return fetchJson<OwnerShopShareResponse>("/api/vendor/shop/share", {
     method: "GET",
-  });
+  }, ShareRequestError);
 }
 

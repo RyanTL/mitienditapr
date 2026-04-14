@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -13,6 +14,7 @@ import {
   ensureVendorRole,
   ensureVendorShopForProfile,
   getShopPoliciesByShopId,
+  maybeAutoPublishDraftShop,
   getVendorPublishChecks,
   getVendorRequestContext,
   getVendorShopByProfileId,
@@ -20,6 +22,7 @@ import {
 } from "@/lib/supabase/vendor-server";
 import {
   buildVendorPolicyCompletion,
+  ensureDefaultShopPolicies,
   getCurrentShopPolicyVersions,
   getRequiredPolicyIds,
 } from "@/lib/supabase/vendor-policy-server";
@@ -33,6 +36,10 @@ type ShopPatchPayload = {
   shippingFlatFeeUsd?: number;
   offersPickup?: boolean;
   athMovilPhone?: string | null;
+  contactPhone?: string | null;
+  contactInstagram?: string | null;
+  contactFacebook?: string | null;
+  contactWhatsapp?: string | null;
   status?: VendorShopStatus;
   policies?: {
     refundPolicy?: string;
@@ -43,10 +50,6 @@ type ShopPatchPayload = {
 };
 
 const MUTABLE_STATUSES = new Set<VendorShopStatus>(["paused", "active"]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getString(input: Record<string, unknown>, key: string) {
   const value = input[key];
@@ -91,6 +94,8 @@ export async function GET() {
     // Secret key is optional in development.
   }
 
+  await maybeAutoPublishDraftShop(dataClient, context.userId);
+
   const shop = await getVendorShopByProfileId(dataClient, context.userId);
   if (!shop) {
     return NextResponse.json({
@@ -103,6 +108,12 @@ export async function GET() {
       },
     });
   }
+
+  await ensureDefaultShopPolicies({
+    supabase: dataClient,
+    shopId: shop.id,
+    publishedBy: shop.vendor_profile_id,
+  });
 
   const [policies, subscription, checks] = await Promise.all([
     getShopPoliciesByShopId(dataClient, shop.id),
@@ -134,6 +145,20 @@ export async function PATCH(request: Request) {
   const body = await parseJsonBody<ShopPatchPayload>(request);
   if (!body || !isRecord(body)) {
     return badRequestResponse("Cuerpo invalido.");
+  }
+
+  if (typeof body.vendorName === "string" && body.vendorName.trim().length > 100) {
+    return NextResponse.json(
+      { error: "El nombre de la tienda no puede exceder 100 caracteres." },
+      { status: 400 },
+    );
+  }
+
+  if (typeof body.description === "string" && body.description.trim().length > 2000) {
+    return NextResponse.json(
+      { error: "La descripción de la tienda no puede exceder 2,000 caracteres." },
+      { status: 400 },
+    );
   }
 
   let dataClient = context.supabase;
@@ -188,6 +213,19 @@ export async function PATCH(request: Request) {
       const raw = body.athMovilPhone;
       updates.ath_movil_phone =
         typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+    }
+
+    for (const [payloadKey, dbKey] of [
+      ["contactPhone", "contact_phone"],
+      ["contactInstagram", "contact_instagram"],
+      ["contactFacebook", "contact_facebook"],
+      ["contactWhatsapp", "contact_whatsapp"],
+    ] as const) {
+      if (Object.prototype.hasOwnProperty.call(body, payloadKey)) {
+        const raw = (body as Record<string, unknown>)[payloadKey];
+        updates[dbKey] =
+          typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+      }
     }
 
     if (typeof body.status === "string") {
@@ -265,6 +303,13 @@ export async function PATCH(request: Request) {
     }
 
     const nextShop = await getVendorShopByProfileId(dataClient, profile.id);
+    if (nextShop) {
+      await ensureDefaultShopPolicies({
+        supabase: dataClient,
+        shopId: nextShop.id,
+        publishedBy: nextShop.vendor_profile_id,
+      });
+    }
     const nextPolicies = nextShop
       ? await getShopPoliciesByShopId(dataClient, nextShop.id)
       : null;

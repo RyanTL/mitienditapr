@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isRecord } from "@/lib/utils";
 import {
   badRequestResponse,
   parseJsonBody,
@@ -12,7 +13,10 @@ import {
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
+  getVendorSubscriptionByShopId,
 } from "@/lib/supabase/vendor-server";
+import { getVendorMaxImagesPerProduct } from "@/lib/vendor/constants";
+import { vendorHasPremiumProductFeatures } from "@/lib/vendor/vendor-subscription-gates";
 
 type ProductRow = {
   id: string;
@@ -24,10 +28,6 @@ type ImagePayload = {
   imageUrl?: string;
   alt?: string | null;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export async function POST(
   request: Request,
@@ -94,7 +94,24 @@ export async function POST(
       throw new Error(countError.message);
     }
 
-    const sortOrder = (existingImages ?? []).length;
+    const subscription = await getVendorSubscriptionByShopId(dataClient, shop.id);
+    const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
+    const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
+    const currentCount = (existingImages ?? []).length;
+
+    if (currentCount >= maxImagesPerProduct) {
+      return NextResponse.json(
+        {
+          error: hasPremiumProductFeatures
+            ? `Puedes agregar hasta ${maxImagesPerProduct} fotos por producto.`
+            : `El plan gratuito permite hasta ${maxImagesPerProduct} fotos por producto. Suscríbete al Plan Vendedor para más fotos.`,
+          upgradeRequired: !hasPremiumProductFeatures,
+        },
+        { status: 400 },
+      );
+    }
+
+    const sortOrder = currentCount;
     const { data: imageRow, error: imageError } = await dataClient
       .from("product_images")
       .insert({
