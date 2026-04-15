@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
 import { ShopCheckoutSheet } from "@/components/cart/shop-checkout-sheet";
-import { formatUsd } from "@/lib/formatters";
+import { FALLBACK_PRODUCT_IMAGE as CART_IMAGE_FALLBACK_URL, formatUsd } from "@/lib/formatters";
 import { fetchAccountSnapshot, type AccountSnapshot } from "@/lib/account/client";
 import {
   fetchCartItems,
@@ -75,6 +75,7 @@ export function GlobalCartPageClient() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [selectedShopSlug, setSelectedShopSlug] = useState<string | null>(null);
   const [checkoutFlow, setCheckoutFlow] = useState<CheckoutFlowState>({ phase: "idle" });
+  const [failedImageItemIds, setFailedImageItemIds] = useState<Set<string>>(new Set());
 
   const loadCartItems = useCallback(async () => {
     setIsLoading(true);
@@ -326,13 +327,28 @@ export function GlobalCartPageClient() {
                           >
                             <div className="flex gap-3">
                               <div className="relative h-[84px] w-[84px] overflow-hidden rounded-2xl bg-[var(--color-gray)]">
-                                {item.product.imageUrl ? (
+                                {(item.product.imageUrl || failedImageItemIds.has(item.id)) ? (
                                   <Image
-                                    src={item.product.imageUrl}
+                                    src={
+                                      failedImageItemIds.has(item.id)
+                                        ? CART_IMAGE_FALLBACK_URL
+                                        : (item.product.imageUrl || CART_IMAGE_FALLBACK_URL)
+                                    }
                                     alt={item.product.alt}
                                     fill
                                     className="object-cover"
                                     sizes="84px"
+                                    unoptimized
+                                    onError={() => {
+                                      setFailedImageItemIds((current) => {
+                                        if (current.has(item.id)) {
+                                          return current;
+                                        }
+                                        const next = new Set(current);
+                                        next.add(item.id);
+                                        return next;
+                                      });
+                                    }}
                                   />
                                 ) : (
                                   <span className="flex h-full w-full items-center justify-center text-center text-[10px] leading-tight text-[var(--color-gray-500)]">

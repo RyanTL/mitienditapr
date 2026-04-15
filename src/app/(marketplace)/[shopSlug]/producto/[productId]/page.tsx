@@ -16,7 +16,7 @@ import { ProductPurchasePanel } from "@/components/product/product-purchase-pane
 import { ProductReviewsSection } from "@/components/reviews/product-reviews-section";
 import { ProductShareButton } from "@/components/share/product-share-button";
 import { ShopRating } from "@/components/shop/shop-rating";
-import { formatUsd } from "@/lib/formatters";
+import { FALLBACK_PRODUCT_IMAGE as PRODUCT_IMAGE_FALLBACK_URL, formatUsd } from "@/lib/formatters";
 import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data-server";
 
 type ProductPageProps = {
@@ -61,6 +61,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const relatedProducts = shop.products
     .filter((entry) => entry.id !== product.id)
     .slice(0, 2);
+  const primaryImageUrl = product.imageUrl || PRODUCT_IMAGE_FALLBACK_URL;
 
   return (
     <div className="min-h-screen bg-[var(--color-white)] px-4 py-5 pb-28 lg:pb-8 text-[var(--color-carbon)] md:px-5">
@@ -85,12 +86,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <div className="relative overflow-hidden rounded-2xl bg-[var(--color-gray)]">
               <div className="relative h-[360px] md:h-[420px] lg:h-[520px]">
                 <Image
-                  src={product.imageUrl}
+                  src={primaryImageUrl}
                   alt={product.alt}
                   fill
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, (max-width: 1024px) 460px, 560px"
                   priority
+                  unoptimized
                 />
               </div>
             </div>
@@ -191,11 +193,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
                   <div className="relative overflow-hidden rounded-2xl bg-[var(--color-gray)]">
                     <div className="relative h-[180px] md:h-[190px]">
                       <Image
-                        src={related.imageUrl}
+                        src={related.imageUrl || PRODUCT_IMAGE_FALLBACK_URL}
                         alt={related.alt}
                         fill
                         className="object-cover"
                         sizes="(max-width: 768px) 48vw, 220px"
+                        unoptimized
                       />
                     </div>
                   </div>

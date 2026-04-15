@@ -1,19 +1,29 @@
 import type { NextConfig } from "next";
 
-function getSupabaseHost() {
+function getSupabaseRemotePattern() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!rawUrl) {
     return null;
   }
 
   try {
-    return new URL(rawUrl).hostname;
+    const parsed = new URL(rawUrl);
+    const protocol = parsed.protocol.replace(":", "");
+
+    if (protocol !== "http" && protocol !== "https") {
+      return null;
+    }
+
+    return {
+      protocol: protocol as "http" | "https",
+      hostname: parsed.hostname,
+    };
   } catch {
     return null;
   }
 }
 
-const supabaseHost = getSupabaseHost();
+const supabaseRemotePattern = getSupabaseRemotePattern();
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
@@ -45,11 +55,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "**.supabase.in",
       },
-      ...(supabaseHost
+      ...(supabaseRemotePattern
         ? [
             {
-              protocol: "https" as const,
-              hostname: supabaseHost,
+              protocol: supabaseRemotePattern.protocol,
+              hostname: supabaseRemotePattern.hostname,
             },
           ]
         : []),

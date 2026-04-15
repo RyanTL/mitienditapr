@@ -1,3 +1,6 @@
+export const FALLBACK_PRODUCT_IMAGE =
+  "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=640&q=80";
+
 export function formatUsd(priceUsd: number) {
   if (!Number.isFinite(priceUsd)) return "$0.00";
   return `$${priceUsd.toFixed(2)}`;

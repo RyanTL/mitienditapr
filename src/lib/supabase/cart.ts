@@ -1,5 +1,6 @@
 "use client";
 
+import { FALLBACK_PRODUCT_IMAGE as CART_IMAGE_FALLBACK_URL } from "@/lib/formatters";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getCurrentProfileId } from "@/lib/supabase/favorites";
 
@@ -180,7 +181,7 @@ export async function fetchCartItems() {
           productId: product.id,
           name: product.name,
           priceUsd: Number(product.price_usd),
-          imageUrl: product.image_url,
+          imageUrl: product.image_url || CART_IMAGE_FALLBACK_URL,
           alt: product.name,
         },
       } satisfies CartItem,

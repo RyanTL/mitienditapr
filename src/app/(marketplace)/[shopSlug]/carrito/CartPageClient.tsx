@@ -20,7 +20,7 @@ import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/n
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { fetchAccountSnapshot, saveCheckoutProfile } from "@/lib/account/client";
-import { formatUsd } from "@/lib/formatters";
+import { FALLBACK_PRODUCT_IMAGE as CART_IMAGE_FALLBACK_URL, formatUsd } from "@/lib/formatters";
 import {
   createStripeCheckoutSession,
   type CheckoutBuyerInput,
@@ -464,11 +464,12 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
                   <div className="mb-4 flex items-start gap-3">
                     <div className="relative h-[94px] w-[94px] overflow-hidden rounded-2xl bg-[var(--color-gray)]">
                       <Image
-                        src={item.product.imageUrl}
+                        src={item.product.imageUrl || CART_IMAGE_FALLBACK_URL}
                         alt={item.product.alt}
                         fill
                         className="object-cover"
                         sizes="94px"
+                        unoptimized
                       />
                     </div>
                     <div className="min-w-0 flex-1">
