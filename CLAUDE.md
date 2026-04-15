@@ -47,6 +47,25 @@ A shop must have at least one buyer rail (Connect or ATH) to publish.
 - Product images: Supabase Storage, ≤5MB, PNG/JPEG/WebP/GIF.
 - Vendor onboarding = 8 steps tracked in `vendor_onboarding` (JSON per step).
 
+## Deployment & Branch Strategy
+
+**Before launch:** Direct merge from develop to main is fine:
+```bash
+git checkout main && git pull origin main && git merge origin/develop && git push origin main
+```
+
+**After launch (post-MVP):** Add GitHub branch protection to `main`:
+1. Go to repo → **Settings** → **Branches**
+2. Click **Add rule**, pattern: `main`
+3. Enable:
+   - ✓ Require pull request reviews (≥1 approval)
+   - ✓ Require status checks to pass (lint, build)
+4. This forces all changes through PR workflow
+
+**Why:** Creates a checkpoint before prod deploys; easier to track and rollback. Develop branch goes to Vercel Preview automatically; main goes to Production after push.
+
+**Migrations:** Always test on dev Supabase (`lscijacjyrsksrdunylt`) first, commit to develop, then apply to prod (`bylouvwcpbcpytdlnpgx`) after merging to main. Use `supabase db push` (linked to target project) or `mcp.apply_migration()` for larger changes.
+
 ## Env
 
 See `.env.example` for the full list.
