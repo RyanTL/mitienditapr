@@ -94,15 +94,6 @@ export type VendorShopPolicyRow = {
   terms: string;
 };
 
-type ProductRow = {
-  id: string;
-  shop_id: string;
-};
-
-type VariantRow = {
-  id: string;
-};
-
 type VendorProductRow = {
   id: string;
   shop_id: string;
@@ -115,17 +106,11 @@ type VendorProductRow = {
   updated_at: string;
 };
 
-type VendorProductVariantRow = {
-  id: string;
+type VendorProductVariantStockRow = {
   product_id: string;
-  title: string;
-  sku: string | null;
-  attributes_json: Record<string, unknown>;
-  price_usd: number;
   stock_qty: number | null;
   is_active: boolean;
   created_at: string;
-  updated_at: string;
 };
 
 type VendorProductImageRow = {
@@ -424,32 +409,121 @@ export async function upsertVendorOnboardingStep(
   } satisfies VendorOnboardingRow;
 }
 
-async function getActiveVariantCountForShop(
-  supabase: SupabaseClient,
-  shopId: string,
-) {
-  const { data: productRows, error: productsError } = await supabase
+async function getActiveProductCountForShop(supabase: SupabaseClient, shopId: string) {
+  const { count, error } = await supabase
     .from("products")
-    .select("id,shop_id")
+    .select("id", { count: "exact", head: true })
     .eq("shop_id", shopId)
     .eq("is_active", true);
 
-  if (productsError || !productRows || productRows.length === 0) {
+  if (error) {
     return 0;
   }
 
-  const productIds = (productRows as ProductRow[]).map((row) => row.id);
-  const { data: variantRows, error: variantsError } = await supabase
+  return count ?? 0;
+}
+
+export type CanonicalVariantStockPatch = {
+  stockQty?: number | null;
+};
+
+/** Keeps a single active variant row in sync with `products` (price, active flag, optional stock). */
+export async function syncCanonicalVariantsWithProduct(
+  client: SupabaseClient,
+  productId: string,
+  stockPatch?: CanonicalVariantStockPatch,
+) {
+  const { data: product, error: productError } = await client
+    .from("products")
+    .select("price_usd,is_active")
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (productError) {
+    throw new Error(productError.message);
+  }
+
+  if (!product) {
+    throw new Error("Producto no encontrado.");
+  }
+
+  const { data: variantRows, error: variantsError } = await client
     .from("product_variants")
-    .select("id")
-    .in("product_id", productIds)
-    .eq("is_active", true);
+    .select("id,stock_qty")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: true });
 
-  if (variantsError || !variantRows) {
-    return 0;
+  if (variantsError) {
+    throw new Error(variantsError.message);
   }
 
-  return (variantRows as VariantRow[]).length;
+  const rows = variantRows ?? [];
+
+  if (rows.length === 0) {
+    const nextStock =
+      stockPatch && Object.prototype.hasOwnProperty.call(stockPatch, "stockQty")
+        ? stockPatch.stockQty
+        : null;
+    const { error: insertError } = await client.from("product_variants").insert({
+      product_id: productId,
+      title: "Default",
+      sku: null,
+      attributes_json: {},
+      price_usd: product.price_usd,
+      stock_qty: nextStock ?? null,
+      is_active: product.is_active,
+    });
+
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
+
+    return;
+  }
+
+  const canonical = rows[0];
+  const otherIds = rows.slice(1).map((row) => row.id);
+  const nextStock =
+    stockPatch && Object.prototype.hasOwnProperty.call(stockPatch, "stockQty")
+      ? stockPatch.stockQty
+      : canonical.stock_qty;
+
+  const { error: updateCanonicalError } = await client
+    .from("product_variants")
+    .update({
+      price_usd: product.price_usd,
+      stock_qty: nextStock,
+      is_active: product.is_active,
+    })
+    .eq("id", canonical.id);
+
+  if (updateCanonicalError) {
+    throw new Error(updateCanonicalError.message);
+  }
+
+  if (otherIds.length > 0) {
+    const { error: deactivateError } = await client
+      .from("product_variants")
+      .update({ is_active: false })
+      .in("id", otherIds);
+
+    if (deactivateError) {
+      throw new Error(deactivateError.message);
+    }
+  }
+}
+
+function stockQtyForVendorProductDisplay(variants: VendorProductVariantStockRow[]) {
+  if (variants.length === 0) {
+    return null;
+  }
+
+  const sorted = [...variants].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  const active = sorted.filter((variant) => variant.is_active);
+  const canonical = active[0] ?? sorted[0];
+  return canonical.stock_qty;
 }
 
 function hasRequiredShopFields(shop: VendorShopRow) {
@@ -477,10 +551,10 @@ function isManualCodeExpired(subscription: VendorSubscriptionRow | null) {
 
 function mapVendorProducts(
   products: VendorProductRow[],
-  variants: VendorProductVariantRow[],
+  variants: VendorProductVariantStockRow[],
   images: VendorProductImageRow[],
 ): VendorProductsResponse["products"] {
-  const variantsByProductId = new Map<string, VendorProductVariantRow[]>();
+  const variantsByProductId = new Map<string, VendorProductVariantStockRow[]>();
   variants.forEach((variant) => {
     const currentVariants = variantsByProductId.get(variant.product_id) ?? [];
     currentVariants.push(variant);
@@ -501,21 +575,10 @@ function mapVendorProducts(
     description: product.description,
     imageUrl: product.image_url,
     priceUsd: Number(product.price_usd),
+    stockQty: stockQtyForVendorProductDisplay(variantsByProductId.get(product.id) ?? []),
     isActive: product.is_active,
     createdAt: product.created_at,
     updatedAt: product.updated_at,
-    variants: (variantsByProductId.get(product.id) ?? []).map((variant) => ({
-      id: variant.id,
-      productId: variant.product_id,
-      title: variant.title,
-      sku: variant.sku,
-      attributes: variant.attributes_json,
-      priceUsd: Number(variant.price_usd),
-      stockQty: variant.stock_qty,
-      isActive: variant.is_active,
-      createdAt: variant.created_at,
-      updatedAt: variant.updated_at,
-    })),
     images: (imagesByProductId.get(product.id) ?? []).map((image) => ({
       id: image.id,
       productId: image.product_id,
@@ -575,7 +638,6 @@ export async function getVendorProductsData(
   const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
   const productLimit = hasPremiumProductFeatures ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
   const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
-  const variantsEnabled = hasPremiumProductFeatures;
 
   if (products.length === 0) {
     return {
@@ -583,7 +645,6 @@ export async function getVendorProductsData(
       productLimit,
       productCount: 0,
       maxImagesPerProduct,
-      variantsEnabled,
     };
   }
 
@@ -592,9 +653,7 @@ export async function getVendorProductsData(
     await Promise.all([
       supabase
         .from("product_variants")
-        .select(
-          "id,product_id,title,sku,attributes_json,price_usd,stock_qty,is_active,created_at,updated_at",
-        )
+        .select("product_id,stock_qty,is_active,created_at")
         .in("product_id", productIds)
         .order("created_at", { ascending: true }),
       supabase
@@ -605,7 +664,7 @@ export async function getVendorProductsData(
     ]);
 
   if (variantsError || !variantRows) {
-    throw new Error(variantsError?.message ?? "No se pudieron cargar variantes.");
+    throw new Error(variantsError?.message ?? "No se pudieron cargar inventario.");
   }
 
   if (imagesError || !imageRows) {
@@ -615,13 +674,12 @@ export async function getVendorProductsData(
   return {
     products: mapVendorProducts(
       products,
-      variantRows as VendorProductVariantRow[],
+      variantRows as VendorProductVariantStockRow[],
       imageRows as VendorProductImageRow[],
     ),
     productLimit,
     productCount: products.length,
     maxImagesPerProduct,
-    variantsEnabled,
   };
 }
 
@@ -638,7 +696,7 @@ export async function getVendorShopSettingsData(
       policies: null,
       checks: {
         canPublish: false,
-        activeVariantCount: 0,
+        activeProductCount: 0,
         blockingReasons: ["Debes crear tu tienda."],
       },
       subscription: null,
@@ -708,7 +766,7 @@ export async function getVendorPublishChecks(
     return {
       shop: null,
       subscription: null,
-      activeVariantCount: 0,
+      activeProductCount: 0,
       canPublish: false,
       blockingReasons,
     };
@@ -750,7 +808,7 @@ export async function getVendorPublishChecks(
     };
   }
 
-  const activeVariantCount = await getActiveVariantCountForShop(supabase, shop.id);
+  const activeProductCount = await getActiveProductCountForShop(supabase, shop.id);
 
   if (!hasRequiredShopFields(shop)) {
     blockingReasons.push("Completa nombre y slug de la tienda.");
@@ -760,10 +818,6 @@ export async function getVendorPublishChecks(
     blockingReasons.push("Tu acceso gratuito expiró. Redime un nuevo código o activa Stripe.");
   }
 
-  if (activeVariantCount < 1) {
-    blockingReasons.push("Debes tener al menos una variante activa.");
-  }
-
   if (!shop.ath_movil_phone && !shop.stripe_connect_account_id) {
     blockingReasons.push("Configura Stripe o ATH Móvil para poder cobrar.");
   }
@@ -771,7 +825,7 @@ export async function getVendorPublishChecks(
   return {
     shop,
     subscription,
-    activeVariantCount,
+    activeProductCount,
     canPublish: blockingReasons.length === 0,
     blockingReasons,
   };

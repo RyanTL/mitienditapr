@@ -14,6 +14,7 @@ import {
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
+  syncCanonicalVariantsWithProduct,
 } from "@/lib/supabase/vendor-server";
 
 type ProductPatchPayload = {
@@ -22,6 +23,7 @@ type ProductPatchPayload = {
   imageUrl?: string | null;
   isActive?: boolean;
   priceUsd?: number;
+  stockQty?: number | null;
 };
 
 type ProductRow = {
@@ -143,31 +145,16 @@ export async function PATCH(
       }
     }
 
-    if (nextPrice !== null) {
-      const { data: firstVariant, error: firstVariantError } = await dataClient
-        .from("product_variants")
-        .select("id")
-        .eq("product_id", product.id)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (firstVariantError) {
-        throw new Error(firstVariantError.message);
-      }
-
-      if (firstVariant) {
-        const { error: variantUpdateError } = await dataClient
-          .from("product_variants")
-          .update({ price_usd: Math.min(99999.99, Math.max(0, nextPrice)) })
-          .eq("id", firstVariant.id)
-          .eq("product_id", product.id);
-
-        if (variantUpdateError) {
-          throw new Error(variantUpdateError.message);
+    const stockPatch = Object.prototype.hasOwnProperty.call(body, "stockQty")
+      ? {
+          stockQty:
+            body.stockQty === null
+              ? null
+              : Math.max(0, Math.trunc(getNumeric(body.stockQty) ?? 0)),
         }
-      }
-    }
+      : undefined;
+
+    await syncCanonicalVariantsWithProduct(dataClient, product.id, stockPatch);
 
     const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
 

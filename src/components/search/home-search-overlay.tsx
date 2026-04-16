@@ -168,9 +168,19 @@ export function HomeSearchOverlay({
                       onClick={handleClose}
                       className="flex items-center gap-3 rounded-2xl border border-[var(--color-gray)] bg-[var(--color-white)] px-3 py-2 transition-colors hover:bg-[var(--color-gray-100)]"
                     >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
-                        {shop.name.charAt(0).toUpperCase()}
-                      </div>
+                      {shop.logoUrl ? (
+                        <Image
+                          src={shop.logoUrl}
+                          alt={shop.name}
+                          width={40}
+                          height={40}
+                          className="h-10 w-10 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
+                          {shop.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-[var(--color-carbon)]">
                           {shop.name}

@@ -44,12 +44,7 @@ export function AddToCartButton({
       return;
     }
 
-    const session = await requireBrowserSession(router, pathname);
-    if (!session) {
-      return;
-    }
-
-    // Optimistic: update UI immediately before server responds
+    // Optimistic: update UI instantly on click, before any async work
     setIsSubmitting(true);
     setIsAdded(true);
     window.dispatchEvent(
@@ -66,9 +61,16 @@ export function AddToCartButton({
     const rollbackOptimisticCart = () => {
       setIsAdded(false);
       window.dispatchEvent(
-        new CustomEvent<CartChangedEventDetail>(CART_CHANGED_EVENT, { detail: { fullRefresh: true } }),
+        new CustomEvent<CartChangedEventDetail>(CART_CHANGED_EVENT, { detail: { delta: -quantity } }),
       );
     };
+
+    const session = await requireBrowserSession(router, pathname);
+    if (!session) {
+      rollbackOptimisticCart();
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const result = await addProductToCart(shopSlug, productId, quantity);

@@ -15,12 +15,10 @@ import { VendorPageShell } from "@/components/vendor/vendor-page-shell";
 import {
   addVendorProductImage,
   createVendorProduct,
-  createVendorProductVariant,
   deleteVendorProduct,
   deleteVendorProductImage,
   fetchVendorProducts,
   updateVendorProduct,
-  updateVendorProductVariant,
   uploadVendorImage,
 } from "@/lib/vendor/client";
 import { VENDOR_FREE_TIER_MAX_IMAGES_PER_PRODUCT } from "@/lib/vendor/constants";
@@ -71,278 +69,15 @@ const DEFAULT_PRODUCT_DRAFT: ProductDraft = {
 
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
-type VariantRowDraft = {
-  id: string;
-  title: string;
-  sku: string;
-  priceUsd: string;
-  stockQty: string;
-  isActive: boolean;
-};
-
-function VariantsSection({
-  product,
-  onSaved,
-  setError,
-}: {
-  product: VendorProduct;
-  onSaved: () => void;
-  setError: (message: string | null) => void;
-}) {
-  const [rows, setRows] = useState<VariantRowDraft[]>(() =>
-    product.variants.map((v) => ({
-      id: v.id,
-      title: v.title,
-      sku: v.sku ?? "",
-      priceUsd: v.priceUsd.toFixed(2),
-      stockQty: v.stockQty === null ? "" : String(v.stockQty),
-      isActive: v.isActive,
-    })),
-  );
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
-  const [newRow, setNewRow] = useState({
-    title: "",
-    sku: "",
-    priceUsd: "0",
-    stockQty: "0",
-    isActive: true,
-  });
-  const [isCreating, setIsCreating] = useState(false);
-
-  useEffect(() => {
-    setRows(
-      product.variants.map((v) => ({
-        id: v.id,
-        title: v.title,
-        sku: v.sku ?? "",
-        priceUsd: v.priceUsd.toFixed(2),
-        stockQty: v.stockQty === null ? "" : String(v.stockQty),
-        isActive: v.isActive,
-      })),
-    );
-  }, [product]);
-
-  const persistRow = async (row: VariantRowDraft) => {
-    setSavingId(row.id);
-    setError(null);
-    try {
-      await updateVendorProductVariant(row.id, {
-        title: row.title.trim() || "Variante",
-        sku: row.sku.trim() || null,
-        priceUsd: Math.max(0, toNumber(row.priceUsd)),
-        stockQty:
-          row.stockQty.trim() === ""
-            ? 0
-            : Math.max(0, Math.trunc(toNumber(row.stockQty))),
-        isActive: row.isActive,
-        attributes: {},
-      });
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo guardar la variante.");
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  const createRow = async () => {
-    setIsCreating(true);
-    setError(null);
-    try {
-      await createVendorProductVariant(product.id, {
-        title: newRow.title.trim() || "Nueva variante",
-        sku: newRow.sku.trim() || undefined,
-        priceUsd: Math.max(0, toNumber(newRow.priceUsd)),
-        stockQty:
-          newRow.stockQty.trim() === ""
-            ? null
-            : Math.max(0, Math.trunc(toNumber(newRow.stockQty))),
-        isActive: newRow.isActive,
-        attributes: {},
-      });
-      setNewRow({ title: "", sku: "", priceUsd: "0", stockQty: "0", isActive: true });
-      setIsAdding(false);
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo crear la variante.");
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4 border-t border-[var(--color-gray-200,#e5e7eb)] pt-5">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">
-          Variantes
-        </p>
-        <p className="mt-1 text-xs text-[var(--color-gray-500)]">
-          Cada variante puede tener precio, SKU e inventario propios.
-        </p>
-      </div>
-
-      <ul className="space-y-4">
-        {rows.map((row, index) => (
-          <li
-            key={row.id}
-            className="rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-[var(--color-gray-100)]/50 p-3"
-          >
-            <p className="mb-2 text-[11px] font-semibold text-[var(--color-gray-500)]">
-              Variante {index + 1}
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                type="text"
-                value={row.title}
-                onChange={(e) =>
-                  setRows((prev) =>
-                    prev.map((r) => (r.id === row.id ? { ...r, title: e.target.value } : r)),
-                  )
-                }
-                placeholder="Nombre (ej. Talla M)"
-                className="rounded-lg border border-[var(--color-gray-200,#e5e7eb)] bg-white px-2 py-2 text-sm"
-              />
-              <input
-                type="text"
-                value={row.sku}
-                onChange={(e) =>
-                  setRows((prev) =>
-                    prev.map((r) => (r.id === row.id ? { ...r, sku: e.target.value } : r)),
-                  )
-                }
-                placeholder="SKU (opcional)"
-                className="rounded-lg border border-[var(--color-gray-200,#e5e7eb)] bg-white px-2 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={row.priceUsd}
-                onChange={(e) =>
-                  setRows((prev) =>
-                    prev.map((r) => (r.id === row.id ? { ...r, priceUsd: e.target.value } : r)),
-                  )
-                }
-                className="rounded-lg border border-[var(--color-gray-200,#e5e7eb)] bg-white px-2 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={row.stockQty}
-                onChange={(e) =>
-                  setRows((prev) =>
-                    prev.map((r) => (r.id === row.id ? { ...r, stockQty: e.target.value } : r)),
-                  )
-                }
-                placeholder="Stock (vacío = 0)"
-                className="rounded-lg border border-[var(--color-gray-200,#e5e7eb)] bg-white px-2 py-2 text-sm"
-              />
-            </div>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-xs text-[var(--color-gray-500)]">
-                <input
-                  type="checkbox"
-                  checked={row.isActive}
-                  onChange={(e) =>
-                    setRows((prev) =>
-                      prev.map((r) =>
-                        r.id === row.id ? { ...r, isActive: e.target.checked } : r,
-                      ),
-                    )
-                  }
-                />
-                Activa
-              </label>
-              <button
-                type="button"
-                disabled={savingId === row.id}
-                onClick={() => void persistRow(row)}
-                className="rounded-full bg-[var(--color-carbon)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-              >
-                {savingId === row.id ? "Guardando…" : "Guardar variante"}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      {isAdding ? (
-        <div className="rounded-xl border border-dashed border-[var(--color-brand)]/40 bg-[var(--color-brand)]/5 p-3">
-          <p className="mb-2 text-xs font-semibold text-[var(--color-carbon)]">Nueva variante</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              type="text"
-              value={newRow.title}
-              onChange={(e) => setNewRow((r) => ({ ...r, title: e.target.value }))}
-              placeholder="Nombre"
-              className="rounded-lg border border-[var(--color-gray-200,#e5e7eb)] bg-white px-2 py-2 text-sm"
-            />
-            <input
-              type="text"
-              value={newRow.sku}
-              onChange={(e) => setNewRow((r) => ({ ...r, sku: e.target.value }))}
-              placeholder="SKU"
-              className="rounded-lg border border-[var(--color-gray-200,#e5e7eb)] bg-white px-2 py-2 text-sm"
-            />
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={newRow.priceUsd}
-              onChange={(e) => setNewRow((r) => ({ ...r, priceUsd: e.target.value }))}
-              className="rounded-lg border border-[var(--color-gray-200,#e5e7eb)] bg-white px-2 py-2 text-sm"
-            />
-            <input
-              type="number"
-              min={0}
-              value={newRow.stockQty}
-              onChange={(e) => setNewRow((r) => ({ ...r, stockQty: e.target.value }))}
-              className="rounded-lg border border-[var(--color-gray-200,#e5e7eb)] bg-white px-2 py-2 text-sm"
-            />
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              disabled={isCreating}
-              onClick={() => void createRow()}
-              className="rounded-full bg-[var(--color-brand)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              {isCreating ? "Creando…" : "Crear"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAdding(false)}
-              className="rounded-full border border-[var(--color-gray-300,#d1d5db)] px-4 py-2 text-xs font-semibold"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setIsAdding(true)}
-          className="w-full rounded-xl border border-[var(--color-gray-300,#d1d5db)] py-2.5 text-sm font-semibold text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)]"
-        >
-          + Agregar variante
-        </button>
-      )}
-    </div>
-  );
-}
-
 function buildDraftFromProduct(product: VendorProduct): ProductDraft {
-  const tracking = product.variants.filter((v) => v.isActive && v.stockQty !== null);
-  const totalStock = tracking.reduce((sum, v) => sum + (v.stockQty ?? 0), 0);
+  const stockQty = product.stockQty;
 
   return {
     name: product.name,
     description: product.description ?? "",
     priceUsd: product.priceUsd.toFixed(2),
-    stockQty: tracking.length > 0 ? String(totalStock) : "0",
-    hasStock: tracking.length > 0,
+    stockQty: stockQty === null ? "0" : String(stockQty),
+    hasStock: stockQty !== null,
     isActive: product.isActive,
   };
 }
@@ -374,14 +109,8 @@ function getPreviewImage(product: VendorProduct) {
   );
 }
 
-function getTotalStock(product: VendorProduct) {
-  const tracking = product.variants.filter((v) => v.isActive && v.stockQty !== null);
-  if (tracking.length === 0) return null;
-  return tracking.reduce((sum, v) => sum + (v.stockQty ?? 0), 0);
-}
-
 function StockBadge({ product }: { product: VendorProduct }) {
-  const total = getTotalStock(product);
+  const total = product.stockQty;
   if (total === null) return <span className="text-xs text-[var(--color-gray-500)]">Sin límite</span>;
   if (total === 0) return <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-600">Sin stock</span>;
   if (total <= 5) return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{total} restantes</span>;
@@ -419,13 +148,11 @@ function ProductSheet({
   onClose,
   onSaved,
   maxImagesPerProduct,
-  variantsEnabled,
 }: {
   sheetState: SheetState;
   onClose: () => void;
   onSaved: (input?: { shopActivated?: boolean }) => void;
   maxImagesPerProduct: number;
-  variantsEnabled: boolean;
 }) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const pendingImagesRef = useRef<PendingProductImage[]>([]);
@@ -637,11 +364,8 @@ function ProductSheet({
           name,
           description: draft.description.trim(),
           images: uploadedImages,
-          variant: {
-            title: "Default",
-            priceUsd: Math.max(0, toNumber(draft.priceUsd)),
-            stockQty: draft.hasStock ? Math.max(0, Math.trunc(toNumber(draft.stockQty))) : null,
-          },
+          priceUsd: Math.max(0, toNumber(draft.priceUsd)),
+          stockQty: draft.hasStock ? Math.max(0, Math.trunc(toNumber(draft.stockQty))) : null,
           isActive: draft.isActive,
         });
         onSaved({ shopActivated: response.shopActivated });
@@ -650,6 +374,7 @@ function ProductSheet({
           name,
           description: draft.description.trim(),
           priceUsd: Math.max(0, toNumber(draft.priceUsd)),
+          stockQty: draft.hasStock ? Math.max(0, Math.trunc(toNumber(draft.stockQty))) : null,
           isActive: draft.isActive,
         });
         onSaved({ shopActivated: response.shopActivated });
@@ -876,24 +601,6 @@ function ProductSheet({
             />
           </div>
 
-          {isEdit && variantsEnabled && (
-            <VariantsSection
-              product={sheetState.product}
-              onSaved={() => onSaved()}
-              setError={setError}
-            />
-          )}
-
-          {isEdit && !variantsEnabled && (
-            <p className="rounded-xl bg-[var(--color-gray-100)] px-3 py-2 text-xs text-[var(--color-gray-500)]">
-              Plan gratuito: una sola variante por producto.{" "}
-              <Link href="/vendedor/suscripcion" className="font-semibold text-[var(--color-brand)]">
-                Suscríbete
-              </Link>{" "}
-              para variantes ilimitadas y más fotos.
-            </p>
-          )}
-
           {error && (
             <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
           )}
@@ -944,9 +651,6 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
   const [maxImagesPerProduct, setMaxImagesPerProduct] = useState(
     initialData?.maxImagesPerProduct ?? VENDOR_FREE_TIER_MAX_IMAGES_PER_PRODUCT,
   );
-  const [variantsEnabled, setVariantsEnabled] = useState(
-    initialData?.variantsEnabled ?? false,
-  );
   const [isLoading, setIsLoading] = useState(!initialData);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
@@ -960,7 +664,6 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
       setProducts(res.products);
       setProductLimit(res.productLimit);
       setMaxImagesPerProduct(res.maxImagesPerProduct);
-      setVariantsEnabled(res.variantsEnabled);
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "No se pudieron cargar productos.");
     } finally {
@@ -980,7 +683,7 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
 
   const lowStockCount = products.filter((p) => {
     if (!p.isActive) return false;
-    const total = getTotalStock(p);
+    const total = p.stockQty;
     return total !== null && total <= 5;
   }).length;
 
@@ -1106,7 +809,6 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
       <ProductSheet
         sheetState={sheetState}
         maxImagesPerProduct={maxImagesPerProduct}
-        variantsEnabled={variantsEnabled}
         onClose={() => setSheetState({ open: false })}
         onSaved={({ shopActivated } = {}) => {
           if (shopActivated) {

@@ -10,6 +10,8 @@ import { type OrderPaymentStatus } from "@/lib/orders/constants";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { CancelOrderButton } from "./cancel-order-button";
 
+export const dynamic = "force-dynamic";
+
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
@@ -23,11 +25,11 @@ type OrderRow = {
   payment_method: "stripe" | "ath_movil" | null;
   total_usd: number;
   created_at: string;
-  shops: Array<{
+  shops: {
     id: string;
     vendor_name: string;
     slug: string;
-  }> | null;
+  } | null;
 };
 
 type OrderItemRow = {
@@ -35,11 +37,11 @@ type OrderItemRow = {
   product_id: string;
   quantity: number;
   unit_price_usd: number;
-  products: Array<{
+  products: {
     id: string;
     name: string;
     image_url: string | null;
-  }> | null;
+  } | null;
 };
 
 type DisplayOrder = {
@@ -112,7 +114,7 @@ async function loadOrdersForCurrentUser() {
   try {
     dataClient = createSupabaseAdminClient();
   } catch {
-    // Development fallback.
+    // Development fallback — use server client (RLS applies).
   }
 
   const { data: ordersData } = await dataClient
@@ -146,7 +148,7 @@ async function loadOrdersForCurrentUser() {
 
   const allOrders: DisplayOrder[] = orders.flatMap((order) => {
     const items = itemsByOrder.get(order.id) ?? [];
-    const shopInfo = order.shops?.[0] ?? null;
+    const shopInfo = order.shops ?? null;
     if (!shopInfo) return [];
 
     const { label, color } = getStatusDisplay(
@@ -176,8 +178,8 @@ async function loadOrdersForCurrentUser() {
         canCancel,
         items: items.map((item) => {
           return {
-            name: item.products?.[0]?.name ?? "Producto",
-            imageUrl: item.products?.[0]?.image_url ?? null,
+            name: item.products?.name ?? "Producto",
+            imageUrl: item.products?.image_url ?? null,
             quantity: item.quantity,
           };
         }),

@@ -7,6 +7,7 @@ export type ShopRow = {
   id: string;
   slug: string;
   vendor_name: string;
+  logo_url: string | null;
   rating: number;
   review_count: number;
   description: string;
@@ -49,6 +50,7 @@ export type MarketplaceSearchShop = {
   name: string;
   rating: string;
   reviewCount: number;
+  logoUrl: string | null;
   products: MarketplaceSearchProduct[];
 };
 
@@ -95,6 +97,7 @@ export function buildMarketplaceSearchShop(
     name: shop.vendor_name,
     rating: formatRating(shop.rating),
     reviewCount: Number(shop.review_count ?? 0),
+    logoUrl: shop.logo_url?.trim() ? shop.logo_url.trim() : null,
     products: products.map((product) => ({
       id: product.id,
       name: product.name,
@@ -126,6 +129,7 @@ export function buildShopDetail(shop: ShopRow, products: ProductRow[]): ShopDeta
     vendorName: shop.vendor_name,
     rating: formatRating(shop.rating),
     reviewCount: Number(shop.review_count ?? 0),
+    logoUrl: shop.logo_url?.trim() ? shop.logo_url.trim() : null,
     description: shop.description ?? "",
     products: shopProducts,
     athMovilPhone: shop.ath_movil_phone ?? null,
@@ -158,6 +162,7 @@ export function buildMarketplaceShopCards(
       name: shop.name,
       rating: shop.rating,
       reviewCount: shop.reviewCount,
+      logoUrl: shop.logoUrl,
       products: previewProducts,
     };
   });

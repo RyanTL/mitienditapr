@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ExternalLinkIcon } from "@/components/icons";
+import { AppLogoLink } from "@/components/layout/app-logo-link";
 import { fetchVendorStatus } from "@/lib/vendor/client";
 
 const NAV_LINKS = [
@@ -43,12 +44,7 @@ export function VendorDesktopNav() {
   return (
     <nav className="sticky top-0 z-40 hidden border-b border-[var(--vendor-nav-border)] bg-[var(--vendor-nav-bg)]/95 backdrop-blur-md md:block">
       <div className="mx-auto flex max-w-6xl items-center px-6">
-        <Link
-          href="/"
-          className="mr-6 text-sm font-bold text-[var(--color-carbon)] transition-opacity hover:opacity-70"
-        >
-          Mitiendita
-        </Link>
+        <AppLogoLink className="mr-6 text-sm transition-opacity hover:opacity-70" />
 
         <div className="flex items-center gap-0.5">
           {NAV_LINKS.map(({ href, label }) => {

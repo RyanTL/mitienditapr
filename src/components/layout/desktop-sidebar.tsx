@@ -11,10 +11,12 @@ import {
   OrdersIcon,
   UserIcon,
 } from "@/components/icons";
+import { AppLogoLink } from "@/components/layout/app-logo-link";
 import { ProfileMenu } from "@/components/profile/profile-menu";
 import { useAuthUser, getUserInitial } from "@/hooks/use-auth-user";
 import {
   CART_CHANGED_EVENT,
+  type CartChangedEventDetail,
   fetchCartQuantityTotal,
 } from "@/lib/supabase/cart";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -62,11 +64,21 @@ export function DesktopSidebar() {
       void syncCartCount();
     });
 
-    window.addEventListener(CART_CHANGED_EVENT, syncCartCount);
+    const handleCartChanged = (event: Event) => {
+      const detail = (event as CustomEvent<CartChangedEventDetail>).detail;
+      if ("delta" in detail) {
+        // Apply delta locally — no network call needed for instant UI update
+        setCartCount((prev) => Math.max(0, prev + detail.delta));
+      } else {
+        void syncCartCount();
+      }
+    };
+
+    window.addEventListener(CART_CHANGED_EVENT, handleCartChanged);
 
     return () => {
       subscription.unsubscribe();
-      window.removeEventListener(CART_CHANGED_EVENT, syncCartCount);
+      window.removeEventListener(CART_CHANGED_EVENT, handleCartChanged);
     };
   }, [user]);
 
@@ -85,13 +97,7 @@ export function DesktopSidebar() {
     <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:w-60 lg:flex-col lg:border-r lg:border-[#ede7df] lg:bg-[#faf7f3]">
       {/* Logo */}
       <div className="flex h-[72px] shrink-0 items-center border-b border-[#ede7df] px-5">
-        <Link
-          href="/"
-          className="text-lg font-extrabold tracking-tight text-[var(--color-carbon)]"
-        >
-          Mitiendita{" "}
-          <span className="text-[var(--color-brand)]">PR</span>
-        </Link>
+        <AppLogoLink />
       </div>
 
       {/* Primary nav */}

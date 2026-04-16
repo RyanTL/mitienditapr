@@ -21,6 +21,7 @@ export type ShopDetail = {
   vendorName: string;
   rating: string;
   reviewCount: number;
+  logoUrl: string | null;
   description: string;
   products: Product[];
   athMovilPhone: string | null;
@@ -38,6 +39,7 @@ export type MarketplaceShopCard = {
   name: string;
   rating: string;
   reviewCount: number;
+  logoUrl: string | null;
   products: Pick<
     Product,
     "id" | "name" | "priceUsd" | "rating" | "reviewCount" | "imageUrl" | "alt"

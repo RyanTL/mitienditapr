@@ -22,15 +22,6 @@ import {
   getVendorSubscriptionByShopId,
 } from "@/lib/supabase/vendor-server";
 
-type VariantPayload = {
-  title?: string;
-  sku?: string;
-  priceUsd?: number;
-  stockQty?: number | null | "";
-  isActive?: boolean;
-  attributes?: Record<string, string>;
-};
-
 type ProductImagePayload = {
   imageUrl?: string;
   alt?: string | null;
@@ -42,7 +33,8 @@ type ProductPayload = {
   imageUrl?: string | null;
   images?: ProductImagePayload[];
   isActive?: boolean;
-  variant?: VariantPayload;
+  priceUsd?: number;
+  stockQty?: number | null | "";
 };
 
 type ProductRow = {
@@ -57,17 +49,11 @@ type ProductRow = {
   updated_at: string;
 };
 
-type VariantRow = {
-  id: string;
+type VariantStockRow = {
   product_id: string;
-  title: string;
-  sku: string | null;
-  attributes_json: Record<string, unknown>;
-  price_usd: number;
   stock_qty: number | null;
   is_active: boolean;
   created_at: string;
-  updated_at: string;
 };
 
 type ImageRow = {
@@ -95,12 +81,25 @@ function readNumeric(value: unknown, fallback = 0) {
   return fallback;
 }
 
+function stockQtyForProduct(variants: VariantStockRow[]) {
+  if (variants.length === 0) {
+    return null;
+  }
+
+  const sorted = [...variants].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  const active = sorted.filter((variant) => variant.is_active);
+  const canonical = active[0] ?? sorted[0];
+  return canonical.stock_qty;
+}
+
 function mapProductResponse(
   products: ProductRow[],
-  variants: VariantRow[],
+  variants: VariantStockRow[],
   images: ImageRow[],
 ) {
-  const variantsByProductId = new Map<string, VariantRow[]>();
+  const variantsByProductId = new Map<string, VariantStockRow[]>();
   variants.forEach((variant) => {
     const list = variantsByProductId.get(variant.product_id) ?? [];
     variantsByProductId.set(variant.product_id, [...list, variant]);
@@ -119,21 +118,10 @@ function mapProductResponse(
     description: product.description,
     imageUrl: product.image_url || null,
     priceUsd: Number(product.price_usd),
+    stockQty: stockQtyForProduct(variantsByProductId.get(product.id) ?? []),
     isActive: product.is_active,
     createdAt: product.created_at,
     updatedAt: product.updated_at,
-    variants: (variantsByProductId.get(product.id) ?? []).map((variant) => ({
-      id: variant.id,
-      productId: variant.product_id,
-      title: variant.title,
-      sku: variant.sku,
-      attributes: variant.attributes_json,
-      priceUsd: Number(variant.price_usd),
-      stockQty: variant.stock_qty,
-      isActive: variant.is_active,
-      createdAt: variant.created_at,
-      updatedAt: variant.updated_at,
-    })),
     images: (imagesByProductId.get(product.id) ?? []).map((image) => ({
       id: image.id,
       productId: image.product_id,
@@ -179,7 +167,6 @@ export async function GET() {
   const hasPremiumProductFeatures = vendorHasPremiumProductFeatures({ subscription });
   const productLimit = hasPremiumProductFeatures ? null : VENDOR_FREE_TIER_PRODUCT_LIMIT;
   const maxImagesPerProduct = getVendorMaxImagesPerProduct(hasPremiumProductFeatures);
-  const variantsEnabled = hasPremiumProductFeatures;
 
   if (products.length === 0) {
     return NextResponse.json({
@@ -187,7 +174,6 @@ export async function GET() {
       productLimit,
       productCount: 0,
       maxImagesPerProduct,
-      variantsEnabled,
     });
   }
 
@@ -197,9 +183,7 @@ export async function GET() {
     await Promise.all([
       dataClient
         .from("product_variants")
-        .select(
-          "id,product_id,title,sku,attributes_json,price_usd,stock_qty,is_active,created_at,updated_at",
-        )
+        .select("product_id,stock_qty,is_active,created_at")
         .in("product_id", productIds)
         .order("created_at", { ascending: true }),
       dataClient
@@ -210,7 +194,7 @@ export async function GET() {
     ]);
 
   if (variantsError || !variantRows) {
-    return serverErrorResponse(variantsError, "No se pudieron cargar variantes.");
+    return serverErrorResponse(variantsError, "No se pudieron cargar inventario.");
   }
 
   if (imagesError || !imageRows) {
@@ -220,13 +204,12 @@ export async function GET() {
   return NextResponse.json({
     products: mapProductResponse(
       products,
-      variantRows as VariantRow[],
+      variantRows as VariantStockRow[],
       imageRows as ImageRow[],
     ),
     productLimit,
     productCount: products.length,
     maxImagesPerProduct,
-    variantsEnabled,
   });
 }
 
@@ -291,20 +274,15 @@ export async function POST(request: Request) {
         })
       : [];
   const isActive = body.isActive ?? true;
-  const rawVariant = isRecord(body.variant) ? body.variant : {};
-
-  const variantTitle = readText(rawVariant.title) || "Default";
-  const variantSku = readText(rawVariant.sku);
-  const variantPrice = Math.min(99999.99, Math.max(0, readNumeric(rawVariant.priceUsd, 0)));
-  const rawStock = rawVariant.stockQty;
+  const variantPrice = Math.min(
+    99999.99,
+    Math.max(0, readNumeric(body.priceUsd ?? 0, 0)),
+  );
+  const rawStock = body.stockQty;
   const variantStock =
     rawStock === null || rawStock === undefined || rawStock === ""
       ? null
       : Math.max(0, Math.trunc(readNumeric(rawStock, 0)));
-  const variantIsActive = rawVariant.isActive ?? true;
-  const variantAttributes = isRecord(rawVariant.attributes)
-    ? rawVariant.attributes
-    : {};
   const imagesToInsert =
     images.length > 0
       ? images
@@ -384,12 +362,12 @@ export async function POST(request: Request) {
 
     const { error: variantError } = await dataClient.from("product_variants").insert({
       product_id: productRow.id,
-      title: variantTitle,
-      sku: variantSku || null,
-      attributes_json: variantAttributes,
+      title: "Default",
+      sku: null,
+      attributes_json: {},
       price_usd: variantPrice,
       stock_qty: variantStock,
-      is_active: variantIsActive,
+      is_active: isActive,
     });
 
     if (variantError) {

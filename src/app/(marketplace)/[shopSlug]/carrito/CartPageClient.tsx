@@ -18,6 +18,7 @@ import {
 import { useFavoriteProducts } from "@/hooks/use-favorite-products";
 import { FIXED_BOTTOM_LEFT_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
+import { VendorShopAvatar } from "@/components/shop/vendor-shop-avatar";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { fetchAccountSnapshot, saveCheckoutProfile } from "@/lib/account/client";
 import { FALLBACK_PRODUCT_IMAGE as CART_IMAGE_FALLBACK_URL, formatUsd } from "@/lib/formatters";
@@ -428,9 +429,13 @@ export default function CartPageClient({ shop }: CartPageClientProps) {
         <section className="rounded-[2rem] border border-[var(--color-gray)] bg-[var(--color-white)] p-5 shadow-[0_16px_34px_var(--shadow-black-008)]">
           {shouldShowShopHeader ? (
             <header className="mb-5 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-gray-border)] bg-[var(--color-gray-icon)] text-xl font-bold text-[var(--color-carbon)]">
-                {shop.vendorName.charAt(0).toUpperCase()}
-              </div>
+              <VendorShopAvatar
+                vendorName={shop.vendorName}
+                logoUrl={shop.logoUrl}
+                sizePx={48}
+                textClassName="text-xl"
+                fallbackClassName="border border-[var(--color-gray-border)] bg-[var(--color-gray-icon)] text-[var(--color-carbon)]"
+              />
               <div>
                 <h1 className="text-base font-bold leading-none text-[var(--color-carbon)]">
                   {shop.vendorName}

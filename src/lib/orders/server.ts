@@ -433,7 +433,7 @@ async function loadShopCartItems(
         : null) ?? variantsByProductId.get(cartItem.product_id)?.[0];
 
     if (!selectedVariant) {
-      throw new Error(`El producto "${product.name}" no tiene variantes activas.`);
+      throw new Error(`El producto "${product.name}" no está disponible para comprar.`);
     }
 
     return {

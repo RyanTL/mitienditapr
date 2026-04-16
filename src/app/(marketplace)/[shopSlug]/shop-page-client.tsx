@@ -21,6 +21,7 @@ import { BOTTOM_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { FollowShopButton } from "@/components/shop/follow-shop-button";
 import { ShopRating } from "@/components/shop/shop-rating";
+import { VendorShopAvatar } from "@/components/shop/vendor-shop-avatar";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import {
   formatDateEsPr,
@@ -325,9 +326,12 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
           >
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
-                  {shop.vendorName.charAt(0).toUpperCase()}
-                </div>
+                <VendorShopAvatar
+                  vendorName={shop.vendorName}
+                  logoUrl={shop.logoUrl}
+                  sizePx={40}
+                  textClassName="text-sm font-semibold"
+                />
                 <div>
                   <p className="text-base font-bold text-[var(--color-carbon)]">{shop.vendorName}</p>
                   <ShopRating

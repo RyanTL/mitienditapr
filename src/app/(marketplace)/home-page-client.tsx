@@ -163,9 +163,19 @@ function DefaultShopCard({ shop }: { shop: MarketplaceShopCard }) {
       className="block rounded-3xl bg-[var(--color-white)] px-4 py-4 shadow-[0_1px_3px_var(--shadow-black-008),0_8px_24px_var(--shadow-black-008)] transition-shadow hover:shadow-[0_14px_30px_var(--shadow-black-012)] md:px-5 md:py-5"
     >
       <div className="mb-3 flex items-center gap-2.5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
-          {shop.name.charAt(0).toUpperCase()}
-        </div>
+        {shop.logoUrl ? (
+          <Image
+            src={shop.logoUrl}
+            alt={shop.name}
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-semibold text-[var(--color-white)]">
+            {shop.name.charAt(0).toUpperCase()}
+          </div>
+        )}
         <div>
           <h2 className="text-base font-extrabold leading-tight text-[var(--color-carbon)] lg:text-lg">
             {shop.name}

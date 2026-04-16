@@ -381,11 +381,12 @@ export function VendorShopSettingsClient({
     });
   }, [policyDrafts, policyData]);
 
-  const hasAnythingToSave = shopFormDirty || policySaveTargets.length > 0;
-  const canSaveAll = hasAnythingToSave && !hasBlockingPolicyEdits;
+  /** Policy drafts with unchecked legal box block policy publishes only — not tienda profile fields. */
+  const canSavePolicies = policySaveTargets.length > 0 && !hasBlockingPolicyEdits;
+  const canAutosave = shopFormDirty || canSavePolicies;
 
   const handleSaveAll = useCallback(async () => {
-    if (!canSaveAll) return;
+    if (!shopFormDirty && !canSavePolicies) return;
     setIsSavingSettings(true);
     setErrorMessage(null);
     setFeedbackMessage(null);
@@ -419,27 +420,26 @@ export function VendorShopSettingsClient({
           })
         : Promise.resolve();
 
-      const savePolicies =
-        policySaveTargets.length > 0
-          ? Promise.all(
-              policySaveTargets.map((policyType) => {
-                const draft = policyDrafts[policyType];
-                return publishVendorShopPolicy(policyType, {
-                  title: draft.title,
-                  body: draft.body,
-                  templateId: draft.templateId,
-                  acceptanceScope: "update",
-                  acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
-                  accepted: draft.accepted,
-                });
-              }),
-            ).then(async () => {
-              const policiesResponse = await fetchVendorShopPolicies();
-              setPolicyData(policiesResponse);
-              setPolicyDrafts(buildPolicyDrafts(policiesResponse, policyTemplates));
-              setExpandedPolicyCard(null);
-            })
-          : Promise.resolve();
+      const savePolicies = canSavePolicies
+        ? Promise.all(
+            policySaveTargets.map((policyType) => {
+              const draft = policyDrafts[policyType];
+              return publishVendorShopPolicy(policyType, {
+                title: draft.title,
+                body: draft.body,
+                templateId: draft.templateId,
+                acceptanceScope: "update",
+                acceptanceText: DEFAULT_VENDOR_POLICY_ACCEPTANCE_TEXT,
+                accepted: draft.accepted,
+              });
+            }),
+          ).then(async () => {
+            const policiesResponse = await fetchVendorShopPolicies();
+            setPolicyData(policiesResponse);
+            setPolicyDrafts(buildPolicyDrafts(policiesResponse, policyTemplates));
+            setExpandedPolicyCard(null);
+          })
+        : Promise.resolve();
 
       await Promise.all([saveShop, savePolicies]);
 
@@ -452,7 +452,7 @@ export function VendorShopSettingsClient({
       setIsSavingSettings(false);
     }
   }, [
-    canSaveAll,
+    canSavePolicies,
     formState,
     policyDrafts,
     policySaveTargets,
@@ -464,7 +464,7 @@ export function VendorShopSettingsClient({
   handleSaveAllRef.current = handleSaveAll;
 
   useEffect(() => {
-    if (isLoading || !canSaveAll || isSavingSettings || isUpdatingStatus || isUploadingLogo) {
+    if (isLoading || !canAutosave || isSavingSettings || isUpdatingStatus || isUploadingLogo) {
       return;
     }
     const id = window.setTimeout(() => {
@@ -472,7 +472,7 @@ export function VendorShopSettingsClient({
     }, AUTOSAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(id);
   }, [
-    canSaveAll,
+    canAutosave,
     formState,
     policyDrafts,
     isLoading,
@@ -504,7 +504,19 @@ export function VendorShopSettingsClient({
     setFeedbackMessage(null);
     try {
       const result = await uploadVendorImage(file);
-      setFormState((current) => ({ ...current, logoUrl: result.url }));
+      const logoUrl = result.url;
+      const response = await updateVendorShopSettings({ logoUrl });
+      setStatusData((prev) => {
+        if (!prev) return prev;
+        const next: ShopResponse = {
+          ...prev,
+          shop: response.shop,
+          checks: response.checks,
+        };
+        setFormState(mapFormStateFromResponse(next));
+        return next;
+      });
+      setFeedbackMessage("Logo guardado en tu tienda.");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo subir el logo.");
     } finally {
@@ -562,7 +574,8 @@ export function VendorShopSettingsClient({
       )}
       {!isLoading && hasBlockingPolicyEdits ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-snug text-amber-900">
-          Marca la casilla legal en cada política que editaste para poder guardarla automáticamente.
+          Marca la casilla legal en cada política que editaste para publicar ese cambio. El perfil de
+          la tienda (nombre, logo, contacto, etc.) se puede guardar igual.
         </p>
       ) : null}
       {!isLoading && isSavingSettings ? (
@@ -1269,19 +1282,13 @@ export function VendorShopSettingsClient({
             </div>
 
             {blockingReasons.length > 0 && (
-              <div className="mb-3 rounded-xl border border-[var(--vendor-card-border)] border-l-[3px] border-l-[var(--color-danger)] bg-white p-3">
-                <p className="mb-1.5 text-xs font-semibold text-[var(--color-danger)]">
-                  Para activarla automáticamente:
-                </p>
-                <ul className="space-y-1.5">
-                  {blockingReasons.map((reason) => (
-                    <li key={reason} className="flex items-start gap-2 text-xs leading-snug text-[var(--color-danger)]">
-                      <AlertIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <span>{reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <ul className="mb-3 space-y-1">
+                {blockingReasons.map((reason) => (
+                  <li key={reason} className="text-xs leading-snug text-[var(--color-gray-500)]">
+                    {reason}
+                  </li>
+                ))}
+              </ul>
             )}
 
             {shopStatus === "draft" && (

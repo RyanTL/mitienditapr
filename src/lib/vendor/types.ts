@@ -55,7 +55,7 @@ export type VendorStatusResponse = {
   } | null;
   checks: {
     canPublish: boolean;
-    activeVariantCount: number;
+    activeProductCount: number;
     blockingReasons: string[];
   };
   metrics: {
@@ -63,19 +63,6 @@ export type VendorStatusResponse = {
     orderCount: number;
     newOrderCount: number;
   };
-};
-
-export type VendorProductVariant = {
-  id: string;
-  productId: string;
-  title: string;
-  sku: string | null;
-  attributes: Record<string, unknown>;
-  priceUsd: number;
-  stockQty: number | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 };
 
 export type VendorProductImage = {
@@ -93,10 +80,11 @@ export type VendorProduct = {
   description: string;
   imageUrl: string | null;
   priceUsd: number;
+  /** Tracked units when set; `null` means unlimited inventory. */
+  stockQty: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  variants: VendorProductVariant[];
   images: VendorProductImage[];
 };
 
@@ -105,7 +93,6 @@ export type VendorProductsResponse = {
   productLimit: number | null;
   productCount: number;
   maxImagesPerProduct: number;
-  variantsEnabled: boolean;
 };
 
 export type VendorShopActivationResponse = {

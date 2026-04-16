@@ -107,7 +107,7 @@ export default async function VendorPanelPage({ searchParams }: VendorPanelPageP
                 Plan Gratuito
               </p>
               <p className="mt-1 text-xs text-[var(--color-gray-500)]">
-                Hasta 4 productos &middot; 2 fotos por producto &middot; Una variante por producto
+                Hasta 4 productos &middot; 2 fotos por producto
               </p>
             </div>
             <span className="shrink-0 rounded-full bg-black px-4 py-2 text-xs font-semibold text-white transition-transform group-hover:scale-[1.02] group-active:scale-[0.98]">
@@ -119,20 +119,11 @@ export default async function VendorPanelPage({ searchParams }: VendorPanelPageP
             <span>&middot;</span>
             <span>Hasta 20 fotos por producto</span>
             <span>&middot;</span>
-            <span>Variantes ilimitadas</span>
-            <span>&middot;</span>
             <span>Código QR</span>
             <span>&middot;</span>
             <span>Seguimiento en vivo</span>
           </div>
         </Link>
-      )}
-
-      {/* Billing bypass banner */}
-      {snapshot.billingBypassEnabled && (
-        <div className="rounded-xl border border-[var(--color-brand)]/20 bg-[var(--color-brand)]/5 px-4 py-2.5 text-xs font-medium text-[var(--color-brand)]">
-          Modo prueba activo — facturación omitida.
-        </div>
       )}
 
       {/* New orders alert */}

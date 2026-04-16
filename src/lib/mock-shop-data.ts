@@ -6,6 +6,7 @@ export const mockShopDetails: ShopDetail[] = [
     vendorName: "Calzado Urbano",
     rating: "4.8",
     reviewCount: 43,
+    logoUrl: null,
     description:
       "Esto es una breve descripción con límite de letras para describir que vendes y a que te dedicas.",
     products: [
@@ -96,6 +97,7 @@ export const mockShopDetails: ShopDetail[] = [
     vendorName: "Estilo Boutique",
     rating: "4.9",
     reviewCount: 58,
+    logoUrl: null,
     description:
       "Selección especial de artículos para tu estilo diario con envíos rápidos y buena calidad.",
     products: [
@@ -186,6 +188,7 @@ export const mockShopDetails: ShopDetail[] = [
     vendorName: "Hecho a Mano PR",
     rating: "4.7",
     reviewCount: 31,
+    logoUrl: null,
     description:
       "Piezas seleccionadas para tu dia a dia, hechas con estilo y atencion a cada detalle.",
     products: [

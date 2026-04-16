@@ -16,6 +16,7 @@ import { ProductPurchasePanel } from "@/components/product/product-purchase-pane
 import { ProductReviewsSection } from "@/components/reviews/product-reviews-section";
 import { ProductShareButton } from "@/components/share/product-share-button";
 import { ShopRating } from "@/components/shop/shop-rating";
+import { VendorShopAvatar } from "@/components/shop/vendor-shop-avatar";
 import { FALLBACK_PRODUCT_IMAGE as PRODUCT_IMAGE_FALLBACK_URL, formatUsd } from "@/lib/formatters";
 import { fetchShopDetailBySlugServer } from "@/lib/supabase/public-shop-data-server";
 
@@ -68,9 +69,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <main className="mx-auto w-full max-w-md md:max-w-3xl lg:max-w-4xl">
         {/* Mobile-only shop header */}
         <header className="mb-4 flex items-center gap-2 lg:hidden">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-carbon)] text-lg font-bold text-[var(--color-white)]">
-            {shop.vendorName.charAt(0).toUpperCase()}
-          </div>
+          <VendorShopAvatar
+            vendorName={shop.vendorName}
+            logoUrl={shop.logoUrl}
+            sizePx={40}
+            textClassName="text-lg"
+          />
           <Link
             href={`/${shop.slug}`}
             className="text-lg font-bold text-[var(--color-carbon)] hover:opacity-80"
@@ -102,9 +106,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <section>
             {/* Desktop-only shop header inside info column */}
             <header className="mb-3 hidden items-center gap-2 lg:flex">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-carbon)] text-sm font-bold text-[var(--color-white)]">
-                {shop.vendorName.charAt(0).toUpperCase()}
-              </div>
+              <VendorShopAvatar
+                vendorName={shop.vendorName}
+                logoUrl={shop.logoUrl}
+                sizePx={36}
+                textClassName="text-sm"
+              />
               <Link
                 href={`/${shop.slug}`}
                 className="text-base font-semibold text-[var(--color-carbon)] hover:opacity-80"
