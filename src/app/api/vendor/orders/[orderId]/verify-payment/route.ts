@@ -116,12 +116,17 @@ export async function POST(
     }
 
     if (order.buyer_email) {
-      void sendBuyerPaymentUpdateEmail({
+      sendBuyerPaymentUpdateEmail({
         to: order.buyer_email,
         buyerName: order.buyer_name,
         orderId: order.id,
         shopName: shop.vendor_name,
         paymentStatus: action === "approve" ? "paid" : "failed",
+      }).catch((error) => {
+        console.error("[email] failed to send buyer payment update email", {
+          orderId: order.id,
+          error,
+        });
       });
     }
 

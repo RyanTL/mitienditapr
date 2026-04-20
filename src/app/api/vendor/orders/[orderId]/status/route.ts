@@ -185,12 +185,17 @@ export async function PATCH(
       (buyerNotifiableStatuses as readonly string[]).includes(value);
 
     if (isBuyerNotifiable(nextStatus) && order.buyer_email) {
-      void sendBuyerOrderStatusEmail({
+      sendBuyerOrderStatusEmail({
         to: order.buyer_email,
         buyerName: order.buyer_name,
         orderId: order.id,
         shopName: shop.vendor_name,
         newStatus: nextStatus,
+      }).catch((error) => {
+        console.error("[email] failed to send buyer order status email", {
+          orderId: order.id,
+          error,
+        });
       });
     }
 

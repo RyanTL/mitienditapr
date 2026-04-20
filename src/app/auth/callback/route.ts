@@ -33,9 +33,14 @@ export async function GET(request: Request) {
     // Send welcome email to new users — works for both email confirmation
     // (type === "signup") and Google OAuth (no type param, but recently created)
     if (data.user?.email && isNewUser(data.user)) {
-      void sendWelcomeEmail({
+      sendWelcomeEmail({
         to: data.user.email,
         name: (data.user.user_metadata?.full_name as string | undefined) ?? null,
+      }).catch((error) => {
+        console.error("[email] failed to send welcome email", {
+          userId: data.user?.id,
+          error,
+        });
       });
     }
   }

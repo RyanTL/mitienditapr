@@ -46,7 +46,6 @@ type ReadinessResult = {
   missingEnv: string[];
   flags: {
     strictDbMode: boolean;
-    catalogSeedEnabled: boolean;
     vendorBillingBypassEnabled: boolean;
     productionBillingBypassDisabled: boolean;
   };
@@ -117,7 +116,6 @@ export async function GET() {
     missingEnv,
     flags: {
       strictDbMode: process.env.ENABLE_STRICT_DB_MODE === "true",
-      catalogSeedEnabled: process.env.ENABLE_CATALOG_SEED === "true",
       vendorBillingBypassEnabled,
       productionBillingBypassDisabled:
         process.env.NODE_ENV !== "production" || !vendorBillingBypassEnabled,
@@ -193,7 +191,6 @@ export async function GET() {
     result.dbConnected &&
     result.missingEnv.length === 0 &&
     result.flags.strictDbMode &&
-    !result.flags.catalogSeedEnabled &&
     result.flags.productionBillingBypassDisabled &&
     result.missingTables.length === 0 &&
     result.checks.shopsShareCode &&

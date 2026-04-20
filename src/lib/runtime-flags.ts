@@ -19,8 +19,3 @@ export const isStrictDbModeEnabled = parseBooleanFlag(
   process.env.ENABLE_STRICT_DB_MODE ?? process.env.NEXT_PUBLIC_ENABLE_STRICT_DB_MODE,
   true,
 );
-
-export const isCatalogSeedEnabled = parseBooleanFlag(
-  process.env.ENABLE_CATALOG_SEED,
-  false,
-);

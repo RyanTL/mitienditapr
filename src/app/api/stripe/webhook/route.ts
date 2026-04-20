@@ -189,7 +189,7 @@ async function handleBuyerCheckoutPaid(
   if (notificationContext.vendorEmail) {
     const shopInfo = notificationContext.order.shops?.[0];
     if (shopInfo) {
-    void sendVendorNewOrderEmail({
+    sendVendorNewOrderEmail({
       to: notificationContext.vendorEmail,
       vendorName: shopInfo.vendor_name,
       orderId,
@@ -198,6 +198,8 @@ async function handleBuyerCheckoutPaid(
       items: notificationContext.items,
       totalUsd: Number(notificationContext.order.total_usd),
       paymentMethod: "stripe",
+    }).catch((error) => {
+      console.error("[email] failed to send vendor new order email", { orderId, error });
     });
     }
   }
@@ -205,7 +207,7 @@ async function handleBuyerCheckoutPaid(
   if (notificationContext.order.buyer_email) {
     const shopInfo = notificationContext.order.shops?.[0];
     if (shopInfo) {
-    void sendBuyerOrderConfirmationEmail({
+    sendBuyerOrderConfirmationEmail({
       to: notificationContext.order.buyer_email,
       buyerName: notificationContext.order.buyer_name,
       orderId,
@@ -213,6 +215,8 @@ async function handleBuyerCheckoutPaid(
       items: notificationContext.items,
       totalUsd: Number(notificationContext.order.total_usd),
       paymentMethod: "stripe",
+    }).catch((error) => {
+      console.error("[email] failed to send buyer order confirmation email", { orderId, error });
     });
     }
   }

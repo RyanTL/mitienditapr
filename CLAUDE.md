@@ -34,7 +34,6 @@ A shop must have at least one buyer rail (Connect or ATH) to publish.
 
 - `ENABLE_VENDOR_MODE` — vendor routes
 - `ENABLE_STRICT_DB_MODE` — real DB only (no mock fallbacks)
-- `ENABLE_CATALOG_SEED` — dev-only seeding endpoint
 - `ENABLE_VENDOR_BILLING_BYPASS` — skip vendor subscription checks; defaults on in dev, must be `false` on develop/prod (`src/lib/vendor/billing-mode.ts`)
 
 ## Conventions

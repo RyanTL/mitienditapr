@@ -125,7 +125,7 @@ export async function POST(request: Request) {
           .maybeSingle<{ email: string | null }>();
 
         if (vendorData?.email) {
-          void sendVendorNewOrderEmail({
+          sendVendorNewOrderEmail({
             to: vendorData.email,
             vendorName: createdOrder.shop.vendor_name,
             orderId: createdOrder.orderId,
@@ -135,11 +135,16 @@ export async function POST(request: Request) {
             totalUsd: createdOrder.totalUsd,
             paymentMethod: "ath_movil",
             athMovilPhone: createdOrder.shop.ath_movil_phone,
+          }).catch((error) => {
+            console.error("[email] failed to send vendor new order email", {
+              orderId: createdOrder.orderId,
+              error,
+            });
           });
         }
 
         if (createdOrder.buyer.email) {
-          void sendBuyerOrderConfirmationEmail({
+          sendBuyerOrderConfirmationEmail({
             to: createdOrder.buyer.email,
             buyerName: createdOrder.buyer.fullName,
             orderId: createdOrder.orderId,
@@ -148,6 +153,11 @@ export async function POST(request: Request) {
             totalUsd: createdOrder.totalUsd,
             paymentMethod: "ath_movil",
             athMovilPhone: createdOrder.shop.ath_movil_phone,
+          }).catch((error) => {
+            console.error("[email] failed to send buyer order confirmation email", {
+              orderId: createdOrder.orderId,
+              error,
+            });
           });
         }
       }

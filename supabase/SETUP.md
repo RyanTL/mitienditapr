@@ -16,7 +16,6 @@ Fill in:
 - `NEXT_PUBLIC_APP_URL=http://localhost:3000`
 - `ENABLE_VENDOR_MODE=true`
 - `ENABLE_STRICT_DB_MODE=true`
-- `ENABLE_CATALOG_SEED=false`
 - Stripe keys if you need billing flows: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_VENDOR_PRICE_ID`
 
 ## 2. Auth URLs (Supabase Dashboard)
@@ -48,6 +47,5 @@ npm run dev
 
 ## Notes
 
-- `/api/catalog/seed` only works with `ENABLE_CATALOG_SEED=true` and an admin user.
 - Rotate any leaked Supabase/Stripe keys from their dashboards.
 
