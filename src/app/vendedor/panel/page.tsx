@@ -155,7 +155,7 @@ export default async function VendorPanelPage({ searchParams }: VendorPanelPageP
             <span>&middot;</span>
             <span>Código QR</span>
             <span>&middot;</span>
-            <span>Seguimiento en vivo</span>
+            <span>Soporte rápido</span>
           </div>
         </Link>
       )}

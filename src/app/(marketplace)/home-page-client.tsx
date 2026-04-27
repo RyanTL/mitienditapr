@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ChevronIcon,
@@ -35,6 +35,17 @@ const HomeSearchOverlay = dynamic(
     ),
   { ssr: false },
 );
+
+const VisitorWelcomePopup = dynamic(
+  () =>
+    import("@/components/marketplace/visitor-welcome-popup").then(
+      (mod) => mod.VisitorWelcomePopup,
+    ),
+  { ssr: false },
+);
+
+const VISITOR_WELCOME_DELAY_MS = 10_000;
+const VISITOR_WELCOME_STORAGE_KEY = "visitor-welcome-shown";
 
 type HomePageClientProps = {
   initialSearchShops: MarketplaceSearchShop[];
@@ -207,6 +218,20 @@ export function HomePageClient({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
+  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
+
+  useEffect(() => {
+    if (isLoading || user) return;
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem(VISITOR_WELCOME_STORAGE_KEY) === "1") return;
+
+    const timer = window.setTimeout(() => {
+      setIsWelcomeOpen(true);
+      sessionStorage.setItem(VISITOR_WELCOME_STORAGE_KEY, "1");
+    }, VISITOR_WELCOME_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [user, isLoading]);
 
   const normalizedFilterQuery = useMemo(
     () => normalizeMarketplaceSearchText(filterQuery),
@@ -367,6 +392,13 @@ export function HomePageClient({
           isOpen={isSearchOpen}
           shops={initialSearchShops}
           onClose={() => setIsSearchOpen(false)}
+        />
+      ) : null}
+
+      {isWelcomeOpen ? (
+        <VisitorWelcomePopup
+          isOpen={isWelcomeOpen}
+          onClose={() => setIsWelcomeOpen(false)}
         />
       ) : null}
     </div>

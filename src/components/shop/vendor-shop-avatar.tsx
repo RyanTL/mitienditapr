@@ -17,6 +17,20 @@ export function VendorShopAvatar({
   fallbackClassName = "bg-[var(--color-carbon)] text-[var(--color-white)]",
 }: VendorShopAvatarProps) {
   const trimmed = logoUrl?.trim();
+  const sharedStyle = {
+    width: `${sizePx}px`,
+    height: `${sizePx}px`,
+    minWidth: `${sizePx}px`,
+    minHeight: `${sizePx}px`,
+    maxWidth: `${sizePx}px`,
+    maxHeight: `${sizePx}px`,
+    flex: `0 0 ${sizePx}px`,
+    aspectRatio: "1 / 1",
+    borderRadius: "9999px",
+    overflow: "hidden",
+    display: "block",
+  } as const;
+
   if (trimmed) {
     return (
       <Image
@@ -24,15 +38,17 @@ export function VendorShopAvatar({
         alt={vendorName}
         width={sizePx}
         height={sizePx}
-        className="shrink-0 rounded-full object-cover"
+        sizes={`${sizePx}px`}
+        className="object-cover"
+        style={sharedStyle}
       />
     );
   }
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full font-bold ${fallbackClassName}`}
-      style={{ width: sizePx, height: sizePx }}
+      className={`flex items-center justify-center font-bold ${fallbackClassName}`}
+      style={sharedStyle}
     >
       <span className={textClassName}>{vendorName.charAt(0).toUpperCase()}</span>
     </div>
