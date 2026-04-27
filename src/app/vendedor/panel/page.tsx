@@ -120,11 +120,9 @@ export default async function VendorPanelPage({ searchParams }: VendorPanelPageP
                 Tu tienda necesita al menos un producto activo para poder publicarse.
               </p>
             </div>
-            <ChevronIcon className="mt-1 h-4 w-4 shrink-0 text-[var(--vendor-nav-text)] transition-transform group-hover:translate-x-0.5" />
           </div>
-          <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-4 py-2 text-xs font-semibold text-white transition-transform group-hover:scale-[1.02] group-active:scale-[0.98]">
+          <span className="mt-3 inline-flex items-center justify-center rounded-full bg-[var(--color-brand)] px-4 py-2 text-xs font-semibold text-white transition-transform group-hover:scale-[1.02] group-active:scale-[0.98]">
             Agregar producto
-            <span aria-hidden>→</span>
           </span>
         </Link>
       )}

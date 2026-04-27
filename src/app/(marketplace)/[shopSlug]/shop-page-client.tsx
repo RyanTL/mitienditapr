@@ -20,12 +20,12 @@ import { FloatingCartLink } from "@/components/navigation/floating-cart-link";
 import { BOTTOM_NAV_CONTAINER_CLASS } from "@/components/navigation/nav-styles";
 import { TwoItemBottomNav } from "@/components/navigation/two-item-bottom-nav";
 import { FollowShopButton } from "@/components/shop/follow-shop-button";
+import { ShopContactChips, ShopContactExtraChips } from "@/components/shop/shop-contact-chips";
 import { ShopRating } from "@/components/shop/shop-rating";
 import { VendorShopAvatar } from "@/components/shop/vendor-shop-avatar";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import {
   formatDateEsPr,
-  formatPhoneForDisplay,
   formatUsd,
   renderStars,
 } from "@/lib/formatters";
@@ -458,57 +458,21 @@ export function ShopPageClient({ shop }: ShopPageClientProps) {
 
               <article className="rounded-3xl bg-[var(--color-gray)] p-4">
                 <h3 className="text-[1.8rem] font-bold leading-none text-[var(--color-carbon)]">
-                  Contactar
+                  Contactos
                 </h3>
-                <div className="mt-3 grid gap-2">
-                  {shop.contactInstagram ? (
-                    <div className="rounded-xl px-1 py-2.5">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                        Instagram
-                      </p>
-                      <p className="text-sm text-[var(--color-carbon)]">@{shop.contactInstagram.replace(/^@/, "")}</p>
-                    </div>
-                  ) : null}
-                  {shop.contactWhatsapp ? (
-                    <div className="rounded-xl px-1 py-2.5">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                        WhatsApp
-                      </p>
-                      <p className="text-sm text-[var(--color-carbon)]">{formatPhoneForDisplay(shop.contactWhatsapp)}</p>
-                    </div>
-                  ) : null}
-                  <div className="rounded-xl px-1 py-2.5">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                      Email
-                    </p>
-                    <p className="text-sm text-[var(--color-carbon)]">{contactEmail}</p>
-                  </div>
-                  {shop.contactFacebook ? (
-                    <div className="rounded-xl px-1 py-2.5">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                        Facebook
-                      </p>
-                      <p className="text-sm text-[var(--color-carbon)]">{shop.contactFacebook}</p>
-                    </div>
-                  ) : null}
-                  {shop.contactPhone ? (
-                    <div className="rounded-xl px-1 py-2.5">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                        Teléfono
-                      </p>
-                      <p className="text-sm text-[var(--color-carbon)]">{formatPhoneForDisplay(shop.contactPhone)}</p>
-                    </div>
-                  ) : null}
-                  {shop.athMovilPhone ? (
-                    <div className="rounded-xl px-1 py-2.5">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-carbon)]">
-                        ATH Móvil
-                      </p>
-                      <p className="text-sm text-[var(--color-carbon)]">
-                        {formatPhoneForDisplay(shop.athMovilPhone)}
-                      </p>
-                    </div>
-                  ) : null}
+                <div className="mt-3 space-y-2">
+                  <ShopContactChips
+                    contact={{
+                      phone: shop.contactPhone,
+                      whatsapp: shop.contactWhatsapp,
+                      instagram: shop.contactInstagram,
+                      facebook: shop.contactFacebook,
+                    }}
+                  />
+                  <ShopContactExtraChips
+                    platformEmail={contactEmail}
+                    athMovilPhone={shop.athMovilPhone}
+                  />
                 </div>
               </article>
 

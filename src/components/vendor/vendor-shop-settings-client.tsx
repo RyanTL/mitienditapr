@@ -50,6 +50,22 @@ import type { VendorShopStatus } from "@/lib/vendor/constants";
 import { toNumber } from "@/lib/utils";
 import type { VendorShopSettingsResponse } from "@/lib/vendor/types";
 
+/** Stable accordion category ids. Anchors like `#tu-tienda` and `#cobros` resolve to these. */
+const CATEGORY_IDS = [
+  "membresia",
+  "tu-tienda",
+  "envios",
+  "cobros",
+  "contacto",
+  "politicas",
+  "estado",
+] as const;
+type CategoryId = (typeof CATEGORY_IDS)[number];
+
+function isCategoryId(value: string): value is CategoryId {
+  return (CATEGORY_IDS as readonly string[]).includes(value);
+}
+
 type ShopResponse = VendorShopSettingsResponse;
 
 /** Short debounce: fewer round-trips than typing every keystroke, still feels instant. */
@@ -247,7 +263,7 @@ function isPolicyDraftDirty(
   );
 }
 
-// ─── Section wrapper (compact settings card) ─────────────────────────────────
+// ─── Section wrapper (collapsible settings category card) ────────────────────
 
 type SectionIconComponent = (props: ComponentPropsWithoutRef<"svg">) => ReactNode;
 
@@ -257,6 +273,8 @@ function SettingsSection({
   Icon,
   children,
   sectionId,
+  open,
+  onToggle,
 }: {
   label: string;
   description: string;
@@ -264,24 +282,68 @@ function SettingsSection({
   children: ReactNode;
   /** Optional DOM id so in-page anchors (e.g. `#cobros`) can scroll to this section. */
   sectionId?: string;
+  open: boolean;
+  onToggle: () => void;
 }) {
+  const headerId = sectionId ? `${sectionId}-header` : undefined;
+  const panelId = sectionId ? `${sectionId}-panel` : undefined;
+
   return (
     <div
       id={sectionId}
-      className="rounded-2xl border border-[var(--color-gray)] bg-white p-4 shadow-[0_2px_12px_var(--shadow-black-003)] scroll-mt-20"
+      className={[
+        "scroll-mt-20 overflow-hidden rounded-2xl border bg-white shadow-[0_2px_12px_var(--shadow-black-003)] transition-colors",
+        open
+          ? "border-[var(--color-brand)]/30"
+          : "border-[var(--color-gray)]",
+      ].join(" ")}
     >
-      <div className="mb-3 flex items-start gap-2.5">
-        <div className="shrink-0 text-[var(--color-carbon)]">
+      <button
+        type="button"
+        id={headerId}
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={onToggle}
+        className="group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-[var(--color-gray-100,#f9fafb)] min-h-14"
+      >
+        <span
+          className={[
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
+            open
+              ? "bg-[var(--color-brand)]/10 text-[var(--color-brand)]"
+              : "bg-[var(--color-gray-100,#f9fafb)] text-[var(--color-carbon)]",
+          ].join(" ")}
+        >
           <Icon className="h-4 w-4" />
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-sm font-bold text-[var(--color-carbon)]">{label}</h2>
-          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-[var(--color-gray-500)]">
-            {description}
-          </p>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-[var(--color-carbon)]">{label}</span>
+        </span>
+        <ChevronDownIcon
+          className={[
+            "h-4 w-4 shrink-0 text-[var(--color-gray-500)] transition-transform duration-200",
+            open ? "rotate-180" : "rotate-0",
+          ].join(" ")}
+        />
+      </button>
+
+      <div
+        id={panelId}
+        role="region"
+        aria-labelledby={headerId}
+        aria-hidden={!open}
+        data-open={open ? "true" : "false"}
+        className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-200 ease-out data-[open=true]:grid-rows-[1fr] data-[open=true]:opacity-100"
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-[var(--color-gray-200,#e5e7eb)] px-4 pb-4 pt-3">
+            <p className="mb-3 text-xs leading-snug text-[var(--color-gray-500)]">
+              {description}
+            </p>
+            {children}
+          </div>
         </div>
       </div>
-      {children}
     </div>
   );
 }
@@ -457,8 +519,14 @@ export function VendorShopSettingsClient({
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   /** Surfaced inline inside the readiness card so the vendor sees it next to the publish button. */
   const [publishError, setPublishError] = useState<string | null>(null);
+  /** Single-focus accordion: only one settings category is expanded at a time. */
+  const [openCategory, setOpenCategory] = useState<CategoryId | null>(null);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const toggleCategory = useCallback((id: CategoryId) => {
+    setOpenCategory((current) => (current === id ? null : id));
+  }, []);
 
   const templatesByType = useMemo(() => {
     return buildTemplatesByType(policyTemplates);
@@ -503,6 +571,30 @@ export function VendorShopSettingsClient({
 
     void loadSettings();
   }, [hasInitialData, loadSettings]);
+
+  /**
+   * Hash anchors used by the readiness card (`#tu-tienda`, `#cobros`) auto-open
+   * the matching category and scroll it into view, so the vendor lands directly
+   * on the editable fields instead of a still-collapsed header.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const apply = () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      if (!hash || !isCategoryId(hash)) return;
+      setOpenCategory(hash);
+      requestAnimationFrame(() => {
+        document
+          .getElementById(hash)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    };
+
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
 
   const shopFormDirty = useMemo(
     () => isShopFormDirty(formState, statusData),
@@ -833,9 +925,12 @@ export function VendorShopSettingsClient({
           <div className="space-y-4 pb-6 md:pb-10">
           {/* ── Membresía ── */}
           <SettingsSection
+            sectionId="membresia"
             label="Membresía"
             description="Suscripción al Plan Vendedor: cancelar, renovación automática y facturas."
             Icon={UserIcon}
+            open={openCategory === "membresia"}
+            onToggle={() => toggleCategory("membresia")}
           >
             {isVendorBillingBypassEnabled ? (
               <p className="text-xs leading-relaxed text-[var(--color-gray-500)]">
@@ -918,6 +1013,8 @@ export function VendorShopSettingsClient({
             label="Tu tienda"
             description="Nombre, enlace y descripción que ven tus clientes."
             Icon={LinkIcon}
+            open={openCategory === "tu-tienda"}
+            onToggle={() => toggleCategory("tu-tienda")}
           >
             <div className="mb-3 flex items-center gap-3">
               <button
@@ -1006,9 +1103,12 @@ export function VendorShopSettingsClient({
 
           {/* ── Envíos y recogida ── */}
           <SettingsSection
+            sectionId="envios"
             label="Envíos y recogida"
             description="Configura el costo base de envío y si ofreces recogido en persona."
             Icon={TruckIcon}
+            open={openCategory === "envios"}
+            onToggle={() => toggleCategory("envios")}
           >
             <div className="space-y-3">
               <label className="block">
@@ -1068,9 +1168,11 @@ export function VendorShopSettingsClient({
           {/* ── Métodos de pago ── */}
           <SettingsSection
             sectionId="cobros"
-            label="Cobros"
+            label="Métodos de cobro"
             description="Tarjeta (Stripe) y ATH Móvil. El número ATH se guarda solo al editar."
             Icon={AthMovilIcon}
+            open={openCategory === "cobros"}
+            onToggle={() => toggleCategory("cobros")}
           >
             <div className="space-y-3">
               <div className="rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white p-3">
@@ -1162,11 +1264,14 @@ export function VendorShopSettingsClient({
             </div>
           </SettingsSection>
 
-          {/* ── Contacto para compradores ── */}
+          {/* ── Contactos ── */}
           <SettingsSection
-            label="Contacto en checkout"
-            description="Datos opcionales que ves en el flujo ATH para coordinar."
+            sectionId="contacto"
+            label="Contactos"
+            description="Teléfono, WhatsApp y redes. Aparecen en el menú de la tienda y al pagar con ATH."
             Icon={UserIcon}
+            open={openCategory === "contacto"}
+            onToggle={() => toggleCategory("contacto")}
           >
             <div className="space-y-2.5">
               <label className="block">
@@ -1236,9 +1341,12 @@ export function VendorShopSettingsClient({
 
           {/* ── Políticas ── */}
           <SettingsSection
+            sectionId="politicas"
             label="Políticas"
             description="Ya tienes textos por defecto. Edita solo si hace falta; se publican solos tras la confirmación legal."
             Icon={ShieldCheckIcon}
+            open={openCategory === "politicas"}
+            onToggle={() => toggleCategory("politicas")}
           >
             <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-[var(--vendor-card-border)] bg-white px-3 py-2.5">
               <div className="shrink-0 text-green-600">
@@ -1493,9 +1601,12 @@ export function VendorShopSettingsClient({
 
           {/* ── Estado de tienda ── */}
           <SettingsSection
+            sectionId="estado"
             label="Estado y visibilidad"
             description="Borrador, activa o pausada. Las acciones de pausa aplican al momento."
             Icon={SettingsIcon}
+            open={openCategory === "estado"}
+            onToggle={() => toggleCategory("estado")}
           >
             <div className="mb-3 flex items-center justify-between rounded-xl border border-[var(--color-gray)] bg-[var(--color-gray-100)] px-3 py-2.5">
               <div className="flex items-center gap-2.5">
@@ -1524,8 +1635,7 @@ export function VendorShopSettingsClient({
             </div>
 
             {shopStatus === "draft" && blockingReasons.length > 0 && (
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-snug text-amber-900">
-                <InfoIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-snug text-amber-900">
                 <p>
                   Completa los pasos del checklist al inicio de esta página para
                   desbloquear la publicación.

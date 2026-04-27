@@ -4,13 +4,8 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
-import {
-  BackIcon,
-  FacebookIcon,
-  InstagramIcon,
-  PhoneIcon,
-  WhatsAppIcon,
-} from "@/components/icons";
+import { BackIcon } from "@/components/icons";
+import { ShopContactChips } from "@/components/shop/shop-contact-chips";
 import {
   ONBOARDING_STEP_ANIMATIONS_CSS,
   OnboardingSegmentedBar,
@@ -36,75 +31,6 @@ function splitFullName(fullName: string): { first: string; last: string } {
 function isValidEmail(value: string) {
   const v = value.trim();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-}
-
-const CHIP_CLASS =
-  "inline-flex items-center gap-1.5 rounded-full bg-[#f5f5f7] px-3 py-1.5 text-[13px] font-medium text-black transition-colors active:bg-[#e5e5ea]";
-
-function buildWhatsAppUrl(raw: string) {
-  const digits = raw.replace(/\D/g, "");
-  // If 10 digits (no country code), prepend US/PR code 1
-  return `https://wa.me/${digits.length === 10 ? `1${digits}` : digits}`;
-}
-
-function buildInstagramUrl(raw: string) {
-  if (raw.startsWith("http")) return raw;
-  return `https://instagram.com/${raw.replace(/^@/, "")}`;
-}
-
-function buildFacebookUrl(raw: string) {
-  if (raw.startsWith("http")) return raw;
-  return `https://facebook.com/${raw}`;
-}
-
-function VendorContactChips({ contact }: { contact: VendorContactInfo }) {
-  if (!contact.phone && !contact.whatsapp && !contact.instagram && !contact.facebook) {
-    return null;
-  }
-
-  return (
-    <div className="ob3 mt-4 flex flex-wrap items-center gap-2">
-      {contact.phone && (
-        <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className={CHIP_CLASS}>
-          <PhoneIcon className="h-3.5 w-3.5 text-[#86868b]" />
-          {formatPhoneForDisplay(contact.phone)}
-        </a>
-      )}
-      {contact.whatsapp && (
-        <a
-          href={buildWhatsAppUrl(contact.whatsapp)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={CHIP_CLASS}
-        >
-          <WhatsAppIcon className="h-3.5 w-3.5 text-[#25d366]" />
-          WhatsApp
-        </a>
-      )}
-      {contact.instagram && (
-        <a
-          href={buildInstagramUrl(contact.instagram)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={CHIP_CLASS}
-        >
-          <InstagramIcon className="h-3.5 w-3.5 text-[#e4405f]" />
-          @{contact.instagram.replace(/^@/, "")}
-        </a>
-      )}
-      {contact.facebook && (
-        <a
-          href={buildFacebookUrl(contact.facebook)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={CHIP_CLASS}
-        >
-          <FacebookIcon className="h-3.5 w-3.5 text-[#1877f2]" />
-          Facebook
-        </a>
-      )}
-    </div>
-  );
 }
 
 function ReceiptCamIcon() {
@@ -698,7 +624,7 @@ export function AthMovilCheckoutWizard({
                     </li>
                   </ol>
 
-                  <VendorContactChips contact={vendorContact} />
+                  <ShopContactChips contact={vendorContact} className="ob3 mt-4" />
 
                   <div className="ob4 mt-8 flex flex-col items-center gap-3">
                     <button
