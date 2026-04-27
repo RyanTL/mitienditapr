@@ -50,3 +50,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# tooling (machine-specific)
+.cursor/
+supabase/.temp/
