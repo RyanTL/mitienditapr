@@ -738,24 +738,37 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
           ))}
         </div>
       ) : products.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 py-16 text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white text-[var(--color-carbon)] shadow-sm">
-            <PackageIcon className="h-9 w-9" />
+        <div className="rounded-2xl border border-[var(--color-gray)] bg-white p-6 text-center shadow-[0_2px_12px_var(--shadow-black-003)] md:p-8">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-gray-100)] text-[var(--color-carbon)]">
+            <PackageIcon className="h-8 w-8" />
           </div>
-          <div>
-            <p className="font-semibold text-[var(--color-carbon)]">Sin productos todavía</p>
-            <p className="mt-1 text-sm text-[var(--color-gray-500)]">
-              Agrega tu primer producto para empezar a vender.
-            </p>
-          </div>
+          <h2 className="mt-4 text-lg font-extrabold tracking-tight text-[var(--color-carbon)]">
+            Agrega tu primer producto
+          </h2>
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[var(--color-gray-500)]">
+            Tu tienda necesita al menos un producto activo para poder publicarse.
+            Agrega fotos, un precio y una descripción corta — toma menos de 2 minutos.
+          </p>
           <button
             type="button"
             onClick={() => setSheetState({ open: true, mode: "create" })}
-            className="rounded-full bg-[var(--color-brand)] px-6 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--color-brand)] px-6 py-3 text-sm font-bold text-white transition-transform hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
             disabled={isAtLimit}
           >
-            + Agregar producto
+            <span aria-hidden>+</span>
+            Agregar producto
           </button>
+          {productLimit !== null ? (
+            <p className="mt-4 text-[11px] leading-snug text-[var(--color-gray-500)]">
+              Plan Gratuito: hasta {productLimit} productos con {maxImagesPerProduct} fotos cada uno.{" "}
+              <Link
+                href="/vendedor/suscripcion"
+                className="font-semibold text-[var(--color-carbon)] underline-offset-2 hover:underline"
+              >
+                Ver plan pagado
+              </Link>
+            </p>
+          ) : null}
         </div>
       ) : (
         <ul className="space-y-2 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">

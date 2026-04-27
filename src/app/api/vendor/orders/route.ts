@@ -27,6 +27,7 @@ type OrderRow = {
   payment_method: string | null;
   subtotal_usd: number;
   shipping_fee_usd: number;
+  tax_usd: number;
   total_usd: number;
   fulfillment_method: string;
   buyer_name: string | null;
@@ -85,7 +86,7 @@ export async function GET() {
     const { data: orderRows, error: orderError } = await dataClient
       .from("orders")
       .select(
-        "id,profile_id,status,vendor_status,payment_status,payment_method,subtotal_usd,shipping_fee_usd,total_usd,fulfillment_method,buyer_name,buyer_email,buyer_phone,shipping_address,shipping_zip_code,pickup_notes,created_at",
+        "id,profile_id,status,vendor_status,payment_status,payment_method,subtotal_usd,shipping_fee_usd,tax_usd,total_usd,fulfillment_method,buyer_name,buyer_email,buyer_phone,shipping_address,shipping_zip_code,pickup_notes,created_at",
       )
       .eq("shop_id", shop.id)
       .order("created_at", { ascending: false });
@@ -163,6 +164,7 @@ export async function GET() {
           paymentMethod: order.payment_method ?? payment?.provider ?? null,
           subtotalUsd: Number(order.subtotal_usd),
           shippingFeeUsd: Number(order.shipping_fee_usd),
+          taxUsd: Number(order.tax_usd),
           totalUsd: Number(order.total_usd),
           fulfillmentMethod: order.fulfillment_method,
           createdAt: order.created_at,

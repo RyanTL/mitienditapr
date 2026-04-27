@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isStrictDbModeEnabled } from "@/lib/runtime-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -115,7 +116,7 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     missingEnv,
     flags: {
-      strictDbMode: process.env.ENABLE_STRICT_DB_MODE === "true",
+      strictDbMode: isStrictDbModeEnabled,
       vendorBillingBypassEnabled,
       productionBillingBypassDisabled:
         process.env.NODE_ENV !== "production" || !vendorBillingBypassEnabled,

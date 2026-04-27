@@ -62,6 +62,9 @@ type OrderNotificationRow = {
   profile_id: string;
   buyer_name: string | null;
   buyer_email: string | null;
+  subtotal_usd: number;
+  shipping_fee_usd: number;
+  tax_usd: number;
   total_usd: number;
   shop_id: string;
   shops: Array<{
@@ -92,7 +95,7 @@ async function fetchStripeOrderNotificationContext(orderId: string) {
       admin
         .from("orders")
         .select(
-          "id,profile_id,buyer_name,buyer_email,total_usd,shop_id,shops(id,slug,vendor_name,vendor_profile_id)",
+          "id,profile_id,buyer_name,buyer_email,subtotal_usd,shipping_fee_usd,tax_usd,total_usd,shop_id,shops(id,slug,vendor_name,vendor_profile_id)",
         )
         .eq("id", orderId)
         .maybeSingle(),
@@ -196,6 +199,9 @@ async function handleBuyerCheckoutPaid(
       buyerEmail: notificationContext.order.buyer_email,
       buyerName: notificationContext.order.buyer_name,
       items: notificationContext.items,
+      subtotalUsd: Number(notificationContext.order.subtotal_usd),
+      shippingFeeUsd: Number(notificationContext.order.shipping_fee_usd),
+      taxUsd: Number(notificationContext.order.tax_usd),
       totalUsd: Number(notificationContext.order.total_usd),
       paymentMethod: "stripe",
     }).catch((error) => {
@@ -213,6 +219,9 @@ async function handleBuyerCheckoutPaid(
       orderId,
       shopName: shopInfo.vendor_name,
       items: notificationContext.items,
+      subtotalUsd: Number(notificationContext.order.subtotal_usd),
+      shippingFeeUsd: Number(notificationContext.order.shipping_fee_usd),
+      taxUsd: Number(notificationContext.order.tax_usd),
       totalUsd: Number(notificationContext.order.total_usd),
       paymentMethod: "stripe",
     }).catch((error) => {

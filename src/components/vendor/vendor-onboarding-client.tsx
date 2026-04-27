@@ -214,8 +214,10 @@ export function VendorOnboardingClient() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-white">
-        <Spinner />
+      <div className="fixed inset-0 flex items-center justify-center bg-white px-7 md:px-10">
+        <div className="flex w-full max-w-xl lg:max-w-2xl xl:max-w-[40rem] justify-center">
+          <Spinner />
+        </div>
       </div>
     );
   }
@@ -227,11 +229,11 @@ export function VendorOnboardingClient() {
       <style>{ONBOARDING_STEP_ANIMATIONS_CSS}</style>
 
       {/* header */}
-      <header className="relative z-10 flex h-14 shrink-0 items-center justify-center px-6">
+      <header className="relative z-10 flex h-14 shrink-0 items-center justify-center px-6 md:px-10">
         <button
           type="button"
           onClick={back}
-          className="absolute left-5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-opacity hover:opacity-50 active:opacity-40"
+          className="absolute left-5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-opacity hover:opacity-50 active:opacity-40 md:left-8"
           aria-label={step === 0 ? "Cerrar" : "Volver"}
         >
           {step === 0 ? (
@@ -241,8 +243,8 @@ export function VendorOnboardingClient() {
           )}
         </button>
         {step > 0 && (
-          <div className="w-[140px]">
-            <OnboardingSegmentedBar step={step} total={SEGMENTS} />
+          <div className="w-[140px] md:w-[200px] lg:w-[240px]">
+            <OnboardingSegmentedBar step={step} total={SEGMENTS} className="w-full" />
           </div>
         )}
       </header>
@@ -258,46 +260,43 @@ export function VendorOnboardingClient() {
               : undefined
           }
         >
-          <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col">
+          <div className="mx-auto w-full max-w-xl lg:max-w-2xl xl:max-w-[40rem] px-7 md:px-10">
+            <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col">
             {/* ── Welcome ──────────────────────────── */}
             {step === 0 && (
-              <>
-                <div className="flex flex-1 flex-col justify-end px-7">
-                  <h1 className="obh text-[36px] font-bold leading-[1.08] tracking-[-0.04em] text-black">
-                    Abre tu
-                    <br />
-                    tienda
+              <div className="flex flex-1 flex-col justify-end pb-12 pt-8 lg:flex-row lg:items-end lg:gap-12 lg:pt-12">
+                <div className="min-w-0 flex-1">
+                  <h1 className="obh text-[36px] font-bold leading-[1.08] tracking-[-0.04em] text-black md:text-[40px] lg:text-[44px]">
+                    Abre tu tienda
                   </h1>
-                  <p className="obh1 mt-4 max-w-[300px] text-[16px] leading-[1.5] text-[#86868b]">
+                  <p className="obh1 mt-4 max-w-prose text-[16px] leading-[1.5] text-[#86868b] md:text-[17px]">
                     Vende en Puerto Rico con tu propia tienda online. Gratis, fácil, sin
                     complicaciones.
                   </p>
                 </div>
-                <div className="obh2 shrink-0 px-7 pb-12 pt-8">
+                <div className="obh2 mt-8 w-full shrink-0 lg:mt-0 lg:w-auto lg:min-w-[220px]">
                   <button
                     type="button"
                     onClick={next}
-                    className="w-full rounded-full bg-black py-[18px] text-[16px] font-semibold text-white transition-transform active:scale-[0.98]"
+                    className="w-full rounded-full bg-black py-[18px] text-[16px] font-semibold text-white transition-transform active:scale-[0.98] lg:px-10"
                   >
                     Comenzar
                   </button>
                 </div>
-              </>
+              </div>
             )}
 
             {/* ── Name ─────────────────────────────── */}
             {step === 1 && (
               <>
-                <div className="flex flex-1 flex-col px-7 pt-4">
-                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black">
-                    ¿Cómo se llama
-                    <br />
-                    tu tienda?
+                <div className="flex flex-1 flex-col pt-4 md:pt-6">
+                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px] lg:text-[34px]">
+                    ¿Cómo se llama tu tienda?
                   </h1>
-                  <p className="ob2 mt-2.5 text-[15px] text-[#86868b]">
+                  <p className="ob2 mt-2.5 text-[15px] text-[#86868b] md:text-base">
                     Así aparecerá para tus clientes
                   </p>
-                  <div className="ob3 mt-10">
+                  <div className="ob3 mt-10 max-w-xl">
                     <input
                       type="text"
                       value={form.vendorName}
@@ -325,7 +324,7 @@ export function VendorOnboardingClient() {
                   </div>
                   {error && <p className="ob4 mt-6 text-[14px] text-[#ff3b30]">{error}</p>}
                 </div>
-                <div className="shrink-0 px-7 pb-12 pt-4">
+                <div className="mx-auto w-full max-w-md shrink-0 pb-12 pt-4">
                   <button
                     type="button"
                     onClick={next}
@@ -341,13 +340,11 @@ export function VendorOnboardingClient() {
             {/* ── Description ──────────────────────── */}
             {step === 2 && (
               <>
-                <div className="flex flex-1 flex-col px-7 pt-4">
-                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black">
-                    Describe tu
-                    <br />
-                    negocio
+                <div className="flex flex-1 flex-col pt-4 md:pt-6">
+                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px] lg:text-[34px]">
+                    Describe tu negocio
                   </h1>
-                  <p className="ob2 mt-2.5 text-[15px] text-[#86868b]">
+                  <p className="ob2 mt-2.5 text-[15px] text-[#86868b] md:text-base">
                     Opcional &middot; Cuéntale a tus clientes qué ofreces
                   </p>
                   <textarea
@@ -357,13 +354,13 @@ export function VendorOnboardingClient() {
                     maxLength={280}
                     autoFocus
                     rows={4}
-                    className="ob3 mt-8 w-full resize-none border-none bg-transparent text-[18px] leading-relaxed text-black caret-black placeholder:text-[#d1d1d6] focus:outline-none"
+                    className="ob3 mt-8 w-full max-w-xl resize-none border-none bg-transparent text-[18px] leading-relaxed text-black caret-black placeholder:text-[#d1d1d6] focus:outline-none"
                   />
-                  <p className="ob3 text-right text-[13px] text-[#c7c7cc]">
+                  <p className="ob3 max-w-xl text-right text-[13px] text-[#c7c7cc]">
                     {form.description.length}/280
                   </p>
                 </div>
-                <div className="shrink-0 px-7 pb-12 pt-4">
+                <div className="mx-auto w-full max-w-md shrink-0 pb-12 pt-4">
                   <button
                     type="button"
                     onClick={next}
@@ -378,16 +375,14 @@ export function VendorOnboardingClient() {
             {/* ── Logo ─────────────────────────────── */}
             {step === 3 && (
               <>
-                <div className="flex flex-1 flex-col px-7 pt-4">
-                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black">
-                    Logo de
-                    <br />
-                    tu tienda
+                <div className="flex flex-1 flex-col pt-4 md:pt-6">
+                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px] lg:text-[34px]">
+                    Logo de tu tienda
                   </h1>
-                  <p className="ob2 mt-2.5 text-[15px] text-[#86868b]">
+                  <p className="ob2 mt-2.5 text-[15px] text-[#86868b] md:text-base">
                     Opcional &middot; PNG, JPG o WebP
                   </p>
-                  <div className="ob3 mt-10 flex flex-col items-center gap-4">
+                  <div className="ob3 mt-10 flex flex-col items-center gap-4 md:mt-12 lg:flex-row lg:items-start lg:justify-start lg:gap-12">
                     <button
                       type="button"
                       onClick={() => fileRef.current?.click()}
@@ -419,17 +414,19 @@ export function VendorOnboardingClient() {
                       <button
                         type="button"
                         onClick={() => setForm((f) => ({ ...f, logoUrl: "" }))}
-                        className="text-[14px] text-[#aeaeb2] underline decoration-[#d1d1d6] underline-offset-2"
+                        className="text-[14px] text-[#aeaeb2] underline decoration-[#d1d1d6] underline-offset-2 lg:self-center"
                       >
                         Eliminar
                       </button>
                     )}
                   </div>
                   {error && (
-                    <p className="mt-4 text-center text-[14px] text-[#ff3b30]">{error}</p>
+                    <p className="mt-4 text-center text-[14px] text-[#ff3b30] lg:text-left">
+                      {error}
+                    </p>
                   )}
                 </div>
-                <div className="shrink-0 px-7 pb-12 pt-4">
+                <div className="mx-auto w-full max-w-md shrink-0 pb-12 pt-4">
                   <button
                     type="button"
                     onClick={next}
@@ -441,6 +438,7 @@ export function VendorOnboardingClient() {
                 </div>
               </>
             )}
+            </div>
           </div>
         </div>
       </div>

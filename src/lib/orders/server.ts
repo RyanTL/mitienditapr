@@ -8,6 +8,8 @@ import {
   type OrderPaymentMethod,
   type OrderPaymentStatus,
 } from "@/lib/orders/constants";
+import { isStripeConnectAccountId } from "@/lib/stripe-connect";
+import { computePuertoRicoIvuUsd } from "@/lib/tax/puerto-rico-ivu";
 
 const DEFAULT_ATH_RECEIPTS_BUCKET = "ath-receipts";
 const MAX_RECEIPT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -130,6 +132,7 @@ export type PreparedCheckoutOrder = {
   }>;
   subtotalUsd: number;
   shippingFeeUsd: number;
+  taxUsd: number;
   totalUsd: number;
 };
 
@@ -137,6 +140,7 @@ export type CreatedCheckoutOrder = {
   orderId: string;
   subtotalUsd: number;
   shippingFeeUsd: number;
+  taxUsd: number;
   totalUsd: number;
   buyer: PreparedCheckoutOrder["buyer"];
   shop: PreparedCheckoutOrder["shop"];
@@ -317,7 +321,7 @@ export async function fetchCheckoutShopBySlug(
   const shop = data as CheckoutShopRow;
   return {
     ...shop,
-    supportsStripe: Boolean(shop.stripe_connect_account_id),
+    supportsStripe: isStripeConnectAccountId(shop.stripe_connect_account_id),
     supportsAthMovil: Boolean(shop.ath_movil_phone),
   };
 }
@@ -517,6 +521,11 @@ export async function prepareCheckoutOrder(input: {
   const shippingFeeUsd =
     fulfillment.method === "shipping" ? Number(shop.shipping_flat_fee_usd ?? 0) : 0;
 
+  const { taxUsd, totalUsd } = computePuertoRicoIvuUsd({
+    subtotalUsd,
+    shippingFeeUsd,
+  });
+
   return {
     buyer: {
       id: buyerProfile.id,
@@ -531,7 +540,8 @@ export async function prepareCheckoutOrder(input: {
     cartItems,
     subtotalUsd,
     shippingFeeUsd,
-    totalUsd: subtotalUsd + shippingFeeUsd,
+    taxUsd,
+    totalUsd,
   } satisfies PreparedCheckoutOrder;
 }
 
@@ -617,6 +627,7 @@ export async function createCheckoutOrder(input: {
         fulfillment_method: preparedOrder.fulfillment.method,
         subtotal_usd: preparedOrder.subtotalUsd,
         shipping_fee_usd: preparedOrder.shippingFeeUsd,
+        tax_usd: preparedOrder.taxUsd,
         total_usd: preparedOrder.totalUsd,
         buyer_name: preparedOrder.buyer.fullName,
         buyer_email: preparedOrder.buyer.email,
@@ -679,6 +690,7 @@ export async function createCheckoutOrder(input: {
       orderId,
       subtotalUsd: preparedOrder.subtotalUsd,
       shippingFeeUsd: preparedOrder.shippingFeeUsd,
+      taxUsd: preparedOrder.taxUsd,
       totalUsd: preparedOrder.totalUsd,
       buyer: preparedOrder.buyer,
       shop: preparedOrder.shop,
@@ -760,6 +772,91 @@ export async function clearPurchasedCartItems(
 
     if (error) {
       throw new Error(error.message);
+    }
+  }
+}
+
+/**
+ * Puts order lines back into the buyer cart (e.g. ATH receipt rejected after cart was cleared on submit).
+ */
+export async function restoreOrderItemsToCart(
+  admin: SupabaseClient,
+  buyerProfileId: string,
+  orderId: string,
+) {
+  const { data: orderItemsData, error: orderItemsError } = await admin
+    .from("order_items")
+    .select("product_id,product_variant_id,quantity")
+    .eq("order_id", orderId);
+
+  if (orderItemsError) {
+    throw new Error(orderItemsError.message);
+  }
+
+  const orderItems = (orderItemsData ?? []) as Array<{
+    product_id: string;
+    product_variant_id: string | null;
+    quantity: number;
+  }>;
+
+  for (const line of orderItems) {
+    let variantId = line.product_variant_id;
+
+    if (!variantId) {
+      const { data: fallbackVariant, error: fvError } = await admin
+        .from("product_variants")
+        .select("id")
+        .eq("product_id", line.product_id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle<{ id: string }>();
+
+      if (fvError) {
+        throw new Error(fvError.message);
+      }
+
+      if (!fallbackVariant?.id) {
+        continue;
+      }
+
+      variantId = fallbackVariant.id;
+    }
+
+    const { data: existing, error: existingError } = await admin
+      .from("cart_items")
+      .select("id,quantity")
+      .eq("profile_id", buyerProfileId)
+      .eq("product_id", line.product_id)
+      .maybeSingle<{ id: string; quantity: number }>();
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    if (existing) {
+      const { error: updateError } = await admin
+        .from("cart_items")
+        .update({
+          quantity: existing.quantity + line.quantity,
+          product_variant_id: variantId,
+        })
+        .eq("id", existing.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+    } else {
+      const { error: insertError } = await admin.from("cart_items").insert({
+        profile_id: buyerProfileId,
+        product_id: line.product_id,
+        product_variant_id: variantId,
+        quantity: line.quantity,
+      });
+
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
     }
   }
 }

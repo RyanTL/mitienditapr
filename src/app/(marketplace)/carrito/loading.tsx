@@ -1,7 +1,7 @@
 export default function CarritoLoading() {
   return (
     <div className="min-h-screen bg-[var(--color-warm-page)] pb-32 animate-pulse">
-      <main className="mx-auto w-full px-4 py-5 md:px-8 lg:max-w-2xl lg:px-8">
+      <main className="mx-auto w-full max-w-md px-4 py-5 md:max-w-3xl md:px-8 lg:max-w-4xl lg:px-8">
         <div className="mb-6 h-7 w-24 rounded-full bg-[var(--color-gray-200)]" />
         <div className="space-y-3 mb-6">
           {Array.from({ length: 3 }).map((_, i) => (

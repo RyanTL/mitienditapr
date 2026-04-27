@@ -8,9 +8,11 @@ import { useRouter } from "next/navigation";
 import { BackHomeBottomNav } from "@/components/navigation/back-home-bottom-nav";
 import { ShopCheckoutSheet } from "@/components/cart/shop-checkout-sheet";
 import { FALLBACK_PRODUCT_IMAGE as CART_IMAGE_FALLBACK_URL, formatUsd } from "@/lib/formatters";
+import { computePuertoRicoIvuUsd } from "@/lib/tax/puerto-rico-ivu";
 import { fetchAccountSnapshot, type AccountSnapshot } from "@/lib/account/client";
 import {
   fetchCartItems,
+  formatCartLineTitle,
   removeCartItem,
   setCartItemQuantity,
   type CartItem,
@@ -137,6 +139,17 @@ export function GlobalCartPageClient() {
     [selectedGroup],
   );
 
+  const selectedGroupIvuEstimate = useMemo(() => {
+    if (!selectedGroup) return null;
+    const shippingForTax = selectedGroup.shopOffersPickup
+      ? 0
+      : selectedGroup.shopShippingFlatFeeUsd;
+    return computePuertoRicoIvuUsd({
+      subtotalUsd: selectedGroup.subtotal,
+      shippingFeeUsd: shippingForTax,
+    });
+  }, [selectedGroup]);
+
   const toggleShop = useCallback((slug: string) => {
     setSelectedShopSlug((current) => (current === slug ? null : slug));
   }, []);
@@ -237,8 +250,16 @@ export function GlobalCartPageClient() {
     if (!profileLoaded) return "Cargando...";
     if (profileLoadFailed && cartItems.length === 0) return "Inicia sesión para continuar";
     if (!selectedGroup) return "Selecciona una tienda";
-    return `Finalizar compra · ${formatUsd(selectedTotal)}`;
-  }, [profileLoaded, profileLoadFailed, cartItems.length, selectedGroup, selectedTotal]);
+    const amount = selectedGroupIvuEstimate?.totalUsd ?? selectedTotal;
+    return `Finalizar compra · ${formatUsd(amount)}`;
+  }, [
+    profileLoaded,
+    profileLoadFailed,
+    cartItems.length,
+    selectedGroup,
+    selectedGroupIvuEstimate,
+    selectedTotal,
+  ]);
 
   const checkoutButtonDisabled = !profileLoaded || !selectedGroup;
 
@@ -362,7 +383,7 @@ export function GlobalCartPageClient() {
                                   href={productHref}
                                   className="mt-0.5 block truncate text-sm font-semibold text-[var(--color-carbon)]"
                                 >
-                                  {item.product.name}
+                                  {formatCartLineTitle(item.product)}
                                 </Link>
 
                                 <p className="mt-1 text-sm font-semibold text-[var(--color-carbon)]">
@@ -445,9 +466,35 @@ export function GlobalCartPageClient() {
                   ))}
                 </div>
 
-                <p className="mb-4 text-xs text-[var(--color-gray-500)]">
-                  Los impuestos y el envío se calculan al finalizar la compra.
-                </p>
+                {selectedGroup && selectedGroupIvuEstimate ? (
+                  <>
+                    <div className="mb-3 space-y-1.5 text-sm text-[var(--color-carbon)]">
+                      <div className="flex justify-between gap-2">
+                        <span>Subtotal</span>
+                        <span className="font-medium shrink-0">{formatUsd(selectedGroup.subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span>IVU (11.5%)</span>
+                        <span className="font-medium shrink-0">
+                          {formatUsd(selectedGroupIvuEstimate.taxUsd)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 border-t border-[var(--color-gray)] pt-2 font-semibold">
+                        <span>Total estimado</span>
+                        <span className="shrink-0">{formatUsd(selectedGroupIvuEstimate.totalUsd)}</span>
+                      </div>
+                    </div>
+                    <p className="mb-4 text-xs text-[var(--color-gray-500)]">
+                      Si la tienda ofrece recogido y eliges envío, el total puede cambiar. El monto
+                      final se confirma al pagar.
+                    </p>
+                  </>
+                ) : (
+                  <p className="mb-4 text-xs text-[var(--color-gray-500)]">
+                    El IVU de Puerto Rico (11.5%) se incluye en el total estimado. Selecciona una
+                    tienda para ver el desglose.
+                  </p>
+                )}
 
                 <button
                   type="button"

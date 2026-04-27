@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isStripeConnectAccountId } from "@/lib/stripe-connect";
 import { isRecord } from "@/lib/utils";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -423,6 +424,42 @@ async function getActiveProductCountForShop(supabase: SupabaseClient, shopId: st
   return count ?? 0;
 }
 
+export async function pauseShopIfNoActiveProducts(
+  supabase: SupabaseClient,
+  shopId: string,
+  profileId: string,
+) {
+  const activeProductCount = await getActiveProductCountForShop(supabase, shopId);
+  if (activeProductCount > 0) {
+    return {
+      paused: false,
+      activeProductCount,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("shops")
+    .update({
+      status: "paused",
+      is_active: false,
+      unpublished_at: nowIso,
+      unpublished_reason: "no_active_products",
+    })
+    .eq("id", shopId)
+    .eq("vendor_profile_id", profileId)
+    .eq("is_active", true);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    paused: true,
+    activeProductCount: 0,
+  };
+}
+
 export type CanonicalVariantStockPatch = {
   stockQty?: number | null;
 };
@@ -687,8 +724,6 @@ export async function getVendorShopSettingsData(
   supabase: SupabaseClient,
   profileId: string,
 ): Promise<VendorShopSettingsResponse> {
-  await maybeAutoPublishDraftShop(supabase, profileId);
-
   const shop = await getVendorShopByProfileId(supabase, profileId);
   if (!shop) {
     return {
@@ -814,11 +849,15 @@ export async function getVendorPublishChecks(
     blockingReasons.push("Completa nombre y slug de la tienda.");
   }
 
+  if (activeProductCount === 0) {
+    blockingReasons.push("Debes publicar al menos 1 producto activo.");
+  }
+
   if (isManualCodeExpired(subscription)) {
     blockingReasons.push("Tu acceso gratuito expiró. Redime un nuevo código o activa Stripe.");
   }
 
-  if (!shop.ath_movil_phone && !shop.stripe_connect_account_id) {
+  if (!shop.ath_movil_phone && !isStripeConnectAccountId(shop.stripe_connect_account_id)) {
     blockingReasons.push("Configura Stripe o ATH Móvil para poder cobrar.");
   }
 
@@ -1056,8 +1095,6 @@ export async function getVendorAnalytics(
 
 export async function getVendorStatusSnapshot(context: VendorRequestContext) {
   const { supabase, userId, profile } = context;
-  await maybeAutoPublishDraftShop(supabase, userId);
-
   const shop = await getVendorShopByProfileId(supabase, userId);
   const onboarding = await getVendorOnboardingByProfileId(supabase, userId);
   const checks = await getVendorPublishChecks(supabase, userId);

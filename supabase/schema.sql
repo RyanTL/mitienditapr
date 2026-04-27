@@ -86,6 +86,7 @@ create table if not exists public.orders (
   status text not null default 'pending'
     check (status in ('pending', 'paid', 'fulfilled', 'cancelled', 'refunded')),
   subtotal_usd numeric(10,2) not null default 0 check (subtotal_usd >= 0),
+  tax_usd numeric(10,2) not null default 0 check (tax_usd >= 0),
   total_usd numeric(10,2) not null default 0 check (total_usd >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

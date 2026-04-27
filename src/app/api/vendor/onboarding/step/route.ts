@@ -17,7 +17,6 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   ensureVendorOnboardingRecord,
-  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorPublishChecks,
@@ -145,8 +144,6 @@ export async function PATCH(request: Request) {
       nextData,
     );
 
-    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
-
     const checks = await getVendorPublishChecks(dataClient, profile.id);
 
     return NextResponse.json({
@@ -154,7 +151,7 @@ export async function PATCH(request: Request) {
       checks,
       nextStep: nextOnboarding.current_step,
       completed: nextOnboarding.status === "completed",
-      shopActivated: autoPublishResult.activated,
+      shopActivated: false,
     });
   } catch (error) {
     return serverErrorResponse(error, "No se pudo guardar este paso.");

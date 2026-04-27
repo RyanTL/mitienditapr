@@ -9,6 +9,7 @@ import {
   OnboardingSegmentedBar,
 } from "@/components/onboarding/onboarding-step-primitives";
 import { formatUsd } from "@/lib/formatters";
+import { computePuertoRicoIvuUsd } from "@/lib/tax/puerto-rico-ivu";
 import type {
   CheckoutFulfillmentInput,
   CheckoutRequestPayload,
@@ -75,7 +76,14 @@ export function StripeCheckoutWizard({
     () => (fulfillmentMethod === "shipping" ? shopShippingFlatFeeUsd : 0),
     [fulfillmentMethod, shopShippingFlatFeeUsd],
   );
-  const totalUsd = subtotalUsd + shippingFeeUsd;
+  const { totalUsd } = useMemo(
+    () =>
+      computePuertoRicoIvuUsd({
+        subtotalUsd,
+        shippingFeeUsd,
+      }),
+    [subtotalUsd, shippingFeeUsd],
+  );
 
   const [firstName, setFirstName] = useState(initialFirst);
   const [lastName, setLastName] = useState(initialLast);

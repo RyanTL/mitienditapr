@@ -256,12 +256,26 @@ export function VendorOrdersClient() {
                   ))}
                 </ul>
 
-                {/* Total */}
-                <div className="mt-2 flex items-center justify-between border-t border-[var(--color-gray-100,#f3f4f6)] pt-2">
-                  <span className="text-xs font-semibold text-[var(--color-gray-500)]">Total</span>
-                  <span className="text-sm font-bold text-[var(--color-carbon)]">
-                    {formatUsd(order.totalUsd)}
-                  </span>
+                {/* Totals */}
+                <div className="mt-2 space-y-1 border-t border-[var(--color-gray-100,#f3f4f6)] pt-2 text-xs text-[var(--color-carbon)]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--color-gray-500)]">Subtotal</span>
+                    <span className="font-medium">{formatUsd(order.subtotalUsd)}</span>
+                  </div>
+                  {order.shippingFeeUsd > 0 ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[var(--color-gray-500)]">Envío</span>
+                      <span className="font-medium">{formatUsd(order.shippingFeeUsd)}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--color-gray-500)]">IVU (11.5%)</span>
+                    <span className="font-medium">{formatUsd(order.taxUsd)}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="font-semibold text-[var(--color-gray-500)]">Total</span>
+                    <span className="text-sm font-bold">{formatUsd(order.totalUsd)}</span>
+                  </div>
                 </div>
 
                 {needsAthVerification && order.payment?.receiptUrl ? (

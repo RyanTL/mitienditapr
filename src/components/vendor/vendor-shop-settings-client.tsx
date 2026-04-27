@@ -40,9 +40,11 @@ import {
   createStripeConnectAccountLink,
   createVendorBillingPortalSession,
   fetchVendorShopSettings,
+  publishVendorShop,
   uploadVendorImage,
   updateVendorShopSettings,
 } from "@/lib/vendor/client";
+import { isStripeConnectAccountId } from "@/lib/stripe-connect";
 import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import type { VendorShopStatus } from "@/lib/vendor/constants";
 import { toNumber } from "@/lib/utils";
@@ -254,14 +256,20 @@ function SettingsSection({
   description,
   Icon,
   children,
+  sectionId,
 }: {
   label: string;
   description: string;
   Icon: SectionIconComponent;
   children: ReactNode;
+  /** Optional DOM id so in-page anchors (e.g. `#cobros`) can scroll to this section. */
+  sectionId?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-gray)] bg-white p-4 shadow-[0_2px_12px_var(--shadow-black-003)]">
+    <div
+      id={sectionId}
+      className="rounded-2xl border border-[var(--color-gray)] bg-white p-4 shadow-[0_2px_12px_var(--shadow-black-003)] scroll-mt-20"
+    >
       <div className="mb-3 flex items-start gap-2.5">
         <div className="shrink-0 text-[var(--color-carbon)]">
           <Icon className="h-4 w-4" />
@@ -274,6 +282,138 @@ function SettingsSection({
         </div>
       </div>
       {children}
+    </div>
+  );
+}
+
+// ─── Publish readiness card (top-of-page checklist) ──────────────────────────
+
+type ReadinessRequirement = {
+  id: string;
+  title: string;
+  description: string;
+  done: boolean;
+  action?: { label: string; href: string; external?: boolean };
+};
+
+function ReadinessRow({ requirement }: { requirement: ReadinessRequirement }) {
+  const { title, description, done, action } = requirement;
+  return (
+    <li className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+      <span
+        aria-hidden
+        className={[
+          "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold",
+          done
+            ? "border-green-500 bg-green-500 text-white"
+            : "border-[var(--color-gray-300,#d1d5db)] bg-white text-[var(--color-gray-500)]",
+        ].join(" ")}
+      >
+        {done ? <CheckIcon className="h-3.5 w-3.5" /> : null}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p
+          className={[
+            "text-sm font-semibold",
+            done ? "text-[var(--color-gray-500)] line-through" : "text-[var(--color-carbon)]",
+          ].join(" ")}
+        >
+          {title}
+        </p>
+        <p className="mt-0.5 text-xs leading-snug text-[var(--color-gray-500)]">{description}</p>
+        {!done && action ? (
+          <Link
+            href={action.href}
+            className="mt-2 inline-flex items-center gap-1 rounded-full bg-[var(--color-carbon)] px-3.5 py-1.5 text-[11px] font-semibold text-white transition-transform active:scale-[0.98]"
+          >
+            {action.label}
+            <span aria-hidden>→</span>
+          </Link>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+function PublishReadinessCard({
+  requirements,
+  canPublish,
+  isPublishing,
+  onPublish,
+  publishError,
+}: {
+  requirements: ReadinessRequirement[];
+  canPublish: boolean;
+  isPublishing: boolean;
+  onPublish: () => void;
+  publishError: string | null;
+}) {
+  const pendingCount = requirements.filter((requirement) => !requirement.done).length;
+
+  return (
+    <div className="rounded-2xl border border-[var(--color-gray)] bg-white p-5 shadow-[0_2px_12px_var(--shadow-black-003)]">
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className={[
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+            canPublish ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700",
+          ].join(" ")}
+        >
+          {canPublish ? <CheckIcon className="h-5 w-5" /> : <InfoIcon className="h-5 w-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-bold text-[var(--color-carbon)]">
+            {canPublish ? "Todo listo para publicar" : "Pasos para publicar tu tienda"}
+          </h2>
+          <p className="mt-0.5 text-xs leading-snug text-[var(--color-gray-500)]">
+            {canPublish
+              ? "Ya cumples con todos los requisitos. Publica tu tienda para empezar a vender."
+              : pendingCount === 1
+                ? "Te falta 1 paso para publicar tu tienda."
+                : `Te faltan ${pendingCount} pasos para publicar tu tienda.`}
+          </p>
+        </div>
+      </div>
+
+      {!canPublish ? (
+        <ul className="mt-4 divide-y divide-[var(--color-gray-200,#e5e7eb)]">
+          {requirements.map((requirement) => (
+            <ReadinessRow key={requirement.id} requirement={requirement} />
+          ))}
+        </ul>
+      ) : null}
+
+      {publishError ? (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-[var(--color-danger)]/30 bg-red-50 px-3 py-2.5 text-xs leading-snug text-[var(--color-danger)]">
+          <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>{publishError}</p>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        disabled={!canPublish || isPublishing}
+        onClick={onPublish}
+        className={[
+          "mt-4 w-full rounded-full px-5 py-3 text-sm font-bold transition-transform active:scale-[0.98]",
+          canPublish
+            ? "bg-[var(--color-brand)] text-white hover:opacity-90"
+            : "cursor-not-allowed bg-[var(--color-gray-100)] text-[var(--color-gray-500)]",
+          isPublishing ? "opacity-60" : "",
+        ].join(" ")}
+      >
+        {isPublishing
+          ? "Publicando…"
+          : canPublish
+            ? "Publicar tienda"
+            : "Publicar tienda"}
+      </button>
+      {!canPublish ? (
+        <p className="mt-2 text-center text-[11px] leading-snug text-[var(--color-gray-500)]">
+          Completa los pasos de arriba para desbloquear el botón.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -315,6 +455,8 @@ export function VendorShopSettingsClient({
   const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  /** Surfaced inline inside the readiness card so the vendor sees it next to the publish button. */
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -498,6 +640,34 @@ export function VendorShopSettingsClient({
     }
   }, []);
 
+  const handlePublishShop = useCallback(async () => {
+    setIsUpdatingStatus(true);
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+    setPublishError(null);
+    try {
+      const publishResponse = await publishVendorShop();
+      const refreshed = await fetchVendorShopSettings();
+      setStatusData(refreshed);
+      setFormState(mapFormStateFromResponse(refreshed));
+
+      if (!publishResponse.published) {
+        const firstReason = publishResponse.blockingReasons[0] ?? null;
+        const fallback = firstReason ?? "No puedes publicar la tienda todavía.";
+        setPublishError(fallback);
+        return;
+      }
+
+      setFeedbackMessage("Tienda publicada.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo publicar la tienda.";
+      setErrorMessage(message);
+      setPublishError(message);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  }, []);
+
   const handleUploadLogo = useCallback(async (file: File) => {
     setIsUploadingLogo(true);
     setErrorMessage(null);
@@ -527,7 +697,7 @@ export function VendorShopSettingsClient({
   const shopStatus = statusData?.shop?.status;
   const isActive = shopStatus === "active";
   const blockingReasons = statusData?.checks.blockingReasons ?? [];
-  const stripeConfigured = Boolean(statusData?.shop?.stripe_connect_account_id);
+  const stripeConfigured = isStripeConnectAccountId(statusData?.shop?.stripe_connect_account_id);
   const athConfigured = formState.athMovilPhone.trim().length > 0;
 
   const handleConnectStripe = useCallback(async () => {
@@ -558,6 +728,66 @@ export function VendorShopSettingsClient({
 
   const subscription = statusData?.subscription ?? null;
 
+  const activeProductCount = statusData?.checks.activeProductCount ?? 0;
+  const canPublish = statusData?.checks.canPublish ?? false;
+  const needsBasics = blockingReasons.includes("Completa nombre y slug de la tienda.");
+  const needsProduct = blockingReasons.includes("Debes publicar al menos 1 producto activo.");
+  const needsPayments = blockingReasons.includes(
+    "Configura Stripe o ATH Móvil para poder cobrar.",
+  );
+  const subscriptionExpiredReason = blockingReasons.find((reason) =>
+    reason.startsWith("Tu acceso gratuito expiró"),
+  );
+
+  const readinessRequirements = useMemo<ReadinessRequirement[]>(() => {
+    const items: ReadinessRequirement[] = [
+      {
+        id: "basics",
+        title: "Información básica de la tienda",
+        description: "Agrega el nombre y el enlace que verán tus clientes.",
+        done: !needsBasics,
+        action: { label: "Completar información", href: "#tu-tienda" },
+      },
+      {
+        id: "product",
+        title: "Lista tu primer producto",
+        description:
+          activeProductCount > 0
+            ? `Tienes ${activeProductCount} ${activeProductCount === 1 ? "producto activo" : "productos activos"}.`
+            : "Tu tienda necesita al menos 1 producto activo para publicarse.",
+        done: !needsProduct,
+        action: { label: "Listar producto", href: "/vendedor/productos" },
+      },
+      {
+        id: "payments",
+        title: "Método de cobro",
+        description: "Conecta Stripe o ATH Móvil para poder recibir pagos.",
+        done: !needsPayments,
+        action: { label: "Configurar cobros", href: "#cobros" },
+      },
+    ];
+
+    if (subscriptionExpiredReason) {
+      items.push({
+        id: "subscription",
+        title: "Renueva tu acceso",
+        description: subscriptionExpiredReason,
+        done: false,
+        action: { label: "Ver planes", href: "/vendedor/suscripcion" },
+      });
+    }
+
+    return items;
+  }, [
+    needsBasics,
+    needsProduct,
+    needsPayments,
+    activeProductCount,
+    subscriptionExpiredReason,
+  ]);
+
+  const showReadinessCard = !isLoading && shopStatus !== "active";
+
   return (
     <VendorPageShell
       title="Configuración de tienda"
@@ -572,6 +802,16 @@ export function VendorShopSettingsClient({
       {errorMessage && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{errorMessage}</p>
       )}
+
+      {showReadinessCard ? (
+        <PublishReadinessCard
+          requirements={readinessRequirements}
+          canPublish={canPublish}
+          isPublishing={isUpdatingStatus}
+          onPublish={() => void handlePublishShop()}
+          publishError={publishError}
+        />
+      ) : null}
       {!isLoading && hasBlockingPolicyEdits ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-snug text-amber-900">
           Marca la casilla legal en cada política que editaste para publicar ese cambio. El perfil de
@@ -636,7 +876,7 @@ export function VendorShopSettingsClient({
                 {subscription.current_period_end ? (
                   <p>
                     <span className="font-semibold text-[var(--color-carbon)]">
-                      Próxima fecha clave:{" "}
+                      Fecha de renovación:{" "}
                     </span>
                     {new Date(subscription.current_period_end).toLocaleDateString("es-PR", {
                       day: "numeric",
@@ -674,6 +914,7 @@ export function VendorShopSettingsClient({
 
           {/* ── Información de tienda ── */}
           <SettingsSection
+            sectionId="tu-tienda"
             label="Tu tienda"
             description="Nombre, enlace y descripción que ven tus clientes."
             Icon={LinkIcon}
@@ -826,6 +1067,7 @@ export function VendorShopSettingsClient({
 
           {/* ── Métodos de pago ── */}
           <SettingsSection
+            sectionId="cobros"
             label="Cobros"
             description="Tarjeta (Stripe) y ATH Móvil. El número ATH se guarda solo al editar."
             Icon={AthMovilIcon}
@@ -1281,26 +1523,20 @@ export function VendorShopSettingsClient({
               </span>
             </div>
 
-            {blockingReasons.length > 0 && (
-              <ul className="mb-3 space-y-1">
-                {blockingReasons.map((reason) => (
-                  <li key={reason} className="text-xs leading-snug text-[var(--color-gray-500)]">
-                    {reason}
-                  </li>
-                ))}
-              </ul>
+            {shopStatus === "draft" && blockingReasons.length > 0 && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-snug text-amber-900">
+                <InfoIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  Completa los pasos del checklist al inicio de esta página para
+                  desbloquear la publicación.
+                </p>
+              </div>
             )}
 
-            {shopStatus === "draft" && (
-              blockingReasons.length > 0 ? (
-                <p className="text-xs leading-snug text-[var(--color-gray-500)]">
-                  Completa lo anterior y activaremos tu tienda automáticamente.
-                </p>
-              ) : (
-                <p className="text-xs leading-snug text-[var(--color-gray-500)]">
-                  Tu tienda está lista; la estamos activando.
-                </p>
-              )
+            {shopStatus === "draft" && blockingReasons.length === 0 && (
+              <p className="mb-3 text-xs leading-snug text-[var(--color-gray-500)]">
+                Tu tienda está lista. Usa el botón de arriba o el de abajo para publicarla.
+              </p>
             )}
 
             {shopStatus === "paused" && (
@@ -1309,13 +1545,26 @@ export function VendorShopSettingsClient({
               </p>
             )}
 
-            {isActive || shopStatus === "paused" ? (
+            {isActive || shopStatus === "paused" || shopStatus === "draft" ? (
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-gray-500)]">
                 Acciones inmediatas
               </p>
             ) : null}
 
-            {isActive ? (
+            {shopStatus === "draft" ? (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  disabled={
+                    isUpdatingStatus || isSavingSettings || blockingReasons.length > 0
+                  }
+                  onClick={() => void handlePublishShop()}
+                  className="flex-1 rounded-full bg-[var(--color-carbon)] py-2.5 text-xs font-semibold text-white transition hover:opacity-80 disabled:cursor-not-allowed disabled:bg-[var(--color-gray-100)] disabled:text-[var(--color-gray-500)] disabled:opacity-100"
+                >
+                  {isUpdatingStatus ? "Publicando..." : "Publicar tienda"}
+                </button>
+              </div>
+            ) : isActive ? (
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"

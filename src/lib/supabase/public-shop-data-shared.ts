@@ -1,3 +1,4 @@
+import { isStripeConnectAccountId } from "@/lib/stripe-connect";
 import type { MarketplaceShopCard, ShopDetail } from "@/lib/supabase/shop-types";
 
 const FALLBACK_IMAGE_URL =
@@ -139,7 +140,7 @@ export function buildShopDetail(shop: ShopRow, products: ProductRow[]): ShopDeta
     contactWhatsapp: shop.contact_whatsapp ?? null,
     shippingFlatFeeUsd: Number(shop.shipping_flat_fee_usd ?? 0),
     offersPickup: Boolean(shop.offers_pickup),
-    acceptsStripePayments: Boolean(shop.stripe_connect_account_id),
+    acceptsStripePayments: isStripeConnectAccountId(shop.stripe_connect_account_id),
   };
 }
 

@@ -14,7 +14,6 @@ import {
   ensureVendorRole,
   ensureVendorShopForProfile,
   getShopPoliciesByShopId,
-  maybeAutoPublishDraftShop,
   getVendorPublishChecks,
   getVendorRequestContext,
   getVendorShopByProfileId,
@@ -93,8 +92,6 @@ export async function GET() {
   } catch {
     // Secret key is optional in development.
   }
-
-  await maybeAutoPublishDraftShop(dataClient, context.userId);
 
   const shop = await getVendorShopByProfileId(dataClient, context.userId);
   if (!shop) {

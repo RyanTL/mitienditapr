@@ -17,6 +17,9 @@ type VendorNewOrderEmailInput = {
   buyerEmail: string | null;
   buyerName: string | null;
   items: OrderItem[];
+  subtotalUsd: number;
+  shippingFeeUsd: number;
+  taxUsd: number;
   totalUsd: number;
   paymentMethod: OrderPaymentMethod;
   athMovilPhone?: string | null;
@@ -33,6 +36,9 @@ type BuyerOrderConfirmationEmailInput = {
   orderId: string;
   shopName: string;
   items: OrderItem[];
+  subtotalUsd: number;
+  shippingFeeUsd: number;
+  taxUsd: number;
   totalUsd: number;
   paymentMethod: OrderPaymentMethod;
   athMovilPhone?: string | null;
@@ -125,6 +131,25 @@ function buildOrderItemsRows(items: OrderItem[]): string {
     .join("");
 }
 
+function buildOrderTotalsSummaryHtml(input: {
+  subtotalUsd: number;
+  shippingFeeUsd: number;
+  taxUsd: number;
+  totalUsd: number;
+}): string {
+  const shippingRow =
+    input.shippingFeeUsd > 0
+      ? `<p style="margin:4px 0 0;color:#555;font-size:14px;">Envío: <strong style="color:#1a1a1a;">${formatUsd(input.shippingFeeUsd)}</strong></p>`
+      : "";
+  return `
+    <div style="text-align:right;margin-bottom:24px;">
+      <p style="margin:0;color:#555;font-size:14px;">Subtotal: <strong style="color:#1a1a1a;">${formatUsd(input.subtotalUsd)}</strong></p>
+      ${shippingRow}
+      <p style="margin:4px 0 0;color:#555;font-size:14px;">IVU (11.5%): <strong style="color:#1a1a1a;">${formatUsd(input.taxUsd)}</strong></p>
+      <p style="margin:8px 0 0;font-size:18px;font-weight:700;color:#1a1a1a;">Total: ${formatUsd(input.totalUsd)}</p>
+    </div>`;
+}
+
 // ─── Vendor: New Order ────────────────────────────────────────────────────────
 
 function buildVendorNewOrderHtml(input: VendorNewOrderEmailInput): string {
@@ -134,6 +159,9 @@ function buildVendorNewOrderHtml(input: VendorNewOrderEmailInput): string {
     buyerEmail,
     buyerName,
     items,
+    subtotalUsd,
+    shippingFeeUsd,
+    taxUsd,
     totalUsd,
     paymentMethod,
     athMovilPhone,
@@ -173,9 +201,7 @@ function buildVendorNewOrderHtml(input: VendorNewOrderEmailInput): string {
           <tbody>${buildOrderItemsRows(items)}</tbody>
         </table>
 
-        <div style="text-align:right;margin-bottom:24px;">
-          <span style="font-size:18px;font-weight:700;color:#1a1a1a;">Total: ${formatUsd(totalUsd)}</span>
-        </div>
+        ${buildOrderTotalsSummaryHtml({ subtotalUsd, shippingFeeUsd, taxUsd, totalUsd })}
 
         <div style="background:#f8f8f8;border-radius:12px;padding:16px;margin-bottom:24px;">
           <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Comprador</p>
@@ -253,7 +279,18 @@ export async function sendWelcomeEmail(input: WelcomeEmailInput): Promise<void> 
 // ─── Buyer: Order Confirmation ────────────────────────────────────────────────
 
 function buildBuyerOrderConfirmationHtml(input: BuyerOrderConfirmationEmailInput): string {
-  const { buyerName, orderId, shopName, items, totalUsd, paymentMethod, athMovilPhone } = input;
+  const {
+    buyerName,
+    orderId,
+    shopName,
+    items,
+    subtotalUsd,
+    shippingFeeUsd,
+    taxUsd,
+    totalUsd,
+    paymentMethod,
+    athMovilPhone,
+  } = input;
   const shortOrderId = orderId.slice(0, 8).toUpperCase();
   const greeting = buyerName ? `¡Hola, ${buyerName}!` : "¡Hola!";
   const paymentBlock =
@@ -292,9 +329,7 @@ function buildBuyerOrderConfirmationHtml(input: BuyerOrderConfirmationEmailInput
           <tbody>${buildOrderItemsRows(items)}</tbody>
         </table>
 
-        <div style="text-align:right;margin-bottom:24px;">
-          <span style="font-size:18px;font-weight:700;color:#1a1a1a;">Total: ${formatUsd(totalUsd)}</span>
-        </div>
+        ${buildOrderTotalsSummaryHtml({ subtotalUsd, shippingFeeUsd, taxUsd, totalUsd })}
 
         ${paymentBlock}
 

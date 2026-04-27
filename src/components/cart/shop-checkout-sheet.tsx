@@ -11,6 +11,7 @@ import { AthMovilIcon, CloseIcon } from "@/components/icons";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
 import { saveCheckoutProfile, type AccountSnapshot } from "@/lib/account/client";
 import { formatUsd } from "@/lib/formatters";
+import { computePuertoRicoIvuUsd } from "@/lib/tax/puerto-rico-ivu";
 import {
   createStripeCheckoutSession,
   type CheckoutFulfillmentInput,
@@ -18,7 +19,7 @@ import {
 } from "@/lib/orders/client";
 import { fetchPublicShopPolicies } from "@/lib/policies/client";
 import type { PublicShopPoliciesResponse, PolicyType } from "@/lib/policies/types";
-import type { CartItem } from "@/lib/supabase/cart";
+import { formatCartLineTitle, type CartItem } from "@/lib/supabase/cart";
 
 type ShopCheckoutSheetProps = {
   shopSlug: string;
@@ -115,7 +116,15 @@ export function ShopCheckoutSheet({
     0,
   );
   const summaryShippingFeeUsd = shopOffersPickup ? null : shopShippingFlatFeeUsd;
-  const summaryTotalUsd = subtotal + (summaryShippingFeeUsd ?? 0);
+  const summaryShippingForTax = summaryShippingFeeUsd ?? 0;
+  const { taxUsd: summaryTaxUsd, totalUsd: summaryTotalUsd } = useMemo(
+    () =>
+      computePuertoRicoIvuUsd({
+        subtotalUsd: subtotal,
+        shippingFeeUsd: summaryShippingForTax,
+      }),
+    [subtotal, summaryShippingForTax],
+  );
 
   const canCheckout = Boolean(
     policiesData?.requiredPolicyVersionIds && hasAcceptedRequiredPolicies && !isLoadingPolicies,
@@ -221,7 +230,7 @@ export function ShopCheckoutSheet({
     () =>
       shopItems.map((item) => ({
         id: item.id,
-        name: item.product.name,
+        name: formatCartLineTitle(item.product),
         quantity: item.quantity,
         lineTotalUsd: item.product.priceUsd * item.quantity,
       })),
@@ -443,6 +452,10 @@ export function ShopCheckoutSheet({
                 <span className="font-semibold">{formatUsd(shopShippingFlatFeeUsd)}</span>
               </div>
             )}
+            <div className="mt-2 flex items-center justify-between text-sm text-[var(--color-carbon)]">
+              <span>IVU (11.5%)</span>
+              <span className="font-semibold">{formatUsd(summaryTaxUsd)}</span>
+            </div>
             <div className="mt-3 flex items-center justify-between border-t border-[var(--color-gray-border)] pt-3 text-base text-[var(--color-carbon)]">
               <span className="font-semibold">
                 {shopOffersPickup ? "Total desde" : "Total"}
@@ -452,7 +465,7 @@ export function ShopCheckoutSheet({
             {shopOffersPickup ? (
               <p className="mt-3 text-xs text-[var(--color-gray-500)]">
                 Al pagar eliges recogido en tienda (sin costo) o envío a domicilio (se suma el monto
-                de arriba).
+                de arriba). Si eliges envío, el IVU se recalcula sobre subtotal más envío.
               </p>
             ) : null}
           </div>

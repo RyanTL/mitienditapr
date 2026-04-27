@@ -9,6 +9,7 @@ import {
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import {
   releaseOrderInventory,
+  restoreOrderItemsToCart,
   updateOrderPaymentState,
 } from "@/lib/orders/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
@@ -25,6 +26,7 @@ type VerifyPaymentPayload = {
 
 type OrderRow = {
   id: string;
+  profile_id: string;
   payment_method: string | null;
   payment_status: string;
   buyer_email: string | null;
@@ -68,7 +70,7 @@ export async function POST(
 
     const { data: orderData, error: orderError } = await dataClient
       .from("orders")
-      .select("id,payment_method,payment_status,buyer_email,buyer_name")
+      .select("id,profile_id,payment_method,payment_status,buyer_email,buyer_name")
       .eq("id", orderId)
       .eq("shop_id", shop.id)
       .maybeSingle();
@@ -113,6 +115,7 @@ export async function POST(
       });
 
       await releaseOrderInventory(dataClient, order.id);
+      await restoreOrderItemsToCart(dataClient, order.profile_id, order.id);
     }
 
     if (order.buyer_email) {

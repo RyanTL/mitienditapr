@@ -1,6 +1,7 @@
 "use client";
 
 import { FALLBACK_PRODUCT_IMAGE as CART_IMAGE_FALLBACK_URL } from "@/lib/formatters";
+import { isStripeConnectAccountId } from "@/lib/stripe-connect";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getCurrentProfileId } from "@/lib/supabase/favorites";
 
@@ -25,7 +26,12 @@ export type CartItem = {
     shopOffersPickup: boolean;
     shopAcceptsStripePayments: boolean;
     productId: string;
+    /** Selected variant id; matches checkout (`loadShopCartItems`). */
+    productVariantId: string | null;
+    /** Shown when the variant is not the generic default title. */
+    variantLabel: string | null;
     name: string;
+    /** Unit price from the resolved variant (same source as server checkout). */
     priceUsd: number;
     imageUrl: string;
     alt: string;
@@ -35,7 +41,18 @@ export type CartItem = {
 type CartItemRow = {
   id: string;
   product_id: string;
+  product_variant_id: string | null;
   quantity: number;
+};
+
+type VariantRow = {
+  id: string;
+  product_id: string;
+  title: string;
+  price_usd: number;
+  stock_qty: number | null;
+  is_active: boolean;
+  created_at: string;
 };
 
 type ProductRow = {
@@ -65,6 +82,14 @@ const UUID_PATTERN =
 
 function isUuidLike(value: string) {
   return UUID_PATTERN.test(value);
+}
+
+/** Spanish UI: product name plus variant when not the default title. */
+export function formatCartLineTitle(product: CartItem["product"]): string {
+  if (product.variantLabel) {
+    return `${product.name} — ${product.variantLabel}`;
+  }
+  return product.name;
 }
 
 function notifyCartChanged(detail: CartChangedEventDetail = { fullRefresh: true }) {
@@ -103,7 +128,7 @@ export async function fetchCartItems() {
   const supabase = createSupabaseBrowserClient();
   const { data: cartRows, error: cartError } = await supabase
     .from("cart_items")
-    .select("id,product_id,quantity")
+    .select("id,product_id,product_variant_id,quantity")
     .eq("profile_id", profileId)
     .order("created_at", { ascending: false });
 
@@ -134,6 +159,25 @@ export async function fetchCartItems() {
     return [];
   }
 
+  const { data: variantRows, error: variantsError } = await supabase
+    .from("product_variants")
+    .select("id,product_id,title,price_usd,stock_qty,is_active,created_at")
+    .in("product_id", productIds)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+
+  if (variantsError) {
+    throw new Error(variantsError.message ?? "No se pudieron cargar variantes.");
+  }
+
+  const activeVariants = (variantRows ?? []) as VariantRow[];
+  const variantsByProductId = activeVariants.reduce((map, row) => {
+    const current = map.get(row.product_id) ?? [];
+    map.set(row.product_id, [...current, row]);
+    return map;
+  }, new Map<string, VariantRow[]>());
+  const activeVariantById = new Map(activeVariants.map((variant) => [variant.id, variant]));
+
   const { data: shopRows, error: shopsError } = await supabase
     .from("shops")
     .select(
@@ -161,6 +205,20 @@ export async function fetchCartItems() {
       return [];
     }
 
+    const selectedVariant =
+      (cartItem.product_variant_id
+        ? activeVariantById.get(cartItem.product_variant_id)
+        : null) ?? variantsByProductId.get(cartItem.product_id)?.[0];
+
+    if (!selectedVariant) {
+      return [];
+    }
+
+    const unitPriceUsd = Number(selectedVariant.price_usd ?? product.price_usd ?? 0);
+    const variantTitle = selectedVariant.title?.trim() ?? "";
+    const variantLabel =
+      variantTitle && variantTitle.toLowerCase() !== "default" ? variantTitle : null;
+
     return [
       {
         id: cartItem.id,
@@ -177,10 +235,12 @@ export async function fetchCartItems() {
           shopContactWhatsapp: shop.contact_whatsapp ?? null,
           shopShippingFlatFeeUsd: Number(shop.shipping_flat_fee_usd ?? 0),
           shopOffersPickup: Boolean(shop.offers_pickup),
-          shopAcceptsStripePayments: Boolean(shop.stripe_connect_account_id),
+          shopAcceptsStripePayments: isStripeConnectAccountId(shop.stripe_connect_account_id),
           productId: product.id,
+          productVariantId: selectedVariant.id,
+          variantLabel,
           name: product.name,
-          priceUsd: Number(product.price_usd),
+          priceUsd: unitPriceUsd,
           imageUrl: product.image_url || CART_IMAGE_FALLBACK_URL,
           alt: product.name,
         },
@@ -259,6 +319,24 @@ export async function addProductToCart(
   }
 
   const supabase = createSupabaseBrowserClient();
+
+  const { data: defaultVariant, error: variantLookupError } = await supabase
+    .from("product_variants")
+    .select("id")
+    .eq("product_id", normalizedProductId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
+  if (variantLookupError) {
+    throw new Error(variantLookupError.message);
+  }
+
+  if (!defaultVariant?.id) {
+    throw new Error("Este producto no está disponible para comprar.");
+  }
+
   const { data: existingItem, error: existingItemError } = await supabase
     .from("cart_items")
     .select("id,quantity")
@@ -274,7 +352,10 @@ export async function addProductToCart(
     const nextQuantity = Math.max(1, existingItem.quantity + quantityToAdd);
     const { error: updateError } = await supabase
       .from("cart_items")
-      .update({ quantity: nextQuantity })
+      .update({
+        quantity: nextQuantity,
+        product_variant_id: defaultVariant.id,
+      })
       .eq("id", existingItem.id)
       .eq("profile_id", profileId);
 
@@ -285,6 +366,7 @@ export async function addProductToCart(
     const { error: insertError } = await supabase.from("cart_items").insert({
       profile_id: profileId,
       product_id: normalizedProductId,
+      product_variant_id: defaultVariant.id,
       quantity: Math.max(1, quantityToAdd),
     });
 

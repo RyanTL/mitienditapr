@@ -11,6 +11,7 @@ import {
 } from "@/lib/orders/server";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { isStripeConnectAccountId } from "@/lib/stripe-connect";
 import { createStripeOneTimeCheckoutSession } from "@/lib/vendor/stripe";
 import { getAppBaseUrl } from "@/lib/vendor/urls";
 
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
       policyAcceptance: payload.policyAcceptance,
     });
 
-    if (!preparedOrder.shop.stripe_connect_account_id) {
+    if (!isStripeConnectAccountId(preparedOrder.shop.stripe_connect_account_id)) {
       return NextResponse.json(
         { error: "Esta tienda todavía no acepta pagos con tarjeta." },
         { status: 400 },
@@ -101,6 +102,14 @@ export async function POST(request: Request) {
         lineItems.push({
           name: "Envío",
           unitAmountCents: Math.round(createdOrder.shippingFeeUsd * 100),
+          quantity: 1,
+        });
+      }
+
+      if (createdOrder.taxUsd > 0) {
+        lineItems.push({
+          name: "IVU (11.5%) — Puerto Rico",
+          unitAmountCents: Math.round(createdOrder.taxUsd * 100),
           quantity: 1,
         });
       }

@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 /**
  * Shared step UI chrome for vendor onboarding and ATH checkout wizard.
  * Keep keyframes and bar markup identical across flows.
@@ -19,9 +21,17 @@ export const ONBOARDING_STEP_ANIMATIONS_CSS = `
 .obh2{animation:onb-hero .7s cubic-bezier(.16,1,.3,1) .16s both}
 `;
 
-export function OnboardingSegmentedBar({ step, total }: { step: number; total: number }) {
+export function OnboardingSegmentedBar({
+  step,
+  total,
+  className,
+}: {
+  step: number;
+  total: number;
+  className?: string;
+}) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className={cn("flex items-center gap-1.5", className)}>
       {Array.from({ length: total }, (_, i) => (
         <div
           key={i}

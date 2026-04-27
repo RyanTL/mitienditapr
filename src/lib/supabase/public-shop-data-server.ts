@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { unstable_noStore as noStore } from "next/cache";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -58,7 +59,7 @@ export async function fetchMarketplaceHomeDataServer(): Promise<{
   };
 }
 
-export async function fetchShopDetailBySlugServer(shopSlug: string) {
+export const fetchShopDetailBySlugServer = cache(async (shopSlug: string) => {
   noStore();
   const supabase = await createSupabaseServerClient();
   const { data: shopData, error: shopError } = await supabase
@@ -92,4 +93,4 @@ export async function fetchShopDetailBySlugServer(shopSlug: string) {
   }
 
   return buildShopDetail(shop, (productsData as ProductRow[] | null) ?? []);
-}
+});

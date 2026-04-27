@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import {
   ChevronIcon,
   OrdersIcon,
+  PackageIcon,
   PlusIcon,
   SettingsIcon,
 } from "@/components/icons";
@@ -93,6 +94,39 @@ export default async function VendorPanelPage({ searchParams }: VendorPanelPageP
             </Link>
           </div>
         </div>
+      )}
+
+      {/* Persistent next-step nudge for vendors who haven't listed a product yet. */}
+      {productCount === 0 && (
+        <Link
+          href="/vendedor/productos"
+          className="group block rounded-2xl border border-[var(--color-brand)]/30 bg-white p-4 shadow-[var(--vendor-card-shadow)] transition-shadow hover:shadow-[var(--vendor-card-shadow-hover)]"
+        >
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-brand)]/10 text-[var(--color-brand)]"
+            >
+              <PackageIcon className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-brand)]">
+                Primer paso
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-[var(--color-carbon)]">
+                Lista tu primer producto
+              </p>
+              <p className="mt-1 text-xs leading-snug text-[var(--vendor-nav-text)]">
+                Tu tienda necesita al menos un producto activo para poder publicarse.
+              </p>
+            </div>
+            <ChevronIcon className="mt-1 h-4 w-4 shrink-0 text-[var(--vendor-nav-text)] transition-transform group-hover:translate-x-0.5" />
+          </div>
+          <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-4 py-2 text-xs font-semibold text-white transition-transform group-hover:scale-[1.02] group-active:scale-[0.98]">
+            Agregar producto
+            <span aria-hidden>→</span>
+          </span>
+        </Link>
       )}
 
       {/* Upgrade card for free-tier vendors */}

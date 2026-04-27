@@ -10,10 +10,10 @@ import {
 import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
-  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
+  pauseShopIfNoActiveProducts,
   syncCanonicalVariantsWithProduct,
 } from "@/lib/supabase/vendor-server";
 
@@ -155,12 +155,11 @@ export async function PATCH(
       : undefined;
 
     await syncCanonicalVariantsWithProduct(dataClient, product.id, stockPatch);
-
-    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+    await pauseShopIfNoActiveProducts(dataClient, shop.id, profile.id);
 
     return NextResponse.json({
       ok: true,
-      shopActivated: autoPublishResult.activated,
+      shopActivated: false,
     });
   } catch (error) {
     return serverErrorResponse(error, "No se pudo actualizar el producto.");
@@ -240,6 +239,8 @@ export async function DELETE(
     if (deleteError) {
       throw new Error(deleteError.message);
     }
+
+    await pauseShopIfNoActiveProducts(dataClient, shop.id, profile.id);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

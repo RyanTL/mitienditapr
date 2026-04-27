@@ -100,9 +100,9 @@ export function VendorActivationClient() {
     : message;
 
   return (
-    <div className="min-h-screen bg-[var(--vendor-page-bg)] px-4 py-8 text-[var(--color-carbon)]">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center justify-center">
-        <div className="w-full rounded-[28px] border border-[var(--vendor-card-border)] bg-white p-8 text-center shadow-[var(--vendor-card-shadow)]">
+    <div className="min-h-screen bg-[var(--vendor-page-bg)] px-4 py-8 text-[var(--color-carbon)] md:px-8 md:py-12">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center justify-center md:max-w-lg lg:max-w-xl">
+        <div className="w-full rounded-[28px] border border-[var(--vendor-card-border)] bg-white p-8 text-center shadow-[var(--vendor-card-shadow)] md:p-10">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[var(--vendor-page-bg)]">
             {displayState === "success" ? (
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-white">

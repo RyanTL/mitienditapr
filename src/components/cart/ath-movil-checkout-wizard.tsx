@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
@@ -15,6 +16,7 @@ import {
   OnboardingSegmentedBar,
 } from "@/components/onboarding/onboarding-step-primitives";
 import { formatPhoneForDisplay, formatUsd } from "@/lib/formatters";
+import { computePuertoRicoIvuUsd } from "@/lib/tax/puerto-rico-ivu";
 import type { VendorContactInfo } from "@/lib/supabase/shop-types";
 import { saveCheckoutProfile } from "@/lib/account/client";
 import {
@@ -191,7 +193,14 @@ export function AthMovilCheckoutWizard({
     () => (effectiveFulfillment === "shipping" ? shopShippingFlatFeeUsd : 0),
     [effectiveFulfillment, shopShippingFlatFeeUsd],
   );
-  const totalUsd = subtotalUsd + shippingFeeUsd;
+  const { taxUsd, totalUsd } = useMemo(
+    () =>
+      computePuertoRicoIvuUsd({
+        subtotalUsd,
+        shippingFeeUsd,
+      }),
+    [subtotalUsd, shippingFeeUsd],
+  );
 
   const [firstName, setFirstName] = useState(initialFirst);
   const [lastName, setLastName] = useState(initialLast);
@@ -650,6 +659,10 @@ export function AthMovilCheckoutWizard({
                             : "Gratis"}
                         </span>
                       </div>
+                      <div className="mt-1 flex justify-between">
+                        <span>IVU (11.5%)</span>
+                        <span className="font-semibold">{formatUsd(taxUsd)}</span>
+                      </div>
                       <div className="mt-2 flex justify-between text-[17px] font-bold">
                         <span>Total</span>
                         <span>{formatUsd(totalUsd)}</span>
@@ -691,13 +704,16 @@ export function AthMovilCheckoutWizard({
                     <button
                       type="button"
                       onClick={() => receiptInputRef.current?.click()}
-                      className="relative flex min-h-[11rem] w-full max-w-[11rem] items-center justify-center overflow-hidden rounded-[28px] border-2 border-dashed border-[#e5e5ea] transition-all hover:border-[#c7c7cc] active:scale-[0.97]"
+                      className="relative flex h-[11rem] w-full max-w-[11rem] items-center justify-center overflow-hidden rounded-[28px] border-2 border-dashed border-[#e5e5ea] transition-all hover:border-[#c7c7cc] active:scale-[0.97]"
                     >
                       {receiptPreviewUrl ? (
-                        <img
+                        <Image
                           src={receiptPreviewUrl}
                           alt="Recibo subido"
-                          className="h-full w-full object-cover"
+                          fill
+                          sizes="11rem"
+                          className="object-cover"
+                          unoptimized
                         />
                       ) : (
                         <div className="flex flex-col items-center gap-2.5">

@@ -15,11 +15,11 @@ import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { vendorHasPremiumProductFeatures } from "@/lib/vendor/vendor-subscription-gates";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
-  maybeAutoPublishDraftShop,
   ensureVendorRole,
   ensureVendorShopForProfile,
   getVendorRequestContext,
   getVendorSubscriptionByShopId,
+  pauseShopIfNoActiveProducts,
 } from "@/lib/supabase/vendor-server";
 
 type ProductImagePayload = {
@@ -389,7 +389,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const autoPublishResult = await maybeAutoPublishDraftShop(dataClient, profile.id);
+    await pauseShopIfNoActiveProducts(dataClient, shop.id, profile.id);
 
     return NextResponse.json(
       {
@@ -397,7 +397,7 @@ export async function POST(request: Request) {
           id: productRow.id,
           name: productRow.name,
         },
-        shopActivated: autoPublishResult.activated,
+        shopActivated: false,
       },
       { status: 201 },
     );

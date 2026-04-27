@@ -181,6 +181,7 @@ export function fetchVendorOrders() {
       paymentMethod: "stripe" | "ath_movil" | null;
       subtotalUsd: number;
       shippingFeeUsd: number;
+      taxUsd: number;
       totalUsd: number;
       fulfillmentMethod: "shipping" | "pickup";
       createdAt: string;

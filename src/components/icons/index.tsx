@@ -158,19 +158,6 @@ export function AlertIcon({ className = "h-6 w-6", ...props }: IconProps) {
   );
 }
 
-export function StoreIcon({ className = "h-6 w-6", ...props }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
-      <path
-        d="M3 9.5 5 4h14l2 5.5M3 9.5h18M3 9.5V20h18V9.5M9 13.5h6M12 9.5v10"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 export function MenuIcon({ className = "h-6 w-6", ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} {...props}>
