@@ -11,12 +11,23 @@ type SignUpFormProps = {
   nextPath: string;
 };
 
+const PASSWORD_REQUIREMENTS_MESSAGE =
+  "La contraseña debe tener al menos 8 caracteres e incluir una mayúscula, una minúscula y un número.";
+
+function isPasswordStrongEnough(value: string): boolean {
+  return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value);
+}
+
 function toSpanishError(message: string): string {
   const lower = message.toLowerCase();
   if (lower.includes("user already registered") || lower.includes("already been registered"))
     return "Ya existe una cuenta con ese email. Intenta iniciar sesión.";
-  if (lower.includes("password should be at least"))
-    return "La contraseña debe tener al menos 6 caracteres.";
+  if (
+    lower.includes("password should be at least") ||
+    lower.includes("password should contain") ||
+    lower.includes("weak password")
+  )
+    return PASSWORD_REQUIREMENTS_MESSAGE;
   if (lower.includes("unable to validate email") || lower.includes("invalid email"))
     return "El formato del email no es válido.";
   if (lower.includes("too many requests") || lower.includes("rate limit"))
@@ -64,6 +75,12 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
     event.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+
+    if (!isPasswordStrongEnough(password)) {
+      setErrorMessage(PASSWORD_REQUIREMENTS_MESSAGE);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -157,14 +174,17 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
             id="password"
             name="password"
             type="password"
-            minLength={6}
+            minLength={8}
             required
             autoComplete="new-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             className="w-full rounded-xl border border-[var(--color-gray-border)] bg-[var(--color-white)] px-3 py-2 text-[var(--color-carbon)] outline-none focus:border-[var(--color-brand)]"
-            placeholder="Mínimo 6 caracteres"
+            placeholder="Mínimo 8 caracteres"
           />
+          <p className="text-xs text-[var(--color-gray-500)]">
+            Mínimo 8 caracteres, una mayúscula, una minúscula y un número.
+          </p>
         </div>
 
         {errorMessage ? (
