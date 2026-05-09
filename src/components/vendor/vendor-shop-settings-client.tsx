@@ -355,7 +355,7 @@ type ReadinessRequirement = {
   title: string;
   description: string;
   done: boolean;
-  action?: { label: string; href: string; external?: boolean };
+  action?: { label: string; href: string; onClick?: () => void; external?: boolean };
 };
 
 function ReadinessRow({ requirement }: { requirement: ReadinessRequirement }) {
@@ -386,6 +386,19 @@ function ReadinessRow({ requirement }: { requirement: ReadinessRequirement }) {
         {!done && action ? (
           <Link
             href={action.href}
+            onClick={
+              action.onClick
+                ? (event) => {
+                    // Hash-only links don't fire `hashchange` reliably under Next App
+                    // Router (history.pushState bypasses the event), so the parent
+                    // accordion never opens. Imperative onClick handles state directly.
+                    if (action.href.startsWith("#")) {
+                      event.preventDefault();
+                    }
+                    action.onClick?.();
+                  }
+                : undefined
+            }
             className="mt-2 inline-flex items-center gap-1 rounded-full bg-[var(--color-carbon)] px-3.5 py-1.5 text-[11px] font-semibold text-white transition-transform active:scale-[0.98]"
           >
             {action.label}
@@ -831,6 +844,15 @@ export function VendorShopSettingsClient({
     reason.startsWith("Tu acceso gratuito expiró"),
   );
 
+  const focusCategory = useCallback((categoryId: CategoryId) => {
+    setOpenCategory(categoryId);
+    requestAnimationFrame(() => {
+      document
+        .getElementById(categoryId)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
   const readinessRequirements = useMemo<ReadinessRequirement[]>(() => {
     const items: ReadinessRequirement[] = [
       {
@@ -838,7 +860,11 @@ export function VendorShopSettingsClient({
         title: "Información básica de la tienda",
         description: "Agrega el nombre y el enlace que verán tus clientes.",
         done: !needsBasics,
-        action: { label: "Completar información", href: "#tu-tienda" },
+        action: {
+          label: "Completar información",
+          href: "#tu-tienda",
+          onClick: () => focusCategory("tu-tienda"),
+        },
       },
       {
         id: "product",
@@ -855,7 +881,11 @@ export function VendorShopSettingsClient({
         title: "Método de cobro",
         description: "Conecta Stripe o ATH Móvil para poder recibir pagos.",
         done: !needsPayments,
-        action: { label: "Configurar cobros", href: "#cobros" },
+        action: {
+          label: "Configurar cobros",
+          href: "#cobros",
+          onClick: () => focusCategory("cobros"),
+        },
       },
     ];
 
@@ -876,6 +906,7 @@ export function VendorShopSettingsClient({
     needsPayments,
     activeProductCount,
     subscriptionExpiredReason,
+    focusCategory,
   ]);
 
   const showReadinessCard = !isLoading && shopStatus !== "active";
