@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { OrdersIcon } from "@/components/icons";
@@ -239,17 +240,34 @@ export function VendorOrdersClient() {
                 </div>
 
                 {/* Items */}
-                <ul className="mt-3 space-y-1 border-t border-[var(--color-gray-100,#f3f4f6)] pt-3">
+                <ul className="mt-3 space-y-2 border-t border-[var(--color-gray-100,#f3f4f6)] pt-3">
                   {order.items.map((item) => (
                     <li
                       key={`${order.id}:${item.productId}:${item.productVariantId ?? "na"}`}
-                      className="flex items-center justify-between text-xs text-[var(--color-gray-500)]"
+                      className="flex items-center gap-3"
                     >
-                      <span className="truncate">
-                        {item.productName}
-                        {item.quantity > 1 ? ` × ${item.quantity}` : ""}
-                      </span>
-                      <span className="ml-2 shrink-0 font-medium text-[var(--color-carbon)]">
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[var(--color-gray-100,#f3f4f6)]">
+                        {item.imageUrl ? (
+                          <Image
+                            src={item.imageUrl}
+                            alt={item.productName}
+                            width={40}
+                            height={40}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[var(--color-gray-500)]">
+                            <OrdersIcon className="h-4 w-4" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-[var(--color-carbon)]">
+                          {item.productName}
+                          {item.quantity > 1 ? ` × ${item.quantity}` : ""}
+                        </p>
+                      </div>
+                      <span className="ml-2 shrink-0 text-xs font-medium text-[var(--color-carbon)]">
                         {formatUsd(item.unitPriceUsd * item.quantity)}
                       </span>
                     </li>
