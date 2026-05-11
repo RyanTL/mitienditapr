@@ -46,6 +46,8 @@ export default async function VendorShopSettingsPage() {
       initialStatusData={initialStatusData}
       initialPolicyTemplates={initialPolicyTemplates.templates}
       initialPolicyData={initialPolicyData}
+      initialAccountEmail={context.profile.email ?? ""}
+      initialAccountName={context.profile.full_name ?? ""}
     />
   );
 }

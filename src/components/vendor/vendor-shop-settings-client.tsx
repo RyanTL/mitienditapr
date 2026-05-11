@@ -2,19 +2,24 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import {
   AlertIcon,
   AthMovilIcon,
   CheckIcon,
   ChevronDownIcon,
   DocumentIcon,
+  EyeIcon,
+  EyeOffIcon,
   ImageIcon,
   InfoIcon,
   PencilIcon,
   LinkIcon,
+  PackageIcon,
+  PhoneIcon,
   SettingsIcon,
   ShieldCheckIcon,
   TruckIcon,
@@ -44,6 +49,7 @@ import {
   uploadVendorImage,
   updateVendorShopSettings,
 } from "@/lib/vendor/client";
+import { changeAccountPassword } from "@/lib/account/client";
 import { isStripeConnectAccountId } from "@/lib/stripe-connect";
 import { isVendorBillingBypassEnabled } from "@/lib/vendor/billing-mode";
 import type { VendorShopStatus } from "@/lib/vendor/constants";
@@ -53,6 +59,7 @@ import type { VendorShopSettingsResponse } from "@/lib/vendor/types";
 /** Stable accordion category ids. Anchors like `#tu-tienda` and `#cobros` resolve to these. */
 const CATEGORY_IDS = [
   "membresia",
+  "cuenta",
   "tu-tienda",
   "envios",
   "cobros",
@@ -75,6 +82,8 @@ type VendorShopSettingsClientProps = {
   initialStatusData?: ShopResponse;
   initialPolicyTemplates?: PolicyTemplate[];
   initialPolicyData?: VendorShopPoliciesResponse;
+  initialAccountEmail?: string;
+  initialAccountName?: string;
 };
 
 type PolicyDraftState = {
@@ -322,7 +331,7 @@ function SettingsSection({
         <ChevronDownIcon
           className={[
             "h-4 w-4 shrink-0 text-[var(--color-gray-500)] transition-transform duration-200",
-            open ? "rotate-180" : "rotate-0",
+            open ? "rotate-0" : "-rotate-90",
           ].join(" ")}
         />
       </button>
@@ -486,7 +495,7 @@ function PublishReadinessCard({
       </button>
       {!canPublish ? (
         <p className="mt-2 text-center text-[11px] leading-snug text-[var(--color-gray-500)]">
-          Completa los pasos de arriba para desbloquear el botón.
+          Completa los pasos de arriba para poder publicar la tienda.
         </p>
       ) : null}
     </div>
@@ -496,12 +505,93 @@ function PublishReadinessCard({
 const fieldInputClass =
   "mt-1 w-full rounded-xl border border-[var(--color-gray-200,#e5e7eb)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]";
 
+function getAccountInitial(name: string, email: string) {
+  const trimmedName = name.trim();
+  if (trimmedName.length > 0) {
+    return trimmedName[0]?.toUpperCase() ?? "?";
+  }
+
+  const localPart = email.split("@")[0] ?? "";
+  return localPart.length > 0 ? localPart[0]?.toUpperCase() ?? "?" : "?";
+}
+
+function AccountPasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  minLength,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  minLength?: number;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div>
+      <label htmlFor={id} className="text-xs font-semibold text-[var(--color-carbon)]">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          minLength={minLength}
+          required
+          className={`${fieldInputClass} pr-10`}
+        />
+        <button
+          type="button"
+          aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+          onClick={() => setVisible((current) => !current)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-gray-500)] transition-colors hover:text-[var(--color-carbon)]"
+        >
+          {visible ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AccountFeedback({
+  error,
+  success,
+}: {
+  error: string | null;
+  success: string | null;
+}) {
+  if (error) {
+    return (
+      <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+        {error}
+      </p>
+    );
+  }
+
+  if (success) {
+    return (
+      <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+        {success}
+      </p>
+    );
+  }
+
+  return null;
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function VendorShopSettingsClient({
   initialStatusData,
   initialPolicyTemplates = [],
   initialPolicyData,
+  initialAccountEmail = "",
+  initialAccountName = "",
 }: VendorShopSettingsClientProps) {
   const hasInitialData = Boolean(initialStatusData && initialPolicyData);
   const [statusData, setStatusData] = useState<ShopResponse | null>(
@@ -534,6 +624,12 @@ export function VendorShopSettingsClient({
   const [publishError, setPublishError] = useState<string | null>(null);
   /** Single-focus accordion: only one settings category is expanded at a time. */
   const [openCategory, setOpenCategory] = useState<CategoryId | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -631,6 +727,14 @@ export function VendorShopSettingsClient({
   /** Policy drafts with unchecked legal box block policy publishes only — not tienda profile fields. */
   const canSavePolicies = policySaveTargets.length > 0 && !hasBlockingPolicyEdits;
   const canAutosave = shopFormDirty || canSavePolicies;
+  const accountEmail = initialAccountEmail.trim();
+  const accountName = initialAccountName.trim();
+  const accountInitial = getAccountInitial(accountName, accountEmail);
+  const canSubmitPassword =
+    currentPassword.trim().length > 0 &&
+    newPassword.trim().length >= 6 &&
+    confirmPassword.trim().length >= 6 &&
+    !isSavingPassword;
 
   const handleSaveAll = useCallback(async () => {
     if (!shopFormDirty && !canSavePolicies) return;
@@ -831,6 +935,49 @@ export function VendorShopSettingsClient({
     }
   }, []);
 
+  const handleUpdatePassword = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    const current = currentPassword.trim();
+    const next = newPassword.trim();
+    const confirm = confirmPassword.trim();
+
+    if (next.length < 6) {
+      setPasswordError("La nueva contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+
+    if (current === next) {
+      setPasswordError("La nueva contraseña debe ser distinta a la actual.");
+      return;
+    }
+
+    if (next !== confirm) {
+      setPasswordError("La confirmación no coincide con la nueva contraseña.");
+      return;
+    }
+
+    setIsSavingPassword(true);
+    try {
+      await changeAccountPassword({
+        currentPassword: current,
+        newPassword: next,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSuccess("Contraseña actualizada correctamente.");
+    } catch (error) {
+      setPasswordError(
+        error instanceof Error ? error.message : "No se pudo actualizar la contraseña.",
+      );
+    } finally {
+      setIsSavingPassword(false);
+    }
+  }, [confirmPassword, currentPassword, newPassword]);
+
   const subscription = statusData?.subscription ?? null;
 
   const activeProductCount = statusData?.checks.activeProductCount ?? 0;
@@ -959,7 +1106,7 @@ export function VendorShopSettingsClient({
             sectionId="membresia"
             label="Membresía"
             description="Suscripción al Plan Vendedor: cancelar, renovación automática y facturas."
-            Icon={UserIcon}
+            Icon={PackageIcon}
             open={openCategory === "membresia"}
             onToggle={() => toggleCategory("membresia")}
           >
@@ -1036,6 +1183,94 @@ export function VendorShopSettingsClient({
                 )}
               </div>
             )}
+          </SettingsSection>
+
+          {/* ── Cuenta ── */}
+          <SettingsSection
+            sectionId="cuenta"
+            label="Cuenta"
+            description="Email de acceso, contraseña y cierre de sesión de tu cuenta."
+            Icon={UserIcon}
+            open={openCategory === "cuenta"}
+            onToggle={() => toggleCategory("cuenta")}
+          >
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-[var(--color-gray-100,#f9fafb)] p-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-carbon)] text-lg font-bold text-white shadow-[0_6px_18px_var(--shadow-black-012)]">
+                    {accountInitial}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[var(--color-carbon)]">
+                      Sesión activa en Mitiendita PR
+                    </p>
+                    {accountName ? (
+                      <p className="mt-0.5 truncate text-sm font-bold text-[var(--color-carbon)]">
+                        {accountName}
+                      </p>
+                    ) : null}
+                    <p className="mt-0.5 truncate text-xs text-[var(--color-gray-500)]">
+                      {accountEmail || "Email no disponible"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form
+                className="rounded-2xl border border-[var(--color-gray-200,#e5e7eb)] bg-white p-3"
+                onSubmit={handleUpdatePassword}
+              >
+                <div className="mb-3">
+                  <p className="text-xs font-semibold text-[var(--color-carbon)]">
+                    Cambiar contraseña
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-gray-500)]">
+                    Por seguridad, confirma tu contraseña actual antes de guardar una nueva.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <AccountPasswordField
+                    id="vendor-current-password"
+                    label="Contraseña actual"
+                    value={currentPassword}
+                    onChange={setCurrentPassword}
+                  />
+                  <AccountPasswordField
+                    id="vendor-new-password"
+                    label="Nueva contraseña"
+                    value={newPassword}
+                    onChange={setNewPassword}
+                    minLength={6}
+                  />
+                  <AccountPasswordField
+                    id="vendor-confirm-password"
+                    label="Confirmar nueva contraseña"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    minLength={6}
+                  />
+
+                  <AccountFeedback error={passwordError} success={passwordSuccess} />
+
+                  <button
+                    type="submit"
+                    disabled={!canSubmitPassword}
+                    className="w-full rounded-full bg-[var(--color-carbon)] py-2.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[var(--color-gray-100)] disabled:text-[var(--color-gray-500)] disabled:opacity-100"
+                  >
+                    {isSavingPassword ? "Actualizando..." : "Actualizar contraseña"}
+                  </button>
+                </div>
+              </form>
+
+              <div className="rounded-2xl border border-red-100 bg-red-50 p-3">
+                <p className="mb-2 text-xs font-semibold text-red-700">Cerrar sesión</p>
+                <p className="mb-3 text-[11px] leading-snug text-red-600">
+                  Saldrás de esta cuenta en este dispositivo.
+                </p>
+                <SignOutButton className="w-full rounded-full border border-red-200 bg-white py-2.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100" />
+              </div>
+            </div>
           </SettingsSection>
 
           {/* ── Información de tienda ── */}
@@ -1300,7 +1535,7 @@ export function VendorShopSettingsClient({
             sectionId="contacto"
             label="Contactos"
             description="Teléfono, WhatsApp y redes. Aparecen en el menú de la tienda y al pagar con ATH."
-            Icon={UserIcon}
+            Icon={PhoneIcon}
             open={openCategory === "contacto"}
             onToggle={() => toggleCategory("contacto")}
           >

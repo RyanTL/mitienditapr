@@ -34,13 +34,13 @@ export function VisitorWelcomePopup({
         role="dialog"
         aria-labelledby="visitor-welcome-title"
         aria-describedby="visitor-welcome-description"
-        className="absolute bottom-0 left-0 right-0 max-h-[90vh] overflow-y-auto rounded-t-3xl border-t border-[var(--color-gray)] bg-[var(--color-white)] p-6 pb-8 text-[var(--color-carbon)] shadow-[0_-8px_40px_var(--shadow-black-018)] md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl md:border md:p-7 md:shadow-[0_22px_54px_var(--shadow-black-018)]"
+        className="absolute bottom-0 left-0 right-0 max-h-[90vh] overflow-y-auto rounded-t-3xl border-t border-[var(--color-gray)] bg-[var(--color-white)] px-6 pb-8 text-[var(--color-carbon)] shadow-[0_-8px_40px_var(--shadow-black-018)] md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl md:border md:px-7 md:shadow-[0_22px_54px_var(--shadow-black-018)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-end">
+        <header className="sticky top-0 z-10 -mx-6 flex justify-end bg-[var(--color-white)] px-6 pt-6 pb-2 md:-mx-7 md:px-7 md:pt-7">
           <button
             type="button"
-            className="-mr-1 flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray)] text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)]"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gray)] text-[var(--color-carbon)] transition hover:bg-[var(--color-gray-100)]"
             aria-label="Cerrar"
             onClick={onClose}
           >
@@ -48,7 +48,7 @@ export function VisitorWelcomePopup({
           </button>
         </header>
 
-        <div className="mt-5">
+        <div>
           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-brand)]">
             ¡Bienvenido!
           </p>

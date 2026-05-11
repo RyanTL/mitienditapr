@@ -410,8 +410,8 @@ function ProductSheet({
 
   return (
     <Sheet open={sheetState.open} onOpenChange={(open) => { if (!open) requestClose(); }}>
-      <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-3xl p-0">
-        <SheetHeader className="sticky top-0 z-10 border-b border-[var(--color-gray-200,#e5e7eb)] bg-white px-5 pb-4 pt-5">
+      <SheetContent side="bottom" className="flex max-h-[92vh] flex-col rounded-t-3xl p-0">
+        <SheetHeader className="shrink-0 border-b border-[var(--color-gray-200,#e5e7eb)] bg-white px-5 pb-4 pt-5">
           <div className="flex items-center justify-between gap-3">
             <SheetTitle className="text-lg font-bold">
               {isEdit ? "Editar producto" : "Nuevo producto"}
@@ -428,7 +428,7 @@ function ProductSheet({
           </div>
         </SheetHeader>
 
-        <div className="space-y-5 px-5 pb-32 pt-5">
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-5">
           <div>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -606,8 +606,8 @@ function ProductSheet({
           )}
         </div>
 
-        {/* Sticky bottom action bar */}
-        <div className="fixed bottom-0 left-0 right-0 z-10 flex gap-2 border-t border-[var(--color-gray-200,#e5e7eb)] bg-white px-5 pt-3" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}>
+        {/* Bottom action bar — flex child of the sheet so it stays tappable above the mobile keyboard */}
+        <div className="shrink-0 flex gap-2 border-t border-[var(--color-gray-200,#e5e7eb)] bg-white px-5 pt-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0.75rem))" }}>
           {isEdit && (
             <button
               type="button"
@@ -747,7 +747,7 @@ export function VendorProductsClient({ initialData }: VendorProductsClientProps)
           </h2>
           <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[var(--color-gray-500)]">
             Tu tienda necesita al menos un producto activo para poder publicarse.
-            Agrega fotos, un precio y una descripción corta — toma menos de 2 minutos.
+            Agrega fotos, un precio y una descripción corta, toma menos de 2 minutos.
           </p>
           <button
             type="button"
