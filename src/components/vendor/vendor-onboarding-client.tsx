@@ -215,7 +215,7 @@ export function VendorOnboardingClient() {
   if (loading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white px-7 md:px-10">
-        <div className="flex w-full max-w-xl lg:max-w-2xl xl:max-w-[40rem] justify-center">
+        <div className="flex w-full max-w-xl md:max-w-md lg:max-w-md justify-center">
           <Spinner />
         </div>
       </div>
@@ -260,13 +260,13 @@ export function VendorOnboardingClient() {
               : undefined
           }
         >
-          <div className="mx-auto w-full max-w-xl lg:max-w-2xl xl:max-w-[40rem] px-7 md:px-10">
+          <div className="mx-auto w-full max-w-xl md:max-w-md lg:max-w-md px-7 md:px-10">
             <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col">
             {/* ── Welcome ──────────────────────────── */}
             {step === 0 && (
-              <div className="flex flex-1 flex-col justify-end pb-12 pt-8 lg:flex-row lg:items-end lg:gap-12 lg:pt-12">
+              <div className="flex flex-1 flex-col justify-end pb-12 pt-8">
                 <div className="min-w-0 flex-1">
-                  <h1 className="obh text-[36px] font-bold leading-[1.08] tracking-[-0.04em] text-black md:text-[40px] lg:text-[44px]">
+                  <h1 className="obh text-[36px] font-bold leading-[1.08] tracking-[-0.04em] text-black md:text-[40px]">
                     Abre tu tienda
                   </h1>
                   <p className="obh1 mt-4 max-w-prose text-[16px] leading-[1.5] text-[#86868b] md:text-[17px]">
@@ -274,11 +274,11 @@ export function VendorOnboardingClient() {
                     complicaciones.
                   </p>
                 </div>
-                <div className="obh2 mt-8 w-full shrink-0 lg:mt-0 lg:w-auto lg:min-w-[220px]">
+                <div className="obh2 mt-8 w-full shrink-0">
                   <button
                     type="button"
                     onClick={next}
-                    className="w-full rounded-full bg-black py-[18px] text-[16px] font-semibold text-white transition-transform active:scale-[0.98] lg:px-10"
+                    className="w-full rounded-full bg-black py-[18px] text-[16px] font-semibold text-white transition-transform active:scale-[0.98]"
                   >
                     Comenzar
                   </button>
@@ -290,13 +290,13 @@ export function VendorOnboardingClient() {
             {step === 1 && (
               <>
                 <div className="flex flex-1 flex-col pt-4 md:pt-6">
-                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px] lg:text-[34px]">
+                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px]">
                     ¿Cómo se llama tu tienda?
                   </h1>
                   <p className="ob2 mt-2.5 text-[15px] text-[#86868b] md:text-base">
                     Así aparecerá para tus clientes
                   </p>
-                  <div className="ob3 mt-10 max-w-xl">
+                  <div className="ob3 mt-10 max-w-md">
                     <input
                       type="text"
                       value={form.vendorName}
@@ -341,7 +341,7 @@ export function VendorOnboardingClient() {
             {step === 2 && (
               <>
                 <div className="flex flex-1 flex-col pt-4 md:pt-6">
-                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px] lg:text-[34px]">
+                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px]">
                     Describe tu negocio
                   </h1>
                   <p className="ob2 mt-2.5 text-[15px] text-[#86868b] md:text-base">
@@ -354,9 +354,9 @@ export function VendorOnboardingClient() {
                     maxLength={280}
                     autoFocus
                     rows={4}
-                    className="ob3 mt-8 w-full max-w-xl resize-none border-none bg-transparent text-[18px] leading-relaxed text-black caret-black placeholder:text-[#d1d1d6] focus:outline-none"
+                    className="ob3 mt-8 w-full max-w-md resize-none border-none bg-transparent text-[18px] leading-relaxed text-black caret-black placeholder:text-[#d1d1d6] focus:outline-none"
                   />
-                  <p className="ob3 max-w-xl text-right text-[13px] text-[#c7c7cc]">
+                  <p className="ob3 max-w-md text-right text-[13px] text-[#c7c7cc]">
                     {form.description.length}/280
                   </p>
                 </div>
@@ -376,7 +376,7 @@ export function VendorOnboardingClient() {
             {step === 3 && (
               <>
                 <div className="flex flex-1 flex-col pt-4 md:pt-6">
-                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px] lg:text-[34px]">
+                  <h1 className="ob1 text-[28px] font-bold leading-[1.14] tracking-[-0.02em] text-black md:text-[32px]">
                     Logo de tu tienda
                   </h1>
                   <p className="ob2 mt-2.5 text-[15px] text-[#86868b] md:text-base">

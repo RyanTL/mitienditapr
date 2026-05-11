@@ -222,7 +222,7 @@ export function StripeCheckoutWizard({
               : undefined
           }
         >
-          <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col">
+          <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-md flex-col">
             {sDelivery > 0 && step === sDelivery && (
               <>
                 <div className="flex flex-1 flex-col px-7 pt-4">

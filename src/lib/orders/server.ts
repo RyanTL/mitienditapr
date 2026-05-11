@@ -485,6 +485,12 @@ export async function prepareCheckoutOrder(input: {
     throw new Error("Debes escribir un teléfono para continuar.");
   }
 
+  const normalizedEmail =
+    normalizeTrimmed(buyerInput.email) ?? normalizeTrimmed(buyerProfile.email);
+  if (!normalizedEmail) {
+    throw new Error("Debes escribir un correo electrónico para continuar.");
+  }
+
   const normalizedFulfillment: PreparedCheckoutOrder["fulfillment"] = {
     method: fulfillment.method,
     shippingAddress: normalizeTrimmed(fulfillment.shippingAddress),
@@ -530,7 +536,7 @@ export async function prepareCheckoutOrder(input: {
     buyer: {
       id: buyerProfile.id,
       fullName: inferBuyerName(buyerProfile, buyerInput),
-      email: normalizeTrimmed(buyerInput.email) ?? normalizeTrimmed(buyerProfile.email),
+      email: normalizedEmail,
       phone: normalizedPhone,
     },
     shop,

@@ -67,7 +67,7 @@ async function applyStepSideEffects(input: {
       .update({
         vendor_name: vendorName || undefined,
         slug,
-        description: description || null,
+        description: description ?? "",
         logo_url: logoUrl || null,
       })
       .eq("id", shopId);
