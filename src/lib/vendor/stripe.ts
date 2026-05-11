@@ -276,8 +276,10 @@ export async function createStripeOneTimeCheckoutSession(input: {
     // Explicit so the session doesn't rely on the connected account's settings.
     // With `on_behalf_of`, Stripe otherwise uses the connected account's enabled
     // payment methods, which may be empty on a freshly-onboarded vendor.
+    // Only `card` — Link/Apple Pay/Google Pay aren't enabled on Express accounts
+    // by default; card covers ~95% of buyers and Apple/Google Pay surface
+    // automatically inside Stripe Checkout when card is enabled.
     "payment_method_types[0]": "card",
-    "payment_method_types[1]": "link",
     "phone_number_collection[enabled]": true,
     billing_address_collection: "auto",
     "payment_intent_data[transfer_data][destination]": input.destinationAccountId,
