@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CloseIcon, QrCodeIcon, ShareIcon } from "@/components/icons";
 import { useBodyScrollLock, useEscapeKey } from "@/hooks/use-overlay-behaviors";
@@ -45,6 +45,7 @@ export function ShopSharePopup({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const shareUrlInputRef = useRef<HTMLInputElement | null>(null);
 
   useBodyScrollLock(isOpen);
   useEscapeKey(isOpen, onClose);
@@ -112,33 +113,68 @@ export function ShopSharePopup({
     };
   }, [isOpen, ownerMode, shopSlug]);
 
-  const handleNativeShare = useCallback(async () => {
+  const selectShareUrl = useCallback(() => {
+    const input = shareUrlInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    input.select();
+    input.setSelectionRange(0, input.value.length);
+  }, []);
+
+  const copyShareUrl = useCallback(
+    async (shareUrl: string) => {
+      selectShareUrl();
+
+      try {
+        if (navigator.clipboard?.writeText && window.isSecureContext) {
+          await navigator.clipboard.writeText(shareUrl);
+          return true;
+        }
+      } catch {
+        // Fall back to the selected input below.
+      }
+
+      try {
+        return document.execCommand("copy");
+      } catch {
+        return false;
+      }
+    },
+    [selectShareUrl],
+  );
+
+  const handleShare = useCallback(async () => {
     if (!shareData) {
       return;
     }
 
-    if (!canUseNativeShare) {
-      setActionMessage("Tu navegador no soporta compartir directamente.");
-      return;
-    }
+    if (canUseNativeShare) {
+      try {
+        await navigator.share({
+          title: shareData.vendorName,
+          text: `Mira mi tienda: ${shareData.vendorName}`,
+          url: shareData.shareUrl,
+        });
 
-    try {
-      await navigator.share({
-        title: shareData.vendorName,
-        text: `Mira mi tienda: ${shareData.vendorName}`,
-        url: shareData.shareUrl,
-      });
-
-      setActionMessage("Enlace compartido.");
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+        setActionMessage("Enlace compartido.");
         return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
       }
-
-      setActionMessage("No se pudo compartir el enlace.");
     }
-  }, [canUseNativeShare, shareData]);
 
+    const didCopy = await copyShareUrl(shareData.shareUrl);
+    setActionMessage(
+      didCopy
+        ? "Enlace copiado."
+        : "Enlace seleccionado. Copia el enlace manualmente.",
+    );
+  }, [canUseNativeShare, copyShareUrl, shareData]);
 
   const handleDownloadQr = useCallback(() => {
     if (!shareData || !qrDataUrl) return;
@@ -216,6 +252,7 @@ export function ShopSharePopup({
                   Enlace público
                 </p>
                 <input
+                  ref={shareUrlInputRef}
                   type="text"
                   readOnly
                   value={shareData.shareUrl}
@@ -229,7 +266,7 @@ export function ShopSharePopup({
                 <button
                   type="button"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--color-brand)] px-3 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                  onClick={() => void handleNativeShare()}
+                  onClick={() => void handleShare()}
                 >
                   <ShareIcon className="h-4 w-4" />
                   Compartir

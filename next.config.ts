@@ -1,5 +1,18 @@
 import type { NextConfig } from "next";
 
+const DEFAULT_ALLOWED_DEV_ORIGINS = ["192.168.0.7"];
+
+function getAllowedDevOrigins() {
+  const configuredOrigins = (process.env.NEXT_ALLOWED_DEV_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return Array.from(
+    new Set([...DEFAULT_ALLOWED_DEV_ORIGINS, ...configuredOrigins]),
+  );
+}
+
 function getSupabaseRemotePattern() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!rawUrl) {
@@ -24,8 +37,10 @@ function getSupabaseRemotePattern() {
 }
 
 const supabaseRemotePattern = getSupabaseRemotePattern();
+const allowedDevOrigins = getAllowedDevOrigins();
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins,
   outputFileTracingRoot: process.cwd(),
   reactCompiler: true,
   turbopack: {

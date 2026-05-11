@@ -28,20 +28,23 @@ export function VendorShopAvatar({
     aspectRatio: "1 / 1",
     borderRadius: "9999px",
     overflow: "hidden",
-    display: "block",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   } as const;
 
   if (trimmed) {
     return (
-      <Image
-        src={trimmed}
-        alt={vendorName}
-        width={sizePx}
-        height={sizePx}
-        sizes={`${sizePx}px`}
-        className="object-cover"
-        style={sharedStyle}
-      />
+      <div style={sharedStyle}>
+        <Image
+          src={trimmed}
+          alt={vendorName}
+          width={sizePx}
+          height={sizePx}
+          sizes={`${sizePx}px`}
+          className="h-full w-full object-cover"
+        />
+      </div>
     );
   }
 
