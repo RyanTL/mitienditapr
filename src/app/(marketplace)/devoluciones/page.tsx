@@ -44,7 +44,7 @@ export default function DevolucionesPage() {
         </li>
         <li>
           Si no llegan a un acuerdo, escríbenos a{" "}
-          <a href="mailto:hola@mitienditapr.com">hola@mitienditapr.com</a> con
+          <a href="mailto:contact.awksolutions@gmail.com">contact.awksolutions@gmail.com</a> con
           el número de orden y la conversación con el vendedor.
         </li>
       </ol>
@@ -97,7 +97,7 @@ export default function DevolucionesPage() {
       <h2>9. Contacto</h2>
       <p>
         Para reclamos:{" "}
-        <a href="mailto:hola@mitienditapr.com">hola@mitienditapr.com</a>.
+        <a href="mailto:contact.awksolutions@gmail.com">contact.awksolutions@gmail.com</a>.
       </p>
     </LegalPage>
   );

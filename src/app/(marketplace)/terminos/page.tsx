@@ -112,7 +112,7 @@ export default function TerminosPage() {
       <h2>11. Contacto</h2>
       <p>
         Para preguntas sobre estos términos escríbenos a{" "}
-        <a href="mailto:hola@mitienditapr.com">hola@mitienditapr.com</a>.
+        <a href="mailto:contact.awksolutions@gmail.com">contact.awksolutions@gmail.com</a>.
       </p>
     </LegalPage>
   );

@@ -17,7 +17,7 @@ export function SiteFooter() {
             Devoluciones
           </Link>
           <a
-            href="mailto:hola@mitienditapr.com"
+            href="mailto:contact.awksolutions@gmail.com"
             className="hover:text-foreground"
           >
             Contacto

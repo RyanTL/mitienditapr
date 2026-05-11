@@ -89,7 +89,7 @@ export default function PrivacidadPage() {
       <p>
         Puedes acceder, corregir o eliminar tu información desde tu cuenta o
         escribiéndonos a{" "}
-        <a href="mailto:hola@mitienditapr.com">hola@mitienditapr.com</a>.
+        <a href="mailto:contact.awksolutions@gmail.com">contact.awksolutions@gmail.com</a>.
         Responderemos en un plazo razonable.
       </p>
 
@@ -109,7 +109,7 @@ export default function PrivacidadPage() {
       <h2>10. Contacto</h2>
       <p>
         Preguntas sobre privacidad:{" "}
-        <a href="mailto:hola@mitienditapr.com">hola@mitienditapr.com</a>.
+        <a href="mailto:contact.awksolutions@gmail.com">contact.awksolutions@gmail.com</a>.
       </p>
     </LegalPage>
   );
