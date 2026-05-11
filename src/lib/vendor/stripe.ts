@@ -139,7 +139,11 @@ export async function createStripeExpressAccount(email: string) {
   return stripeRequest<StripeExpressAccountResponse>("/accounts", {
     type: "express",
     email,
-    capabilities: undefined,
+    // Express auto-grants `transfers` but `card_payments` MUST be explicitly
+    // requested — without it the connected account has no enabled payment
+    // methods and buyer checkout fails with "No valid payment method types".
+    "capabilities[card_payments][requested]": true,
+    "capabilities[transfers][requested]": true,
   });
 }
 
@@ -269,6 +273,11 @@ export async function createStripeOneTimeCheckoutSession(input: {
     cancel_url: input.cancelUrl,
     customer_email: input.customerEmail,
     client_reference_id: input.clientReferenceId,
+    // Explicit so the session doesn't rely on the connected account's settings.
+    // With `on_behalf_of`, Stripe otherwise uses the connected account's enabled
+    // payment methods, which may be empty on a freshly-onboarded vendor.
+    "payment_method_types[0]": "card",
+    "payment_method_types[1]": "link",
     "phone_number_collection[enabled]": true,
     billing_address_collection: "auto",
     "payment_intent_data[transfer_data][destination]": input.destinationAccountId,
