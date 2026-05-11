@@ -410,8 +410,11 @@ function ProductSheet({
 
   return (
     <Sheet open={sheetState.open} onOpenChange={(open) => { if (!open) requestClose(); }}>
-      <SheetContent side="bottom" className="flex max-h-[92vh] flex-col rounded-t-3xl p-0">
-        <SheetHeader className="shrink-0 border-b border-[var(--color-gray-200,#e5e7eb)] bg-white px-5 pb-4 pt-5">
+      <SheetContent
+        side="bottom"
+        className="flex max-h-[min(92vh,calc(100dvh-0.5rem))] flex-col overflow-hidden rounded-t-3xl p-0"
+      >
+        <SheetHeader className="shrink-0 border-b border-[var(--color-gray-200,#e5e7eb)] bg-white px-5 pb-4 pt-[max(1rem,env(safe-area-inset-top,1rem))]">
           <div className="flex items-center justify-between gap-3">
             <SheetTitle className="text-lg font-bold">
               {isEdit ? "Editar producto" : "Nuevo producto"}
