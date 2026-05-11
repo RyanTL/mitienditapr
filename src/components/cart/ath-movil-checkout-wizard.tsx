@@ -20,6 +20,8 @@ import {
   type CheckoutRequestPayload,
 } from "@/lib/orders/client";
 
+const MAX_RECEIPT_FILE_SIZE_BYTES = 4 * 1024 * 1024;
+
 function splitFullName(fullName: string): { first: string; last: string } {
   const t = fullName.trim();
   if (!t) return { first: "", last: "" };
@@ -655,7 +657,18 @@ export function AthMovilCheckoutWizard({
                       className="hidden"
                       onChange={(e) => {
                         const f = e.currentTarget.files?.[0];
-                        setReceiptFile(f ?? null);
+                        if (!f) {
+                          setReceiptFile(null);
+                          return;
+                        }
+                        if (f.size > MAX_RECEIPT_FILE_SIZE_BYTES) {
+                          setError("El recibo debe pesar menos de 4MB.");
+                          e.currentTarget.value = "";
+                          setReceiptFile(null);
+                          return;
+                        }
+                        setError(null);
+                        setReceiptFile(f);
                       }}
                     />
                     {receiptFile ? (

@@ -67,7 +67,7 @@ const DEFAULT_PRODUCT_DRAFT: ProductDraft = {
   isActive: true,
 };
 
-const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE_BYTES = 4 * 1024 * 1024;
 
 function buildDraftFromProduct(product: VendorProduct): ProductDraft {
   const stockQty = product.stockQty;
@@ -229,7 +229,7 @@ function ProductSheet({
       }
 
       if (file.size <= 0 || file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
-        nextError = "Cada imagen debe pesar menos de 5MB.";
+        nextError = "Cada imagen debe pesar menos de 4MB.";
         return;
       }
 

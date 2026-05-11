@@ -12,7 +12,7 @@ import { isStripeConnectAccountId } from "@/lib/stripe-connect";
 import { computePuertoRicoIvuUsd } from "@/lib/tax/puerto-rico-ivu";
 
 const DEFAULT_ATH_RECEIPTS_BUCKET = "ath-receipts";
-const MAX_RECEIPT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_RECEIPT_FILE_SIZE_BYTES = 4 * 1024 * 1024;
 const ATH_RECEIPT_SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 type BuyerProfileRow = {
@@ -227,7 +227,7 @@ export async function uploadAthReceipt(
   }
 
   if (file.size <= 0 || file.size > MAX_RECEIPT_FILE_SIZE_BYTES) {
-    throw new Error("El recibo debe pesar menos de 5MB.");
+    throw new Error("El recibo debe pesar menos de 4MB.");
   }
 
   const bucketName =

@@ -43,7 +43,7 @@ A shop must have at least one buyer rail (Connect or ATH) to publish.
 - Currency through `src/lib/formatters.ts` (always USD).
 - Icons live in `src/components/icons/` — no inline SVGs in pages.
 - Shadcn primitives in `src/components/ui/`; no extra form libraries.
-- Product images: Supabase Storage, ≤5MB, PNG/JPEG/WebP/GIF.
+- Product images: Supabase Storage, ≤4MB (Vercel serverless body cap is 4.5MB), PNG/JPEG/WebP/GIF.
 - Vendor onboarding = 8 steps tracked in `vendor_onboarding` (JSON per step).
 
 ## Deployment & Branch Strategy

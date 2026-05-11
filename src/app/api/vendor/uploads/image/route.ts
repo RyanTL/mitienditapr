@@ -15,7 +15,7 @@ import { isVendorModeEnabled } from "@/lib/vendor/feature-flag";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { ensureVendorRole, getVendorRequestContext } from "@/lib/supabase/vendor-server";
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_BUCKET = "vendor-images";
 
 function sanitizeFileName(input: string) {
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     }
 
     if (maybeFile.size <= 0 || maybeFile.size > MAX_FILE_SIZE_BYTES) {
-      return badRequestResponse("La imagen debe pesar menos de 5MB.");
+      return badRequestResponse("La imagen debe pesar menos de 4MB.");
     }
 
     const bucketName = process.env.SUPABASE_VENDOR_IMAGES_BUCKET ?? DEFAULT_BUCKET;
