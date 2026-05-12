@@ -261,7 +261,18 @@ function ProductSheet({
     try {
       const uploadedImages: VendorProduct["images"] = [];
       for (const file of validFiles) {
-        const compressed = await compressImageForUpload(file);
+        let compressed: File;
+        try {
+          compressed = await compressImageForUpload(file);
+        } catch (compressError) {
+          const { reportClientError } = await import("@/lib/client-log");
+          reportClientError("vendorProducts.compress", compressError, {
+            fileName: file.name,
+            fileType: file.type,
+            fileSize: file.size,
+          });
+          throw compressError;
+        }
         const upload = await uploadVendorImage(compressed);
         const response = await addVendorProductImage(sheetState.product.id, {
           imageUrl: upload.url,
@@ -353,7 +364,18 @@ function ProductSheet({
         if (pendingImages.length > 0) {
           setIsUploadingImage(true);
           for (const image of pendingImages) {
-            const compressed = await compressImageForUpload(image.file);
+            let compressed: File;
+            try {
+              compressed = await compressImageForUpload(image.file);
+            } catch (compressError) {
+              const { reportClientError } = await import("@/lib/client-log");
+              reportClientError("vendorProducts.compress", compressError, {
+                fileName: image.file.name,
+                fileType: image.file.type,
+                fileSize: image.file.size,
+              });
+              throw compressError;
+            }
             const upload = await uploadVendorImage(compressed);
             uploadedImages.push({
               imageUrl: upload.url,

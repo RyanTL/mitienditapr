@@ -278,16 +278,40 @@ export async function uploadVendorImage(file: File) {
   const formData = new FormData();
   formData.set("file", file);
 
-  const response = await fetch("/api/vendor/uploads/image", {
-    method: "POST",
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/vendor/uploads/image", {
+      method: "POST",
+      body: formData,
+    });
+  } catch (fetchError) {
+    const { reportClientError } = await import("@/lib/client-log");
+    reportClientError("uploadVendorImage.fetch", fetchError, {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+    });
+    throw new Error(
+      "No pudimos conectar para subir la foto. Revisa tu conexión e inténtalo otra vez.",
+    );
+  }
 
   const body = (await response.json().catch(() => null)) as
     | { url?: string; path?: string; bucket?: string; error?: string }
     | null;
 
   if (!response.ok) {
+    const { reportClientError } = await import("@/lib/client-log");
+    reportClientError(
+      "uploadVendorImage.status",
+      new Error(body?.error ?? `Request failed (${response.status}).`),
+      {
+        status: response.status,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      },
+    );
     throw new Error(body?.error ?? `Request failed (${response.status}).`);
   }
 
