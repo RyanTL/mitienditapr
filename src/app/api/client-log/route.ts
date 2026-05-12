@@ -10,10 +10,10 @@ type ClientLogPayload = {
   context?: unknown;
 };
 
-function clip(value: unknown, max: number): string {
+function str(value: unknown, max = 400): string {
   if (value === null || value === undefined) return "";
-  const str = typeof value === "string" ? value : JSON.stringify(value);
-  return str.length > max ? `${str.slice(0, max)}…` : str;
+  const s = typeof value === "string" ? value : JSON.stringify(value);
+  return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
 export async function POST(request: Request) {
@@ -25,11 +25,18 @@ export async function POST(request: Request) {
   }
 
   const ua = request.headers.get("user-agent") ?? "";
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+  const id = Math.random().toString(36).slice(2, 8);
 
-  console.warn(
-    `[client-log] scope=${clip(body.scope, 64)} name=${clip(body.errorName, 64)} msg=${clip(body.message, 400)} ctx=${clip(body.context, 800)} stack=${clip(body.errorStack, 600)} ua="${clip(ua, 200)}" ip=${ip}`,
-  );
+  // Emit one short line per field so log viewers that truncate the
+  // "message" column at ~30 chars still show meaningful values.
+  console.warn(`[clog ${id}] scope=${str(body.scope, 80)}`);
+  console.warn(`[clog ${id}] name=${str(body.errorName, 80)}`);
+  console.warn(`[clog ${id}] msg=${str(body.message, 200)}`);
+  console.warn(`[clog ${id}] ctx=${str(body.context, 400)}`);
+  console.warn(`[clog ${id}] ua=${str(ua, 200)}`);
+  if (body.errorStack) {
+    console.warn(`[clog ${id}] stack=${str(body.errorStack, 400)}`);
+  }
 
   return NextResponse.json({ ok: true });
 }
