@@ -14,13 +14,14 @@ import { formatPhoneForDisplay, formatUsd } from "@/lib/formatters";
 import { computePuertoRicoIvuUsd } from "@/lib/tax/puerto-rico-ivu";
 import type { VendorContactInfo } from "@/lib/supabase/shop-types";
 import { saveCheckoutProfile } from "@/lib/account/client";
+import { compressImageForUpload } from "@/lib/image-compression";
 import {
   createAthMovilCheckout,
   type CheckoutFulfillmentInput,
   type CheckoutRequestPayload,
 } from "@/lib/orders/client";
 
-const MAX_RECEIPT_FILE_SIZE_BYTES = 4 * 1024 * 1024;
+const MAX_RECEIPT_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 
 function splitFullName(fullName: string): { first: string; last: string } {
   const t = fullName.trim();
@@ -268,9 +269,10 @@ export function AthMovilCheckoutWizard({
       } catch (profileError) {
         console.error("No se pudo guardar la info del comprador en su cuenta:", profileError);
       }
+      const compressedReceipt = await compressImageForUpload(receiptFile);
       const result = await createAthMovilCheckout({
         payload,
-        receipt: receiptFile,
+        receipt: compressedReceipt,
         receiptNote: receiptNote.trim() || null,
       });
       onSuccess(result.orderId);
@@ -662,7 +664,7 @@ export function AthMovilCheckoutWizard({
                           return;
                         }
                         if (f.size > MAX_RECEIPT_FILE_SIZE_BYTES) {
-                          setError("El recibo debe pesar menos de 4MB.");
+                          setError("El recibo debe pesar menos de 25MB.");
                           e.currentTarget.value = "";
                           setReceiptFile(null);
                           return;

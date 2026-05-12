@@ -23,6 +23,7 @@ import {
 } from "@/lib/vendor/client";
 import { VENDOR_FREE_TIER_MAX_IMAGES_PER_PRODUCT } from "@/lib/vendor/constants";
 import { formatUsd } from "@/lib/formatters";
+import { compressImageForUpload } from "@/lib/image-compression";
 import { toNumber } from "@/lib/utils";
 import type { VendorProductsResponse } from "@/lib/vendor/types";
 
@@ -67,7 +68,7 @@ const DEFAULT_PRODUCT_DRAFT: ProductDraft = {
   isActive: true,
 };
 
-const MAX_IMAGE_FILE_SIZE_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 
 function buildDraftFromProduct(product: VendorProduct): ProductDraft {
   const stockQty = product.stockQty;
@@ -229,7 +230,7 @@ function ProductSheet({
       }
 
       if (file.size <= 0 || file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
-        nextError = "Cada imagen debe pesar menos de 4MB.";
+        nextError = "Cada imagen debe pesar menos de 25MB.";
         return;
       }
 
@@ -260,7 +261,8 @@ function ProductSheet({
     try {
       const uploadedImages: VendorProduct["images"] = [];
       for (const file of validFiles) {
-        const upload = await uploadVendorImage(file);
+        const compressed = await compressImageForUpload(file);
+        const upload = await uploadVendorImage(compressed);
         const response = await addVendorProductImage(sheetState.product.id, {
           imageUrl: upload.url,
         });
@@ -351,7 +353,8 @@ function ProductSheet({
         if (pendingImages.length > 0) {
           setIsUploadingImage(true);
           for (const image of pendingImages) {
-            const upload = await uploadVendorImage(image.file);
+            const compressed = await compressImageForUpload(image.file);
+            const upload = await uploadVendorImage(compressed);
             uploadedImages.push({
               imageUrl: upload.url,
               alt: image.alt,
