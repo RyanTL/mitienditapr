@@ -758,16 +758,9 @@ export function VendorShopSettingsClient({
 
       const saveShop = shopFormDirty
         ? updateVendorShopSettings(shopPayload).then((response) => {
-            setStatusData((prev) => {
-              if (!prev) return prev;
-              const next: ShopResponse = {
-                ...prev,
-                shop: response.shop,
-                checks: response.checks,
-              };
-              setFormState(mapFormStateFromResponse(next));
-              return next;
-            });
+            setStatusData((prev) =>
+              prev ? { ...prev, shop: response.shop, checks: response.checks } : prev,
+            );
           })
         : Promise.resolve();
 
