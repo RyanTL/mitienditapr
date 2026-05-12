@@ -50,17 +50,26 @@ type OrderPaymentRow = {
   verified_at: string | null;
 };
 
+type OrderItemProduct = {
+  name: string;
+  image_url: string | null;
+};
+
 type OrderItemRow = {
   order_id: string;
   product_id: string;
   product_variant_id: string | null;
   quantity: number;
   unit_price_usd: number;
-  products: Array<{
-    name: string;
-    image_url: string | null;
-  }> | null;
+  products: OrderItemProduct | OrderItemProduct[] | null;
 };
+
+function normalizeProduct(
+  products: OrderItemProduct | OrderItemProduct[] | null,
+): OrderItemProduct | null {
+  if (!products) return null;
+  return Array.isArray(products) ? products[0] ?? null : products;
+}
 
 export async function GET() {
   if (!isVendorModeEnabled) {
@@ -189,14 +198,17 @@ export async function GET() {
                 verifiedAt: payment.verified_at,
               }
             : null,
-          items: orderItems.map((item) => ({
-            productId: item.product_id,
-            productVariantId: item.product_variant_id,
-            productName: item.products?.[0]?.name ?? "Producto",
-            imageUrl: item.products?.[0]?.image_url ?? null,
-            quantity: item.quantity,
-            unitPriceUsd: Number(item.unit_price_usd),
-          })),
+          items: orderItems.map((item) => {
+            const product = normalizeProduct(item.products);
+            return {
+              productId: item.product_id,
+              productVariantId: item.product_variant_id,
+              productName: product?.name ?? "Producto",
+              imageUrl: product?.image_url ?? null,
+              quantity: item.quantity,
+              unitPriceUsd: Number(item.unit_price_usd),
+            };
+          }),
         };
       }),
     });

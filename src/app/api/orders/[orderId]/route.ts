@@ -43,16 +43,25 @@ type PaymentRow = {
   stripe_payment_intent_id: string | null;
 };
 
+type ItemProduct = {
+  name: string;
+  image_url: string | null;
+};
+
 type ItemRow = {
   product_id: string;
   product_variant_id: string | null;
   quantity: number;
   unit_price_usd: number;
-  products: Array<{
-    name: string;
-    image_url: string | null;
-  }> | null;
+  products: ItemProduct | ItemProduct[] | null;
 };
+
+function normalizeProduct(
+  products: ItemProduct | ItemProduct[] | null,
+): ItemProduct | null {
+  if (!products) return null;
+  return Array.isArray(products) ? products[0] ?? null : products;
+}
 
 export async function GET(
   _request: Request,
@@ -175,14 +184,17 @@ export async function GET(
             stripePaymentIntentId: payment.stripe_payment_intent_id,
           }
         : null,
-      items: ((itemData ?? []) as unknown as ItemRow[]).map((item) => ({
-        productId: item.product_id,
-        productVariantId: item.product_variant_id,
-        name: item.products?.[0]?.name ?? "Producto",
-        imageUrl: item.products?.[0]?.image_url ?? null,
-        quantity: item.quantity,
-        unitPriceUsd: Number(item.unit_price_usd),
-      })),
+      items: ((itemData ?? []) as unknown as ItemRow[]).map((item) => {
+        const product = normalizeProduct(item.products);
+        return {
+          productId: item.product_id,
+          productVariantId: item.product_variant_id,
+          name: product?.name ?? "Producto",
+          imageUrl: product?.image_url ?? null,
+          quantity: item.quantity,
+          unitPriceUsd: Number(item.unit_price_usd),
+        };
+      }),
     },
   });
 }
